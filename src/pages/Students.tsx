@@ -154,21 +154,18 @@ export default function Students() {
   };
 
   const handleGenerateAccounts = async () => {
-    if (!currentTenant) return;
-    setGeneratingAccounts(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('create-student-accounts', {
-        body: { tenantId: currentTenant.id }
-      });
-      if (error) throw error;
-
-      toast.success(`Proceso finalizado. Creadas: ${data.created}, Vinculadas: ${data.linked}, Omitidas: ${data.skipped}`);
-    } catch (error: any) {
-      console.error("Error generating accounts:", error);
-      toast.error("Error al generar cuentas masivas");
-    } finally {
-      setGeneratingAccounts(false);
-    }
+    // Edge Functions are not deployed/working. Direct user to local script.
+    toast.info("Función Cloud Deshabilitada", {
+      description: "Por favor ejecute este comando en su terminal: npm run generate-accounts",
+      duration: 10000,
+      action: {
+        label: "Copiar",
+        onClick: () => {
+          navigator.clipboard.writeText("npm run generate-accounts");
+          toast.success("Comando copiado");
+        }
+      }
+    });
   };
 
   if (loading && !students.length) return <div className="text-center py-8">Cargando...</div>;
