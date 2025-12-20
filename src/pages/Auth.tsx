@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { School, Eye, EyeOff, KeyRound, ArrowLeft } from "lucide-react";
 import logoImage from "@/assets/logo-santa-cruz.png";
+import { validateRut, generateRutEmail, cleanRutForDB } from "@/lib/rutUtils";
 
 type ViewMode = "login" | "reset-password" | "signup";
 
@@ -54,8 +55,6 @@ export default function Auth() {
       return;
     }
 
-
-
     if (password.length < 6) {
       toast.error("La contraseña debe tener al menos 6 caracteres");
       return;
@@ -64,21 +63,36 @@ export default function Auth() {
     setLoading(true);
 
     try {
+      let finalEmail = email;
+
+      // Check if input looks like a RUT (has numbers and maybe K) and NOT an email (@)
+      if (!email.includes("@")) {
+        // Normalize for validation check (optional, but good for UX)
+        // Actually, our validateRut handles dots/dashes
+        if (validateRut(email)) {
+          finalEmail = generateRutEmail(email);
+          console.log("RUT detected. Converted to:", finalEmail);
+        } else {
+          // Not a valid RUT, and not an email. Let it fail as email or warn?
+          // Let's assume it might represent a username if we supported that, but we don't.
+          // We'll let SignIn try it as email, it will fail naturally.
+          // Or better, warn if it looks like they tried a RUT but failed digit check.
+        }
+      }
+
       if (viewMode === 'signup') {
-        const { error } = await signUp(email, password);
+        const { error } = await signUp(finalEmail, password);
         if (error) {
           toast.error(error.message);
         } else {
           toast.success("Cuenta creada exitosamente. !Bienvenido!");
-          // El auth state change manejará la redirección, pero podemos forzar el login automatico si Supabase lo permite,
-          // o esperar que el usuario confirme email si está configurado.
-          // Asumiendo auto-confirm desactivado o login directo:
         }
       } else {
-        const { error } = await signIn(email, password);
+        const { error } = await signIn(finalEmail, password);
         if (error) {
+          // Improve error message for RUT users
           if (error.message.includes("Invalid login credentials")) {
-            toast.error("Credenciales inválidas");
+            toast.error("Credenciales inválidas. Si usa RUT, verifique que esté correcto.");
           } else {
             toast.error(error.message);
           }
@@ -207,11 +221,11 @@ export default function Auth() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
+              <Label htmlFor="email">Correo Electrónico o RUT</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="usuario@ejemplo.com"
+                type="text"
+                placeholder="usuario@ejemplo.com o 12.345.678-9"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}

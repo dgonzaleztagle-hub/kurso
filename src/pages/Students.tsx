@@ -267,6 +267,22 @@ export default function Students() {
         </div>
       </div>
 
+
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3 text-blue-800 text-sm">
+        <div className="mt-0.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-info"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
+        </div>
+        <div className="space-y-1">
+          <p className="font-semibold">Información de Acceso para Alumnos</p>
+          <p>
+            Los alumnos pueden ingresar al portal usando su <strong>RUT</strong> (ej: 12.345.678-9).
+            La <strong>contraseña inicial</strong> corresponde a los <strong>primeros 6 dígitos</strong> de su RUT (sin puntos).
+            El sistema les obligará a cambiar su clave al primer ingreso.
+          </p>
+        </div>
+      </div>
+
       <StudentImport onSuccess={loadStudents} tenantId={currentTenant?.id} />
 
       <Card>

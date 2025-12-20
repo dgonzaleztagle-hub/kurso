@@ -55,11 +55,11 @@ const queryClient = new QueryClient();
 
 // Force Refresh Trigger
 function AppRoutes() {
-  // DESACTIVADO TEMPORALMENTE: Verificación de primer login deshabilitada
-  // const { firstLogin, userRole, refreshUserData } = useAuth();
-  // if (firstLogin && (userRole === 'alumnos' || userRole === 'admin')) {
-  //   return <FirstLoginPasswordChange onPasswordChanged={refreshUserData} />;
-  // }
+  // CHECK: First Login
+  const { firstLogin, userRole, refreshUserData } = useAuth();
+  if (firstLogin && (userRole === 'alumnos' || userRole === 'admin' || userRole === 'master')) {
+    return <FirstLoginPasswordChange onPasswordChanged={refreshUserData} />;
+  }
 
   return (
     <Routes>

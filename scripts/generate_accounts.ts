@@ -65,7 +65,7 @@ async function main() {
         // Generate Credentials
         const rutClean = student.rut.replace(/\./g, '').replace(/-/g, '').toLowerCase();
         const email = `${rutClean}@kurso.cl`;
-        const password = rutClean; // Initial password is RUT
+        const password = rutClean.substring(0, 6); // Password: First 6 digits of RUT
 
         // console.log(`Creating account for ${student.first_name} ${student.last_name} (${email})...`);
 
@@ -94,7 +94,8 @@ async function main() {
         const { error: roleError } = await supabase.from('user_roles').insert({
             user_id: userId,
             role: 'alumnos', // Ensure 'alumnos' is in Enum (We fixed this already)
-            user_name: `${student.first_name} ${student.last_name}`
+            user_name: `${student.first_name} ${student.last_name}`,
+            first_login: true // Force password change on first login
         });
 
         if (roleError) console.error("Role Link Error:", roleError.message);

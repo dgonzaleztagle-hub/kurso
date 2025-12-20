@@ -24,6 +24,8 @@ interface AuthContextType {
   adminPermissions: AppModule[]; // Mapear permisos aqui
   studentId: number | null;
   hasPermission: (module: AppModule) => boolean;
+  firstLogin: boolean;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Estados Legacy (Compatibilidad)
   const [userRole, setUserRole] = useState<LegacyRole | null>(null);
+  const [firstLogin, setFirstLogin] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -51,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) fetchAppUser(session.user.id);
       else {
         setAppUser(null);
+        setFirstLogin(false);
         setLoading(false);
       }
     });
@@ -60,31 +64,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchAppUser = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // 1. Fetch App User
+      const { data: appData, error: appError } = await supabase
         .from('app_users')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching app user:', error);
+      if (appError && appError.code !== 'PGRST116') {
+        console.error('Error fetching app user:', appError);
       }
+      setAppUser(appData as AppUser);
 
-      setAppUser(data as AppUser);
+      // 2. Fetch User Roles (Global/First Login check)
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role, first_login')
+        .eq('user_id', userId)
+        .single(); // Assuming one role entry per user for simple cases, or take first
 
-      setAppUser(data as AppUser);
-
-      // MOCK ROLE FOR NOW (Compatibilidad)
-      // Si es superadmin -> master (para ver todo)
-      // Si no, dejamos que layout/tenant context decidan, o ponemos 'member' como placeholder seguro
-      // PERO no 'student' que oculta el sidebar.
-      if (data?.is_superadmin) {
-        setUserRole('master');
+      if (roleData) {
+        // Normalize role
+        const dbRole = roleData.role as LegacyRole;
+        setUserRole(dbRole);
+        setFirstLogin(roleData.first_login || false);
       } else {
-        // Fix: No forzar student. Dejar null para que el sistema use el rol del tenant.
-        // O mejor, usar 'admin' temporalmente si es owner, pero la verdad deberíamos matar userRole de aquí.
-        // Para evitar el "white screen" rápido:
-        setUserRole(null);
+        // Fallback if no user_roles entry
+        if (appData?.is_superadmin) setUserRole('master');
+        else setUserRole(null);
+        setFirstLogin(false);
       }
 
     } catch (error) {
@@ -92,6 +100,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const refreshUserData = async () => {
+    if (user) await fetchAppUser(user.id);
   };
 
   const signIn = async (email: string, password: string) => {
@@ -113,6 +125,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setSession(null);
     setAppUser(null);
+    setUserRole(null);
+    setFirstLogin(false);
   };
 
   // Legacy Permission Check
@@ -150,9 +164,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn,
       signUp,
       signOut,
-      updateProfile, // Exposed
+      updateProfile,
+      refreshUserData, // Exposed
       // Legacy
       userRole,
+      firstLogin,      // Exposed
       studentId: null,
       adminPermissions: [],
       hasPermission

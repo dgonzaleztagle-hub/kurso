@@ -60,13 +60,10 @@ export function cleanRutForDB(rut: string): string {
 }
 
 export function generateRutEmail(rut: string): string {
-    // Returns XXXXXXXX@kurso.cl (Body only)
-    const clean = rut.replace(/[^0-9kK]/g, "").toUpperCase();
+    // Returns XXXXXXXXK@kurso.cl (Body + DV)
+    // Matches logic in generate_accounts.ts
+    const clean = rut.replace(/[^0-9kK]/g, "").toLowerCase(); // Lowercase for email
     if (clean.length < 2) return "";
 
-    const body = clean.slice(0, -1);
-    // Remove leading zeros if any? Usually RUT doesn't have them in string, but good practice.
-    const cleanBody = body.replace(/^0+/, "");
-
-    return `${cleanBody}@kurso.cl`;
+    return `${clean}@kurso.cl`;
 }
