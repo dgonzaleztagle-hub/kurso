@@ -68,3 +68,4 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+// trigger rebuild
