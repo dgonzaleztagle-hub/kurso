@@ -1,0 +1,26 @@
+project_id = "gsebgpnbzzeglzgvkieh"
+
+# MODO PRUEBA: Funciones sin verificación JWT
+[functions.create-student-accounts]
+verify_jwt = false
+
+[functions.get-users-with-roles]
+verify_jwt = false
+
+[functions.create-admin-user]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.reset-user-password]
+verify_jwt = false
+
+[functions.fix-student-emails]
+verify_jwt = false
+
+[functions.check-default-password]
+verify_jwt = false
+
+[functions.reset-password-by-email]
+verify_jwt = false
