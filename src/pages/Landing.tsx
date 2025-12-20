@@ -1,8 +1,9 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { Moon, Sun, ArrowRight, CheckCircle2, Building2, GraduationCap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 
 const Landing = () => {
     const { theme, setTheme } = useTheme();
@@ -101,22 +102,18 @@ const Landing = () => {
                             </Button>
                         </motion.div>
 
-                        {/* Mockup Preview */}
+                        {/* Mockup Preview with Carousel */}
                         <motion.div
                             variants={fadeIn}
-                            className="mt-16 relative mx-auto max-w-5xl rounded-xl border bg-background/50 shadow-2xl overflow-hidden"
+                            className="mt-16 relative mx-auto max-w-5xl rounded-xl border bg-background/50 shadow-2xl overflow-hidden min-h-[300px] md:min-h-[500px]"
                         >
-                            <div className="absolute top-0 w-full h-12 bg-muted/50 border-b flex items-center px-4 space-x-2">
+                            <div className="absolute top-0 w-full h-12 bg-muted/50 border-b flex items-center px-4 space-x-2 z-20 backdrop-blur-sm">
                                 <div className="w-3 h-3 rounded-full bg-red-400" />
                                 <div className="w-3 h-3 rounded-full bg-yellow-400" />
                                 <div className="w-3 h-3 rounded-full bg-green-400" />
                             </div>
-                            <img
-                                src="/dashboard-preview.png" // Placeholder, we should generate one or use existing
-                                onError={(e) => e.currentTarget.src = "https://placehold.co/1200x800/1a1a1a/FFF?text=Kurso+Dashboard+Preview"}
-                                alt="Dashboard Preview"
-                                className="w-full pt-12"
-                            />
+
+                            <ImageCarousel />
                         </motion.div>
                     </motion.div>
                 </div>
@@ -214,5 +211,53 @@ const ListItem = ({ children }: { children: React.ReactNode }) => (
         <span>{children}</span>
     </li>
 );
+
+const ImageCarousel = () => {
+    const images = [
+        "/dashboard-preview.png",
+        "/app-dashboard.png",
+        "/app-menu-finanzas.png",
+        "/app-menu-pagos.png"
+    ];
+
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentIndex((prev) => (prev + 1) % images.length);
+        }, 5000); // Change every 5 seconds
+
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <div className="relative w-full h-[300px] md:h-[500px] bg-background">
+            <AnimatePresence mode="wait">
+                <motion.img
+                    key={currentIndex}
+                    src={images[currentIndex]}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.5 }}
+                    alt={`Preview ${currentIndex + 1}`}
+                    className="absolute inset-0 w-full h-full object-cover md:object-contain pt-12"
+                />
+            </AnimatePresence>
+
+            {/* Carousel Indicators */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-30">
+                {images.map((_, idx) => (
+                    <button
+                        key={idx}
+                        onClick={() => setCurrentIndex(idx)}
+                        className={`w-2 h-2 rounded-full transition-all ${idx === currentIndex ? "bg-primary w-4" : "bg-primary/30"
+                            }`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
 
 export default Landing;
