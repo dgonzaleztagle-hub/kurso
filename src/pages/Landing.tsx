@@ -231,13 +231,7 @@ const ImageCarousel = () => {
     }, []);
 
     return (
-        <div className="relative w-full h-[300px] md:h-[500px] bg-background border-4 border-red-500 overflow-hidden">
-            {/* Debug Info */}
-            <div className="absolute top-2 right-2 z-50 text-xs bg-black/80 text-white px-2 py-1 rounded font-mono">
-                Idx: {currentIndex} <br />
-                Img: {images[currentIndex]}
-            </div>
-
+        <div className="relative w-full h-[300px] md:h-[500px] bg-background overflow-hidden">
             <AnimatePresence mode="wait">
                 <motion.img
                     key={currentIndex}
@@ -248,11 +242,6 @@ const ImageCarousel = () => {
                     transition={{ duration: 0.5 }}
                     alt={`Preview ${currentIndex + 1}`}
                     className="absolute inset-0 w-full h-full object-contain pt-12 z-10"
-                    onLoad={() => console.log("Image loaded:", images[currentIndex])}
-                    onError={(e) => {
-                        console.error("Image failed:", images[currentIndex]);
-                        e.currentTarget.style.border = "5px solid yellow";
-                    }}
                 />
             </AnimatePresence>
 
@@ -262,7 +251,7 @@ const ImageCarousel = () => {
                     <button
                         key={idx}
                         onClick={() => setCurrentIndex(idx)}
-                        className={`w-3 h-3 rounded-full transition-all border border-white ${idx === currentIndex ? "bg-primary scale-125" : "bg-white/50"
+                        className={`w-2 h-2 rounded-full transition-all ${idx === currentIndex ? "bg-primary w-4" : "bg-primary/30"
                             }`}
                         aria-label={`Go to slide ${idx + 1}`}
                     />
