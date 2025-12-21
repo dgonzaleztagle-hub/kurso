@@ -154,18 +154,27 @@ export default function Students() {
   };
 
   const handleGenerateAccounts = async () => {
-    // Edge Functions are not deployed/working. Direct user to local script.
-    toast.info("Función Cloud Deshabilitada", {
-      description: "Por favor ejecute este comando en su terminal: npm run generate-accounts",
-      duration: 10000,
-      action: {
-        label: "Copiar",
-        onClick: () => {
-          navigator.clipboard.writeText("npm run generate-accounts");
-          toast.success("Comando copiado");
-        }
-      }
-    });
+    if (!currentTenant) return;
+    setGeneratingAccounts(true);
+    try {
+      // Usamos la nueva función de Base de Datos (RPC) que no requiere Terminal
+      // @ts-ignore
+      const { data, error } = await supabase.rpc('generate_missing_accounts', {
+        p_tenant_id: currentTenant.id
+      });
+
+      if (error) throw error;
+
+      // @ts-ignore
+      const count = data?.created || 0;
+      toast.success(`Cuentas generadas existosamente: ${count}`);
+      loadStudents(); // Refresh to see changes if any status update visual exists
+    } catch (error: any) {
+      console.error("Error generating accounts:", error);
+      toast.error("Error al generar cuentas. Asegurese de haber ejecutado el Script SQL de Solución.");
+    } finally {
+      setGeneratingAccounts(false);
+    }
   };
 
   if (loading && !students.length) return <div className="text-center py-8">Cargando...</div>;
