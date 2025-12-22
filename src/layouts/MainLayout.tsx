@@ -91,6 +91,18 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                                     | {institutionName}
                                 </span>
                             )}
+
+                            {/* TRIAL BADGE */}
+                            {currentTenant?.subscription_status === 'trial' && currentTenant.trial_ends_at && (
+                                (() => {
+                                    const days = Math.ceil((new Date(currentTenant.trial_ends_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                                    return (
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-2 ${days <= 3 ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                                            Prueba: {days > 0 ? `${days}d` : '0d'}
+                                        </span>
+                                    );
+                                })()
+                            )}
                         </div>
                     </div>
                     <div className="ml-auto flex items-center gap-2">

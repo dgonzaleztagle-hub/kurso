@@ -1,5 +1,5 @@
 export type AppRole = 'owner' | 'admin' | 'member' | 'student';
-export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled';
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled' | 'grace_period' | 'locked';
 export type PlanType = 'basic' | 'institutional';
 
 export interface AppUser {

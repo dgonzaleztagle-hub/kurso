@@ -59,6 +59,14 @@ export default function OrganizationDetail() {
     const [orgName, setOrgName] = useState("");
     const [updatingOrg, setUpdatingOrg] = useState(false);
 
+    // Subscription Management States
+    const [isExtendTrialOpen, setIsExtendTrialOpen] = useState(false);
+    const [extendDays, setExtendDays] = useState(5);
+    const [processingSub, setProcessingSub] = useState(false);
+
+    const [isActivatePlanOpen, setIsActivatePlanOpen] = useState(false);
+    const [planMonths, setPlanMonths] = useState(12);
+
     useEffect(() => {
         if (id) {
             fetchDetails();
@@ -219,6 +227,60 @@ export default function OrganizationDetail() {
         }
     };
 
+    const handleExtendTrial = async () => {
+        if (!selectedTenant) return;
+        setProcessingSub(true);
+        try {
+            const newDate = new Date();
+            newDate.setDate(newDate.getDate() + parseInt(extendDays.toString()));
+
+            const { error } = await supabase
+                .from('tenants')
+                .update({
+                    trial_ends_at: newDate.toISOString(),
+                    subscription_status: 'trial'
+                })
+                .eq('id', selectedTenant.id);
+
+            if (error) throw error;
+            toast.success(`Trial extendido por ${extendDays} días`);
+            setIsExtendTrialOpen(false);
+            fetchDetails();
+        } catch (error: any) {
+            console.error("Error extending trial:", error);
+            toast.error("Error al extender trial");
+        } finally {
+            setProcessingSub(false);
+        }
+    };
+
+    const handleActivatePlan = async () => {
+        if (!selectedTenant) return;
+        setProcessingSub(true);
+        try {
+            const newDate = new Date();
+            newDate.setMonth(newDate.getMonth() + parseInt(planMonths.toString()));
+
+            const { error } = await supabase
+                .from('tenants')
+                .update({
+                    valid_until: newDate.toISOString(),
+                    subscription_status: 'active'
+                })
+                .eq('id', selectedTenant.id);
+
+            if (error) throw error;
+            toast.success(`Plan activado por ${planMonths} meses`);
+            setIsActivatePlanOpen(false);
+            fetchDetails();
+        } catch (error: any) {
+            console.error("Error activating plan:", error);
+            toast.error("Error al activar plan");
+        } finally {
+            setProcessingSub(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center p-8">
@@ -306,9 +368,11 @@ export default function OrganizationDetail() {
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>
-                        </div>
 
+
+                        </div>
                         <Table>
+
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Nombre</TableHead>
@@ -349,6 +413,20 @@ export default function OrganizationDetail() {
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => {
+                                                            setSelectedTenant(tenant);
+                                                            setIsExtendTrialOpen(true);
+                                                        }}>
+                                                            <Calendar className="mr-2 h-4 w-4" />
+                                                            Extender Trial
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => {
+                                                            setSelectedTenant(tenant);
+                                                            setIsActivatePlanOpen(true);
+                                                        }}>
+                                                            <School className="mr-2 h-4 w-4" />
+                                                            Activar Plan
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => {
                                                             setSelectedTenant(tenant);
                                                             setIsAssignOpen(true);
@@ -501,6 +579,65 @@ export default function OrganizationDetail() {
 
                     <DialogFooter>
                         <Button onClick={() => setIsCredentialsOpen(false)}>Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog: Extend Trial */}
+            <Dialog open={isExtendTrialOpen} onOpenChange={setIsExtendTrialOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Extender Periodo de Prueba</DialogTitle>
+                        <DialogDescription>
+                            Añade días extra al periodo de prueba de <b>{selectedTenant?.name}</b>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2 space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Días a añadir (desde HOY)</label>
+                            <Input
+                                type="number"
+                                min="1"
+                                value={extendDays}
+                                onChange={(e) => setExtendDays(parseInt(e.target.value))}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsExtendTrialOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleExtendTrial} disabled={processingSub}>
+                            {processingSub ? "Procesando..." : "Extender Trial"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog: Activate Plan */}
+            <Dialog open={isActivatePlanOpen} onOpenChange={setIsActivatePlanOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Activar Plan Institucional</DialogTitle>
+                        <DialogDescription>
+                            Activa el plan completo para <b>{selectedTenant?.name}</b>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2 space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Duración (Meses)</label>
+                            <Input
+                                type="number"
+                                min="1"
+                                value={planMonths}
+                                onChange={(e) => setPlanMonths(parseInt(e.target.value))}
+                            />
+                            <p className="text-xs text-muted-foreground">La fecha de expiración se calculará desde HOY.</p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsActivatePlanOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleActivatePlan} disabled={processingSub} className="bg-green-600 hover:bg-green-700">
+                            {processingSub ? "Procesando..." : "Activar Plan"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
