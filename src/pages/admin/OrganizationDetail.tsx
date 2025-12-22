@@ -5,7 +5,7 @@ import { Organization, Tenant } from "@/types/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, Plus, School, Calendar, MoreVertical, GraduationCap } from "lucide-react";
+import { ArrowLeft, Plus, School, Calendar, GraduationCap, UserCog, CheckCircle2, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -25,12 +25,6 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 export default function OrganizationDetail() {
     const { id } = useParams<{ id: string }>();
@@ -66,6 +60,9 @@ export default function OrganizationDetail() {
 
     const [isActivatePlanOpen, setIsActivatePlanOpen] = useState(false);
     const [planMonths, setPlanMonths] = useState(12);
+
+    // Course Detail Modal State
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
 
     useEffect(() => {
         if (id) {
@@ -281,6 +278,16 @@ export default function OrganizationDetail() {
         }
     };
 
+    // Helper to format date safely
+    const formatDate = (dateString: string | null) => {
+        if (!dateString) return "N/A";
+        try {
+            return format(new Date(dateString), "dd MMM yyyy");
+        } catch (e) {
+            return "Indefinido";
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center p-8">
@@ -321,7 +328,7 @@ export default function OrganizationDetail() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span className="capitalize badge bg-secondary px-2 rounded-full text-secondary-foreground">{org.plan_type}</span>
                         <span>•</span>
-                        <span>Registrado el {format(new Date(org.created_at), 'dd MMM yyyy')}</span>
+                        <span>Registrado el {formatDate(org.created_at)}</span>
                     </div>
                 </div>
             </div>
@@ -331,7 +338,7 @@ export default function OrganizationDetail() {
                     <CardHeader>
                         <CardTitle>Cursos (Tenants)</CardTitle>
                         <CardDescription>
-                            Estos son los espacios de trabajo individuales.
+                            Estos son los espacios de trabajo individuales. Click en la fila para ver detalles.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -368,11 +375,8 @@ export default function OrganizationDetail() {
                                     </DialogFooter>
                                 </DialogContent>
                             </Dialog>
-
-
                         </div>
                         <Table>
-
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Nombre</TableHead>
@@ -389,62 +393,71 @@ export default function OrganizationDetail() {
                                     </TableRow>
                                 ) : (
                                     tenants.map((tenant) => (
-                                        <TableRow key={tenant.id}>
+                                        <TableRow
+                                            key={tenant.id}
+                                            className="cursor-pointer hover:bg-muted/50"
+                                            onClick={() => {
+                                                setSelectedTenant(tenant);
+                                                if (tenant.owner_id) {
+                                                    // Optional: pre-fetch handled by specific view action
+                                                }
+                                                setIsDetailOpen(true);
+                                            }}
+                                        >
                                             <TableCell className="font-medium">
-                                                <Button
-                                                    variant="link"
-                                                    className="p-0 h-auto font-medium flex items-center gap-2 text-foreground hover:no-underline"
-                                                    onClick={() => handleViewCredentials(tenant)}
-                                                >
+                                                <div className="flex items-center gap-2">
                                                     <GraduationCap className="h-4 w-4 text-primary" />
                                                     {tenant.name}
-                                                </Button>
+                                                </div>
                                             </TableCell>
                                             <TableCell>
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                                    {tenant.subscription_status}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
+                                                    ${tenant.subscription_status === 'active' ? 'bg-green-100 text-green-800' :
+                                                        tenant.subscription_status === 'trial' ? 'bg-blue-100 text-blue-800' :
+                                                            'bg-gray-100 text-gray-800'}`}>
+                                                    {tenant.subscription_status || 'Sin estado'}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => {
+                                                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="Extender Trial"
+                                                        onClick={() => {
                                                             setSelectedTenant(tenant);
                                                             setIsExtendTrialOpen(true);
-                                                        }}>
-                                                            <Calendar className="mr-2 h-4 w-4" />
-                                                            Extender Trial
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => {
+                                                        }}
+                                                    >
+                                                        <Calendar className="h-4 w-4 text-blue-600" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="Activar Plan"
+                                                        onClick={() => {
                                                             setSelectedTenant(tenant);
                                                             setIsActivatePlanOpen(true);
-                                                        }}>
-                                                            <School className="mr-2 h-4 w-4" />
-                                                            Activar Plan
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => {
-                                                            setSelectedTenant(tenant);
-                                                            setIsAssignOpen(true);
-                                                        }}>
-                                                            <GraduationCap className="mr-2 h-4 w-4" />
-                                                            Asignar/Crear Encargado
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handleViewCredentials(tenant)}>
-                                                            Ver Credenciales
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => toast.info("Próximamente: Renombrar")}>
-                                                            Renombrar
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-destructive" onClick={() => toast.info("Próximamente: Desactivar")}>
-                                                            Desactivar
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                        }}
+                                                    >
+                                                        <School className="h-4 w-4 text-green-600" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="Gestionar Encargado"
+                                                        onClick={() => {
+                                                            if (tenant.owner_id) {
+                                                                handleViewCredentials(tenant);
+                                                            } else {
+                                                                setSelectedTenant(tenant);
+                                                                setIsAssignOpen(true);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <UserCog className="h-4 w-4 text-muted-foreground" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -487,6 +500,92 @@ export default function OrganizationDetail() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Dialog: Detail View */}
+            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Detalle del Curso</DialogTitle>
+                        <DialogDescription>
+                            Información completa de suscripción y estado.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {selectedTenant && (
+                        <div className="grid gap-6 py-4">
+                            {/* Basic Info */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                    <GraduationCap className="h-4 w-4" />
+                                    Información General
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-muted-foreground">Nombre</p>
+                                        <p className="font-medium">{selectedTenant.name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground">Creado el</p>
+                                        <p className="font-medium">{formatDate(selectedTenant.created_at)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-border" />
+
+                            {/* Subscription Info */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                    <Clock className="h-4 w-4" />
+                                    Estado de Suscripción
+                                </h4>
+                                <div className="space-y-3 bg-muted/40 p-3 rounded-md border">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Estado Actual</span>
+                                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full uppercase
+                                             ${selectedTenant.subscription_status === 'active' ? 'bg-green-100 text-green-700' :
+                                                selectedTenant.subscription_status === 'trial' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-gray-100 text-gray-700'}`}>
+                                            {selectedTenant.subscription_status || 'SIN ESTADO'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Trial Vence</span>
+                                        <span className="text-sm font-mono font-medium">
+                                            {selectedTenant.trial_ends_at ? formatDate(selectedTenant.trial_ends_at) : 'N/A'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Plan Válido Hasta</span>
+                                        <span className="text-sm font-mono font-medium">
+                                            {selectedTenant.valid_until ? formatDate(selectedTenant.valid_until) : 'Indefinido'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => {
+                                        if (selectedTenant.owner_id) {
+                                            handleViewCredentials(selectedTenant);
+                                        } else {
+                                            setIsAssignOpen(true);
+                                        }
+                                    }}
+                                >
+                                    <UserCog className="mr-2 h-4 w-4" />
+                                    {selectedTenant.owner_id ? 'Ver Credenciales Encargado' : 'Asignar Encargado'}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button onClick={() => setIsDetailOpen(false)}>Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Dialog for Creating Owner */}
             <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
