@@ -35,6 +35,7 @@ export default function OrganizationDetail() {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [newTenantName, setNewTenantName] = useState("");
     const [creating, setCreating] = useState(false);
+    const [initialPlanMonths, setInitialPlanMonths] = useState(12);
 
     // Create Owner States
     const [isAssignOpen, setIsAssignOpen] = useState(false);
@@ -112,6 +113,15 @@ export default function OrganizationDetail() {
         }
     };
 
+
+
+    // Helper calculate valid_until
+    const calculateValidUntil = (months: number) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() + months);
+        return date.toISOString();
+    };
+
     const handleCreateTenant = async () => {
         if (!newTenantName.trim() || !org) return;
 
@@ -135,6 +145,7 @@ export default function OrganizationDetail() {
                 organization_id: org.id,
                 owner_id: user.id, // SuperAdmin technically owns it until assigned
                 subscription_status: 'active',
+                valid_until: calculateValidUntil(initialPlanMonths),
                 slug: slug,
                 settings: {}
             }])
@@ -364,6 +375,16 @@ export default function OrganizationDetail() {
                                                 placeholder="Ej: Pre-Kinder A 2025"
                                                 value={newTenantName}
                                                 onChange={(e) => setNewTenantName(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Duración del Plan (Meses)</label>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                placeholder="12"
+                                                value={initialPlanMonths}
+                                                onChange={(e) => setInitialPlanMonths(parseInt(e.target.value) || 1)}
                                             />
                                         </div>
                                     </div>
