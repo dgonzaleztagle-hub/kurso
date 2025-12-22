@@ -23,39 +23,37 @@ Deno.serve(async (req) => {
       }
     )
 
-    // Verificar que el usuario que hace la petición sea master
+    // Verificar autorización básica del usuario llamante
     const authHeader = req.headers.get('Authorization')!
-    const token = authHeader.replace('Bearer ', '')
-    
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
-    
-    if (authError || !user) {
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No autorizado' }),
+        JSON.stringify({ error: 'Falta header de autorización' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user: callerUser }, error: authError } = await supabaseAdmin.auth.getUser(token)
+
+    if (authError || !callerUser) {
+      return new Response(
+        JSON.stringify({ error: 'No autorizado / Token inválido' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Verificar que el usuario tenga rol master
-    const { data: roleData, error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single()
-
-    if (roleError || roleData?.role !== 'master') {
-      return new Response(
-        JSON.stringify({ error: 'Solo usuarios Master pueden crear admins' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     // Obtener datos del cuerpo
-    const { email, password, name, userName, position, phone } = await req.json()
+    const { email, password, name, userName, position, phone, tenantId } = await req.json()
 
     if (!email || !password || !userName) {
       return new Response(
         JSON.stringify({ error: 'Email, contraseña y nombre de usuario son requeridos' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!tenantId) {
+      return new Response(
+        JSON.stringify({ error: 'tenantId es requerido para asignar el usuario' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -68,13 +66,15 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Crear el usuario admin
+    // 1. Crear el usuario en Auth
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: {
-        name: name || userName
+        full_name: name || userName,
+        user_name: userName, // Legacy support in metadata
+        phone: phone
       }
     })
 
@@ -87,34 +87,80 @@ Deno.serve(async (req) => {
 
     if (!newUser.user) {
       return new Response(
-        JSON.stringify({ error: 'Error al crear usuario' }),
+        JSON.stringify({ error: 'Error interno al crear usuario (Auth)' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Asignar rol admin con user_name, position y phone
-    const { error: roleInsertError } = await supabaseAdmin
-      .from('user_roles')
-      .insert({ 
-        user_id: newUser.user.id, 
-        role: 'admin',
+    // 2. Crear entrada en app_users (Perfil público)
+    // Usamos upsert para asegurar que exista
+    const { error: profileError } = await supabaseAdmin
+      .from('app_users')
+      .upsert({
+        id: newUser.user.id,
+        email: email,
+        full_name: name || userName,
+        whatsapp_number: phone || null,
+        is_superadmin: false
+      })
+
+    if (profileError) {
+      console.error("Error creating app_user profile:", profileError)
+      // No fallamos fatalmente aquí, pero es bueno loguearlo
+    }
+
+    // 3. Asignar membresía al Tenant (Rol Owner)
+    const { error: memberError } = await supabaseAdmin
+      .from('tenant_members')
+      .insert({
+        tenant_id: tenantId,
+        user_id: newUser.user.id,
+        role: 'owner',
+        status: 'active'
+      })
+
+    if (memberError) {
+      // Si falla la asignación, borramos el usuario para no dejar basura
+      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
+
+      return new Response(
+        JSON.stringify({
+          error: 'Error al asignar membresía (tenant_members): ' + memberError.message,
+          details: memberError
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 3.5 Actualizar owner_id en la tabla tenants (Para que aparezca en UI Admin)
+    // Esto es crítico para los listados de "Responsable"
+    const { error: tenantUpdateError } = await supabaseAdmin
+      .from('tenants')
+      .update({ owner_id: newUser.user.id })
+      .eq('id', tenantId)
+
+    if (tenantUpdateError) {
+      console.error("Error updating tenant owner_id:", tenantUpdateError)
+      // No fallamos fatalmente porque la membresía ya está creada, pero es un warning importante
+    }
+
+    // 4. (Opcional) Legacy support: user_roles
+    // Intentamos escribir en user_roles por si acaso, pero ignoramos error si la tabla no existe o falla
+    try {
+      await supabaseAdmin.from('user_roles').insert({
+        user_id: newUser.user.id,
+        role: 'owner',
         user_name: userName,
         position: position,
         phone: phone || null
       })
-
-    if (roleInsertError) {
-      // Si falla al asignar el rol, eliminar el usuario
-      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
-      return new Response(
-        JSON.stringify({ error: 'Error al asignar rol admin' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    } catch (e) {
+      console.warn("Legacy user_roles insert failed ignored", e)
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         user: {
           id: newUser.user.id,
           email: newUser.user.email,

@@ -28,7 +28,7 @@ interface FormExclusion {
 export default function FormResponses() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Form | null>(null);
   const [fields, setFields] = useState<FormField[]>([]);
@@ -53,7 +53,7 @@ export default function FormResponses() {
         .from('form_exclusions')
         .select('id, student_id, reason')
         .eq('form_id', id);
-      
+
       if (error) throw error;
       setExclusions(data || []);
     } catch (error) {
@@ -63,7 +63,7 @@ export default function FormResponses() {
 
   const addExclusion = async () => {
     if (!id || !newExclusionStudentId) return;
-    
+
     try {
       const { error } = await supabase
         .from('form_exclusions')
@@ -72,9 +72,9 @@ export default function FormResponses() {
           student_id: parseInt(newExclusionStudentId),
           reason: newExclusionReason.trim() || null
         });
-      
+
       if (error) throw error;
-      
+
       await loadExclusions();
       setNewExclusionStudentId('');
       setNewExclusionReason('');
@@ -95,9 +95,9 @@ export default function FormResponses() {
         .from('form_exclusions')
         .delete()
         .eq('id', exclusionId);
-      
+
       if (error) throw error;
-      
+
       setExclusions(exclusions.filter(e => e.id !== exclusionId));
       toast.success('Exclusión eliminada');
     } catch (error) {
@@ -108,18 +108,18 @@ export default function FormResponses() {
 
   const loadData = async () => {
     if (!id) return;
-    
+
     try {
       const [formRes, fieldsRes, responsesRes, studentsRes] = await Promise.all([
         supabase.from('forms').select('*').eq('id', id).single(),
         supabase.from('form_fields').select('*').eq('form_id', id).order('order_index'),
         supabase.from('form_responses').select('*').eq('form_id', id).order('submitted_at', { ascending: false }),
-        supabase.from('students').select('id, name')
+        supabase.from('students').select('id, first_name, last_name')
       ]);
-      
+
       if (formRes.error) throw formRes.error;
       setForm(formRes.data);
-      
+
       if (fieldsRes.error) throw fieldsRes.error;
       setFields(fieldsRes.data.map(f => ({
         ...f,
@@ -127,20 +127,22 @@ export default function FormResponses() {
         options: f.options as unknown as FieldOption[] | ScaleConfig | MatrixConfig,
         conditional_logic: f.conditional_logic as unknown as FormField['conditional_logic']
       })));
-      
+
       if (responsesRes.error) throw responsesRes.error;
       setResponses(responsesRes.data.map(r => ({
         ...r,
         response_data: r.response_data as unknown as Record<string, any>
       })));
-      
+
       if (!studentsRes.error && studentsRes.data) {
         const studentMap: Record<number, string> = {};
-        studentsRes.data.forEach(s => {
-          studentMap[s.id] = s.name;
+        const mappedStudents = studentsRes.data.map(s => {
+          const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre';
+          studentMap[s.id] = fullName;
+          return { id: s.id, name: fullName };
         });
         setStudents(studentMap);
-        setAllStudents(studentsRes.data);
+        setAllStudents(mappedStudents);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -156,9 +158,9 @@ export default function FormResponses() {
         .from('form_responses')
         .delete()
         .eq('id', responseId);
-        
+
       if (error) throw error;
-      
+
       setResponses(responses.filter(r => r.id !== responseId));
       toast.success('Respuesta eliminada');
     } catch (error) {
@@ -169,14 +171,14 @@ export default function FormResponses() {
 
   const formatValue = (field: FormField | null, value: any): string => {
     if (value === undefined || value === null) return '-';
-    
+
     // Si no hay campo (respuesta huérfana), mostrar el valor directamente
     if (!field) {
       if (typeof value === 'boolean') return value ? 'Sí' : 'No';
       if (typeof value === 'object') return JSON.stringify(value);
       return String(value);
     }
-    
+
     switch (field.field_type) {
       case 'single_choice': {
         const options = field.options as FieldOption[];
@@ -216,7 +218,7 @@ export default function FormResponses() {
   // Obtener los primeros valores de una respuesta para mostrar en la tabla
   const getResponsePreviewValues = (response: FormResponse): string[] => {
     const previewValues: string[] = [];
-    
+
     // Primero intentar con los campos actuales del formulario
     for (const field of fields.slice(0, 3)) {
       const value = response.response_data[field.id];
@@ -224,7 +226,7 @@ export default function FormResponses() {
         previewValues.push(formatValue(field, value));
       }
     }
-    
+
     // Si no hay valores con campos actuales, mostrar los primeros valores del response_data
     if (previewValues.length === 0) {
       const dataKeys = Object.keys(response.response_data).slice(0, 3);
@@ -233,12 +235,12 @@ export default function FormResponses() {
         previewValues.push(formatValue(null, value));
       }
     }
-    
+
     // Rellenar con '-' si faltan valores
     while (previewValues.length < 3) {
       previewValues.push('-');
     }
-    
+
     return previewValues;
   };
 
@@ -248,32 +250,32 @@ export default function FormResponses() {
         'Fecha': format(new Date(response.submitted_at), 'dd/MM/yyyy HH:mm', { locale: es }),
         'Estudiante': response.student_id ? students[response.student_id] || '-' : '-'
       };
-      
+
       fields.forEach(field => {
         row[field.label] = formatValue(field, response.response_data[field.id]);
       });
-      
+
       return row;
     });
-    
+
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
     XLSX.writeFile(wb, `${form?.title || 'formulario'}_respuestas.xlsx`);
-    
+
     toast.success('Archivo exportado');
   };
 
   const getStatistics = () => {
     const stats: Record<string, Record<string, number>> = {};
-    
+
     fields.forEach(field => {
       if (['single_choice', 'multiple_choice', 'scale'].includes(field.field_type)) {
         stats[field.id] = {};
-        
+
         responses.forEach(response => {
           const value = response.response_data[field.id];
-          
+
           if (field.field_type === 'multiple_choice' && Array.isArray(value)) {
             value.forEach(v => {
               stats[field.id][v] = (stats[field.id][v] || 0) + 1;
@@ -284,7 +286,7 @@ export default function FormResponses() {
         });
       }
     });
-    
+
     return stats;
   };
 
@@ -316,12 +318,12 @@ export default function FormResponses() {
 
   const exportPendingToPDF = async () => {
     if (!form) return;
-    
+
     const excludedWithNames = exclusions.map(e => ({
       name: students[e.student_id] || `ID: ${e.student_id}`,
       reason: e.reason || undefined
     }));
-    
+
     await generatePendingFormReport({
       formTitle: form.title,
       pendingStudents: pendingStudents.map(s => ({ name: s.name })),
@@ -329,7 +331,7 @@ export default function FormResponses() {
       totalStudents: allStudents.length,
       respondedCount: responses.filter(r => r.student_id !== null).length
     });
-    
+
     toast.success('Informe PDF generado');
   };
 
@@ -405,52 +407,53 @@ export default function FormResponses() {
                         {responses.map(response => {
                           const previewValues = getResponsePreviewValues(response);
                           return (
-                          <TableRow key={response.id}>
-                            <TableCell className="whitespace-nowrap">
-                              {format(new Date(response.submitted_at), 'd/MM/yy HH:mm', { locale: es })}
-                            </TableCell>
-                            <TableCell>
-                              {response.student_id ? students[response.student_id] || '-' : '-'}
-                            </TableCell>
-                            {previewValues.map((val, idx) => (
-                              <TableCell key={idx} className="max-w-[200px] truncate">
-                                {val}
+                            <TableRow key={response.id}>
+                              <TableCell className="whitespace-nowrap">
+                                {format(new Date(response.submitted_at), 'd/MM/yy HH:mm', { locale: es })}
                               </TableCell>
-                            ))}
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setSelectedResponse(response)}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="text-destructive">
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>¿Eliminar respuesta?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Esta acción no se puede deshacer.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => deleteResponse(response.id)}>
-                                        Eliminar
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )})}
+                              <TableCell>
+                                {response.student_id ? students[response.student_id] || '-' : '-'}
+                              </TableCell>
+                              {previewValues.map((val, idx) => (
+                                <TableCell key={idx} className="max-w-[200px] truncate">
+                                  {val}
+                                </TableCell>
+                              ))}
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSelectedResponse(response)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="text-destructive">
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>¿Eliminar respuesta?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Esta acción no se puede deshacer.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => deleteResponse(response.id)}>
+                                          Eliminar
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -487,16 +490,16 @@ export default function FormResponses() {
                   Estudiantes sin responder
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setExclusionsDialogOpen(true)}
                   >
                     <UserX className="h-4 w-4 mr-1" />
                     Exclusiones ({exclusions.length})
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={exportPendingToPDF}
                     disabled={pendingStudents.length === 0 && exclusions.length === 0}
                   >
@@ -513,8 +516,8 @@ export default function FormResponses() {
                 ) : (
                   <div className="space-y-1">
                     {pendingStudents.map((student, index) => (
-                      <div 
-                        key={student.id} 
+                      <div
+                        key={student.id}
                         className="flex items-center gap-3 py-2 px-3 rounded-md hover:bg-muted/50"
                       >
                         <span className="text-sm text-muted-foreground w-6">{index + 1}.</span>
@@ -532,7 +535,7 @@ export default function FormResponses() {
               {fields.filter(f => ['single_choice', 'multiple_choice', 'scale'].includes(f.field_type)).map(field => {
                 const fieldStats = statistics[field.id] || {};
                 const total = Object.values(fieldStats).reduce((a, b) => a + b, 0);
-                
+
                 return (
                   <Card key={field.id}>
                     <CardHeader className="pb-2">
@@ -546,12 +549,12 @@ export default function FormResponses() {
                           {Object.entries(fieldStats).map(([key, count]) => {
                             const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
                             let label = key;
-                            
+
                             if (field.field_type === 'single_choice' || field.field_type === 'multiple_choice') {
                               const options = field.options as FieldOption[];
                               label = options.find(o => o.id === key)?.label || key;
                             }
-                            
+
                             return (
                               <div key={key} className="space-y-1">
                                 <div className="flex justify-between text-sm">
@@ -559,7 +562,7 @@ export default function FormResponses() {
                                   <span className="text-muted-foreground">{count} ({percentage}%)</span>
                                 </div>
                                 <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                  <div 
+                                  <div
                                     className="h-full bg-primary rounded-full transition-all"
                                     style={{ width: `${percentage}%` }}
                                   />
@@ -604,9 +607,9 @@ export default function FormResponses() {
                           {formatValue(field, value)}
                         </p>
                         {field.field_type === 'file' && value && (
-                          <a 
-                            href={value} 
-                            target="_blank" 
+                          <a
+                            href={value}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-primary hover:underline text-sm"
                           >
@@ -616,7 +619,7 @@ export default function FormResponses() {
                       </div>
                     );
                   })}
-                  
+
                   {/* Mostrar datos huérfanos (campos que ya no existen en el formulario) */}
                   {Object.entries(selectedResponse.response_data)
                     .filter(([key]) => !fields.some(f => f.id === key))
@@ -643,7 +646,7 @@ export default function FormResponses() {
             <DialogHeader>
               <DialogTitle>Gestionar Exclusiones</DialogTitle>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               {/* Agregar nueva exclusión */}
               <div className="space-y-3 p-3 border rounded-lg">
@@ -665,8 +668,8 @@ export default function FormResponses() {
                   value={newExclusionReason}
                   onChange={(e) => setNewExclusionReason(e.target.value)}
                 />
-                <Button 
-                  onClick={addExclusion} 
+                <Button
+                  onClick={addExclusion}
                   disabled={!newExclusionStudentId}
                   size="sm"
                   className="w-full"
@@ -684,8 +687,8 @@ export default function FormResponses() {
               ) : (
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
                   {exclusions.map(exclusion => (
-                    <div 
-                      key={exclusion.id} 
+                    <div
+                      key={exclusion.id}
                       className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
                     >
                       <div>

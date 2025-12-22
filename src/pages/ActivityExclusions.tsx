@@ -19,31 +19,18 @@ interface Student {
 }
 
 interface Activity {
-  id: number | string;
+  id: number;
   name: string;
-  scheduled_date?: string;
-  type: 'base' | 'scheduled';
+  activity_date?: string;
 }
 
-interface BaseExclusion {
+interface Exclusion {
   id: number;
   student_id: number;
   activity_id: number;
   students: { name: string };
-  activities: { name: string };
-  type: 'base';
+  activities: { name: string; activity_date?: string };
 }
-
-interface ScheduledExclusion {
-  id: number;
-  student_id: number;
-  scheduled_activity_id: string;
-  students: { name: string };
-  scheduled_activities: { name: string; scheduled_date: string };
-  type: 'scheduled';
-}
-
-type Exclusion = BaseExclusion | ScheduledExclusion;
 
 export default function ActivityExclusions() {
   const navigate = useNavigate();
@@ -65,50 +52,46 @@ export default function ActivityExclusions() {
 
   const loadData = async () => {
     try {
-      const [baseExclusionsRes, scheduledExclusionsRes, studentsRes, baseActivitiesRes, scheduledActivitiesRes] = await Promise.all([
+      const [exclusionsRes, studentsRes, activitiesRes] = await Promise.all([
         supabase
           .from("activity_exclusions")
-          .select("*, students(name), activities(name)")
+          .select("*, students(first_name, last_name), activities(name, activity_date)")
           .order("id", { ascending: false }),
-        supabase
-          .from("scheduled_activity_exclusions")
-          .select("*, students(name), scheduled_activities(name, scheduled_date)")
-          .order("id", { ascending: false }),
-        supabase.from("students").select("id, name").order("name"),
-        supabase.from("activities").select("id, name").order("name"),
-        supabase.from("scheduled_activities").select("id, name, scheduled_date").order("scheduled_date", { ascending: false }),
+        supabase.from("students").select("id, first_name, last_name").order("last_name"),
+        supabase.from("activities").select("id, name, activity_date").order("id", { ascending: false }),
       ]);
 
-      if (baseExclusionsRes.error) throw baseExclusionsRes.error;
-      if (scheduledExclusionsRes.error) throw scheduledExclusionsRes.error;
+      if (exclusionsRes.error) throw exclusionsRes.error;
       if (studentsRes.error) throw studentsRes.error;
-      if (baseActivitiesRes.error) throw baseActivitiesRes.error;
-      if (scheduledActivitiesRes.error) throw scheduledActivitiesRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
 
-      // Combinar exclusiones de ambas tablas
-      const combinedExclusions: Exclusion[] = [
-        ...(baseExclusionsRes.data || []).map(e => ({ ...e, type: 'base' as const })),
-        ...(scheduledExclusionsRes.data || []).map(e => ({ ...e, type: 'scheduled' as const })),
-      ];
+      // Mapear exclusiones
+      const mappedExclusions: Exclusion[] = (exclusionsRes.data || []).map(e => ({
+        id: e.id,
+        student_id: e.student_id,
+        activity_id: e.activity_id,
+        students: {
+          name: `${e.students?.first_name || ''} ${e.students?.last_name || ''}`.trim() || 'Sin Nombre'
+        },
+        activities: {
+          name: e.activities?.name || 'Actividad Desconocida',
+          activity_date: e.activities?.activity_date
+        }
+      }));
 
-      // Combinar actividades de ambas tablas con prefijo para distinguirlas
-      const combinedActivities: Activity[] = [
-        ...(baseActivitiesRes.data || []).map(a => ({
-          id: a.id,
-          name: a.name,
-          type: 'base' as const
-        })),
-        ...(scheduledActivitiesRes.data || []).map(a => ({
-          id: a.id,
-          name: `${a.name} - ${new Date(a.scheduled_date).toLocaleDateString('es-CL')}`,
-          scheduled_date: a.scheduled_date,
-          type: 'scheduled' as const
-        }))
-      ];
+      // Mapear actividades
+      const mappedActivities: Activity[] = (activitiesRes.data || []).map(a => ({
+        id: a.id,
+        name: a.name,
+        activity_date: a.activity_date
+      }));
 
-      setExclusions(combinedExclusions);
-      setStudents(studentsRes.data || []);
-      setActivities(combinedActivities);
+      setExclusions(mappedExclusions);
+      setStudents((studentsRes.data || []).map(s => ({
+        id: s.id,
+        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
+      })));
+      setActivities(mappedActivities);
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Error al cargar datos");
@@ -126,34 +109,13 @@ export default function ActivityExclusions() {
     }
 
     try {
-      // Encontrar la actividad seleccionada para determinar su tipo
-      const selectedActivity = activities.find(a => a.id.toString() === newExclusion.activity_id);
-      
-      if (!selectedActivity) {
-        toast.error("Actividad no encontrada");
-        return;
-      }
-
-      let error;
-      
-      if (selectedActivity.type === 'base') {
-        // Insertar en activity_exclusions para actividades base
-        const result = await supabase.from("activity_exclusions").insert({
-          student_id: parseInt(newExclusion.student_id),
-          activity_id: parseInt(newExclusion.activity_id),
-        });
-        error = result.error;
-      } else {
-        // Insertar en scheduled_activity_exclusions para actividades programadas
-        const result = await supabase.from("scheduled_activity_exclusions").insert({
-          student_id: parseInt(newExclusion.student_id),
-          scheduled_activity_id: newExclusion.activity_id,
-        });
-        error = result.error;
-      }
+      const { error } = await supabase.from("activity_exclusions").insert({
+        student_id: parseInt(newExclusion.student_id),
+        activity_id: parseInt(newExclusion.activity_id),
+      });
 
       if (error) {
-        if (error.code === "23505") {
+        if (error.code === "23505") { // Unique constraint code
           toast.error("Esta exclusión ya existe");
         } else {
           throw error;
@@ -171,25 +133,14 @@ export default function ActivityExclusions() {
     }
   };
 
-  const handleDeleteExclusion = async (exclusion: Exclusion) => {
+  const handleDeleteExclusion = async (id: number) => {
     if (!confirm("¿Está seguro de eliminar esta exclusión?")) return;
 
     try {
-      let error;
-      
-      if (exclusion.type === 'base') {
-        const result = await supabase
-          .from("activity_exclusions")
-          .delete()
-          .eq("id", exclusion.id);
-        error = result.error;
-      } else {
-        const result = await supabase
-          .from("scheduled_activity_exclusions")
-          .delete()
-          .eq("id", exclusion.id);
-        error = result.error;
-      }
+      const { error } = await supabase
+        .from("activity_exclusions")
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
 
@@ -201,17 +152,12 @@ export default function ActivityExclusions() {
     }
   };
 
-  const getExclusionActivityName = (exclusion: Exclusion): string => {
-    if (exclusion.type === 'base') {
-      return exclusion.activities.name;
-    } else {
-      const date = new Date(exclusion.scheduled_activities.scheduled_date).toLocaleDateString('es-CL');
-      return `${exclusion.scheduled_activities.name} - ${date}`;
+  const formatActivityName = (activity: Activity | Exclusion['activities']) => {
+    if (activity.activity_date) {
+      const date = new Date(activity.activity_date).toLocaleDateString('es-CL');
+      return `${activity.name} (${date})`;
     }
-  };
-
-  const getExclusionStudentName = (exclusion: Exclusion): string => {
-    return exclusion.students.name;
+    return activity.name;
   };
 
   return (
@@ -279,16 +225,9 @@ export default function ActivityExclusions() {
                         <SelectValue placeholder="Seleccione una actividad" />
                       </SelectTrigger>
                       <SelectContent className="bg-background max-h-[250px] md:max-h-[300px] overflow-y-auto">
-                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Actividades Base</div>
-                        {activities.filter(a => a.type === 'base').map((activity) => (
-                          <SelectItem key={`base-${activity.id}`} value={activity.id.toString()}>
-                            {activity.name}
-                          </SelectItem>
-                        ))}
-                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground mt-2">Actividades Programadas</div>
-                        {activities.filter(a => a.type === 'scheduled').map((activity) => (
-                          <SelectItem key={`scheduled-${activity.id}`} value={activity.id.toString()}>
-                            {activity.name}
+                        {activities.map((activity) => (
+                          <SelectItem key={activity.id} value={activity.id.toString()}>
+                            {formatActivityName(activity)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -318,27 +257,21 @@ export default function ActivityExclusions() {
                     <TableRow>
                       <TableHead>Estudiante</TableHead>
                       <TableHead>Actividad</TableHead>
-                      <TableHead>Tipo</TableHead>
                       <TableHead className="w-[100px]">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {exclusions.map((exclusion) => (
-                      <TableRow key={`${exclusion.type}-${exclusion.id}`}>
+                      <TableRow key={exclusion.id}>
                         <TableCell className="font-medium">
-                          {getExclusionStudentName(exclusion)}
+                          {exclusion.students.name}
                         </TableCell>
-                        <TableCell>{getExclusionActivityName(exclusion)}</TableCell>
-                        <TableCell>
-                          <Badge variant={exclusion.type === 'base' ? 'secondary' : 'outline'}>
-                            {exclusion.type === 'base' ? 'Base' : 'Programada'}
-                          </Badge>
-                        </TableCell>
+                        <TableCell>{formatActivityName(exclusion.activities)}</TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteExclusion(exclusion)}
+                            onClick={() => handleDeleteExclusion(exclusion.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -352,27 +285,24 @@ export default function ActivityExclusions() {
               {/* Vista Móvil - Cards */}
               <div className="md:hidden space-y-3">
                 {exclusions.map((exclusion) => (
-                  <Card key={`${exclusion.type}-${exclusion.id}`} className="border-l-4 border-l-primary">
+                  <Card key={exclusion.id} className="border-l-4 border-l-primary">
                     <CardContent className="p-4">
                       <div className="space-y-2">
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Estudiante</p>
-                            <p className="font-medium text-sm">{getExclusionStudentName(exclusion)}</p>
+                            <p className="font-medium text-sm">{exclusion.students.name}</p>
                           </div>
-                          <Badge variant={exclusion.type === 'base' ? 'secondary' : 'outline'} className="text-xs">
-                            {exclusion.type === 'base' ? 'Base' : 'Programada'}
-                          </Badge>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Actividad</p>
-                          <p className="text-sm">{getExclusionActivityName(exclusion)}</p>
+                          <p className="text-sm">{formatActivityName(exclusion.activities)}</p>
                         </div>
                         <div className="pt-2 flex justify-end">
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => handleDeleteExclusion(exclusion)}
+                            onClick={() => handleDeleteExclusion(exclusion.id)}
                           >
                             <Trash2 className="h-3 w-3 mr-1.5" />
                             Eliminar

@@ -80,7 +80,7 @@ export default function StudentDashboard() {
       const currentYear = new Date().getFullYear();
 
       const [studentResult, paymentsResult, activitiesResult, exclusionsResult, scheduledActivitiesResult, notificationsResult, creditResult, creditMovementsResult] = await Promise.all([
-        supabase.from("students").select("name, enrollment_date").eq("id", studentId).single(),
+        supabase.from("students").select("first_name, last_name, enrollment_date").eq("id", studentId).single(),
         supabase.from("payments").select("*").eq("student_id", studentId).order("payment_date", { ascending: false }),
         supabase.from("activities").select("id, name, amount, activity_date"),
         supabase.from("activity_exclusions").select("activity_id").eq("student_id", studentId),
@@ -93,7 +93,8 @@ export default function StudentDashboard() {
       if (studentResult.error) throw studentResult.error;
       if (paymentsResult.error) throw paymentsResult.error;
 
-      setStudentName(studentResult.data.name);
+      const fullName = `${studentResult.data.first_name || ''} ${studentResult.data.last_name || ''}`.trim() || 'Sin Nombre';
+      setStudentName(fullName);
       setPaymentHistory(paymentsResult.data);
       setActivities(scheduledActivitiesResult.data || []);
       setNotifications(notificationsResult.data || []);
@@ -104,12 +105,12 @@ export default function StudentDashboard() {
         .filter(act => !act.completed)
         .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
         .slice(0, 2);
-      
+
       setUpcomingActivities(activeActivities);
-      
+
       // Cargar donaciones para las próximas 2 actividades
       const donationsMap: { [activityId: string]: Donation[] } = {};
-      
+
       for (const nextAct of activeActivities) {
         const { data: nextActDonations } = await supabase
           .from("activity_donations")
@@ -117,7 +118,7 @@ export default function StudentDashboard() {
           .eq("student_id", studentId)
           .eq("scheduled_activity_id", nextAct.id)
           .order("created_at", { ascending: false });
-        
+
         if (nextActDonations && nextActDonations.length > 0) {
           donationsMap[nextAct.id] = nextActDonations.map(d => ({
             ...d,
@@ -127,7 +128,7 @@ export default function StudentDashboard() {
           donationsMap[nextAct.id] = [];
         }
       }
-      
+
       setActivityDonations(donationsMap);
 
       const totalPaidAmount = paymentsResult.data.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -165,7 +166,7 @@ export default function StudentDashboard() {
 
       // Primero calcular lo pagado por cada actividad
       const activityPayments = new Map<number, number>();
-      
+
       for (const activity of activitiesResult.data || []) {
         // Sumar todos los pagos relacionados con esta actividad
         const relatedPayments = paymentsResult.data.filter(p => {
@@ -173,19 +174,19 @@ export default function StudentDashboard() {
           if (p.activity_id !== null && p.activity_id === activity.id) {
             return true;
           }
-          
+
           // Si no tiene activity_id, verificar por concepto
           // Normalizar ambos strings para comparación
           const activityNameNormalized = activity.name.toUpperCase().trim().replace(/\s+/g, ' ');
           const conceptNormalized = (p.concept || '').toUpperCase().trim().replace(/\s+/g, ' ');
-          
+
           // El concepto debe contener el nombre completo de la actividad
           return conceptNormalized.includes(activityNameNormalized);
         });
-        
+
         const totalPaid = relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
         activityPayments.set(activity.id, totalPaid);
-        
+
         // Debug: mostrar qué se encontró para esta actividad
         if (totalPaid > 0) {
           console.log(`Actividad "${activity.name}": Monto esperado $${activity.amount}, Pagado $${totalPaid}`);
@@ -196,27 +197,27 @@ export default function StudentDashboard() {
       for (const activity of activitiesResult.data || []) {
         // Solo considerar actividades con fecha
         if (!activity.activity_date) continue;
-        
+
         const activityDate = new Date(activity.activity_date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         // Solo considerar actividades que ya pasaron
         if (activityDate > today) continue;
-        
+
         // Excluir si el alumno está excluido de esta actividad
         if (exclusionsSet.has(activity.id)) continue;
-        
+
         // Excluir si el alumno se matriculó después de la actividad
         if (enrollmentDate > activityDate) continue;
 
         const paid = activityPayments.get(activity.id) || 0;
         const expectedAmount = Number(activity.amount);
         const owed = Math.max(0, expectedAmount - paid);
-        
+
         // Debug: mostrar todas las actividades evaluadas
         console.log(`Evaluando "${activity.name}": Esperado $${expectedAmount}, Pagado $${paid}, Adeudado $${owed}`);
-        
+
         if (owed > 0) {
           activityDebts.push({ name: activity.name, amount: owed });
         }
@@ -299,15 +300,15 @@ export default function StudentDashboard() {
                 </p>
               </div>
             </div>
-            
+
             {/* Donaciones de la actividad */}
             {activityDonations[activity.id]?.length > 0 && (
               <div className="mt-4 pt-4 border-t border-border/50">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Tus donaciones:</p>
                 <div className="space-y-2">
                   {activityDonations[activity.id].map((donation) => (
-                    <div 
-                      key={donation.id} 
+                    <div
+                      key={donation.id}
                       className="flex items-center justify-between p-2 bg-background/50 rounded-md"
                     >
                       <div className="flex-1">
@@ -316,7 +317,7 @@ export default function StudentDashboard() {
                           {donation.amount} {donation.unit}
                         </p>
                       </div>
-                      <Badge 
+                      <Badge
                         variant={donation.donated_at ? "default" : "secondary"}
                         className={donation.donated_at ? "bg-green-100 text-green-700 hover:bg-green-100 text-xs" : "text-xs"}
                       >
@@ -358,9 +359,9 @@ export default function StudentDashboard() {
       <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-primary/20">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 p-4 md:p-8">
           <div className="flex items-center gap-4 md:gap-6">
-            <img 
-              src={logoImage} 
-              alt="Logo del Colegio" 
+            <img
+              src={logoImage}
+              alt="Logo del Colegio"
               className="w-16 h-16 md:w-24 md:h-24 object-contain"
             />
             <div>
@@ -452,7 +453,7 @@ export default function StudentDashboard() {
                 </span>
               </div>
             )}
-            
+
             {debtDetail.activityDebts.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Actividades:</p>
@@ -506,7 +507,7 @@ export default function StudentDashboard() {
               )}
             </Button>
           </CollapsibleTrigger>
-          
+
           <CollapsibleContent>
             <CardContent className="pt-0 pb-4">
               {activities.length === 0 ? (
@@ -516,8 +517,8 @@ export default function StudentDashboard() {
               ) : (
                 <div className="space-y-2">
                   {activities.map((activity) => (
-                    <div 
-                      key={activity.id} 
+                    <div
+                      key={activity.id}
                       className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                     >
                       <div className="flex-1">
@@ -566,7 +567,7 @@ export default function StudentDashboard() {
               )}
             </Button>
           </CollapsibleTrigger>
-          
+
           <CollapsibleContent>
             <CardContent className="pt-0 pb-4">
               {paymentHistory.length === 0 ? (

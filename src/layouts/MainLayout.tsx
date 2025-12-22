@@ -21,7 +21,10 @@ import { useTenant } from "@/contexts/TenantContext";
 export const MainLayout = ({ children }: MainLayoutProps) => {
     const location = useLocation();
     const { signOut, userRole: globalRole, hasPermission } = useAuth();
-    const { roleInCurrentTenant } = useTenant();
+    const { roleInCurrentTenant, currentTenant } = useTenant();
+
+    // Extract College Name from Settings
+    const institutionName = currentTenant?.settings?.institution_name || null;
 
     // Use Tenant Role if available, otherwise global (for SuperAdmin/Legacy)
     // If not in a tenant context (e.g. creating one), fallback might be needed
@@ -62,8 +65,8 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
 
                 // Students/Members restrictions
                 if (activeRole === 'student' || activeRole === 'member') {
-                    // Filter out management modules
-                    return false;
+                    // Allow specific items for students (like Meeting Minutes)
+                    if (!item.allowStudent) return false;
                 }
 
                 return item.module ? hasPermission(item.module as any) : true;
@@ -81,7 +84,14 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                 <div className="container flex h-14 items-center px-4">
                     <div className="flex items-center gap-2">
                         <School className="h-5 w-5 text-primary" />
-                        <span className="text-sm font-medium hidden sm:inline-block">Kurso SaaS</span>
+                        <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                            <span className="text-sm font-medium hidden sm:inline-block">Kurso SaaS</span>
+                            {institutionName && (
+                                <span className="text-xs text-muted-foreground font-light hidden sm:inline-block">
+                                    | {institutionName}
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                         <span className="text-xs sm:text-sm text-muted-foreground">{greeting}</span>

@@ -8,7 +8,8 @@ import { parseDateFromDB } from "@/lib/dateUtils";
 
 interface Student {
   id: number;
-  name: string;
+  first_name: string;
+  last_name: string;
   enrollment_date: string;
 }
 
@@ -42,8 +43,8 @@ export default function ActivityPayments() {
       // Get all students with enrollment dates
       const { data: students, error: studentsError } = await supabase
         .from("students")
-        .select("id, name, enrollment_date")
-        .order("name");
+        .select("id, first_name, last_name, enrollment_date")
+        .order("last_name");
 
       if (studentsError) throw studentsError;
 
@@ -64,7 +65,7 @@ export default function ActivityPayments() {
       // Get all payments (we'll match by concept name)
       const { data: payments, error: paymentsError } = await supabase
         .from("payments")
-        .select("student_id, student_name, concept, amount");
+        .select("student_id, concept, amount");
 
       if (paymentsError) throw paymentsError;
 
@@ -80,7 +81,7 @@ export default function ActivityPayments() {
         const matchingActivity = activities?.find(
           (act) => payment.concept?.toUpperCase().includes(act.name.toUpperCase())
         );
-        
+
         if (matchingActivity && payment.student_id) {
           const key = `${payment.student_id}-${matchingActivity.id}`;
           const current = paymentMap.get(key) || 0;
@@ -91,19 +92,21 @@ export default function ActivityPayments() {
       // Build the payment status array
       const statuses: PaymentStatus[] = [];
       students?.forEach((student) => {
+        const studentName = `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Sin Nombre';
+
         activities?.forEach((activity) => {
           const key = `${student.id}-${activity.id}`;
           const isExcluded = exclusionMap.has(key);
           const totalPaid = paymentMap.get(key) || 0;
-          
+
           // Check if student was enrolled at the time of the activity
-          const wasNotEnrolled = activity.activity_date && 
-            student.enrollment_date && 
+          const wasNotEnrolled = activity.activity_date &&
+            student.enrollment_date &&
             parseDateFromDB(student.enrollment_date) > parseDateFromDB(activity.activity_date);
 
           statuses.push({
             student_id: student.id,
-            student_name: student.name,
+            student_name: studentName,
             activity_id: activity.id,
             activity_name: activity.name,
             activity_amount: activity.amount,
@@ -127,13 +130,13 @@ export default function ActivityPayments() {
     if (status.was_not_enrolled) {
       return <Badge variant="outline" className="bg-muted">No matriculado aún</Badge>;
     }
-    
+
     if (status.is_excluded) {
       return <Badge variant="outline">Excluido</Badge>;
     }
-    
+
     const remaining = status.activity_amount - status.total_paid;
-    
+
     if (remaining <= 0) {
       return <Badge className="bg-green-500">Pagado</Badge>;
     } else if (status.total_paid > 0) {
@@ -181,11 +184,11 @@ export default function ActivityPayments() {
                       const totalExpected = nonExcluded.length * statuses[0]?.activity_amount;
                       const totalCollected = nonExcluded.reduce((sum, s) => sum + s.total_paid, 0);
                       const totalOutstanding = totalExpected - totalCollected;
-                      
+
                       return (
                         <>
-                          <span className="font-semibold">Total esperado:</span> ${totalExpected.toLocaleString()} | 
-                          <span className="font-semibold ml-2">Recaudado:</span> ${totalCollected.toLocaleString()} | 
+                          <span className="font-semibold">Total esperado:</span> ${totalExpected.toLocaleString()} |
+                          <span className="font-semibold ml-2">Recaudado:</span> ${totalCollected.toLocaleString()} |
                           <span className="font-semibold ml-2">Adeudado:</span> ${totalOutstanding.toLocaleString()}
                         </>
                       );
@@ -212,8 +215,8 @@ export default function ActivityPayments() {
                           {status.was_not_enrolled
                             ? "-"
                             : status.is_excluded
-                            ? "-"
-                            : `$${status.total_paid.toLocaleString()}`}
+                              ? "-"
+                              : `$${status.total_paid.toLocaleString()}`}
                         </TableCell>
                         <TableCell>{getPaymentStatus(status)}</TableCell>
                       </TableRow>

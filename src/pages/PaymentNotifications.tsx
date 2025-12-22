@@ -37,7 +37,8 @@ interface PaymentNotification {
   created_at: string;
   students?: {
     id: number;
-    name: string;
+    first_name: string;
+    last_name: string;
   };
 }
 
@@ -70,13 +71,14 @@ export default function PaymentNotifications() {
           *,
           students (
             id,
-            name
+            first_name,
+            last_name
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setNotifications((data || []) as PaymentNotification[]);
+      setNotifications((data || []) as unknown as PaymentNotification[]);
     } catch (error) {
       console.error('Error loading notifications:', error);
       toast({
@@ -87,6 +89,11 @@ export default function PaymentNotifications() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getStudentName = (notification: PaymentNotification) => {
+    if (!notification.students) return 'Estudiante desconocido';
+    return `${notification.students.first_name || ''} ${notification.students.last_name || ''}`.trim() || 'Sin Nombre';
   };
 
   const handleViewDetails = (notification: PaymentNotification) => {
@@ -124,6 +131,7 @@ export default function PaymentNotifications() {
       const paymentDetails = notification.payment_details;
       const selectedDebts = paymentDetails.selected_debts || [];
       const remainder = paymentDetails.remainder_to_monthly_fees || 0;
+      const studentFullName = getStudentName(notification);
 
       console.log('=== APPROVAL DEBUG ===');
       console.log('Payment details:', JSON.stringify(paymentDetails, null, 2));
@@ -136,14 +144,14 @@ export default function PaymentNotifications() {
       // Registrar pagos según la distribución
       for (const debt of selectedDebts) {
         console.log('Processing debt:', debt.type, debt.name, 'Amount:', debt.paid_amount);
-        
+
         if (debt.type === 'activity') {
           // Registrar solo el monto pagado para actividades
           const { error: insertError } = await supabase.from('payments').insert({
             folio: currentFolio++,
             payment_date: notification.payment_date,
             student_id: notification.student_id,
-            student_name: notification.students?.name,
+            student_name: studentFullName,
             activity_id: debt.id,
             concept: debt.name,
             amount: debt.paid_amount, // Usar el monto realmente pagado
@@ -155,7 +163,7 @@ export default function PaymentNotifications() {
             folio: currentFolio++,
             payment_date: notification.payment_date,
             student_id: notification.student_id,
-            student_name: notification.students?.name,
+            student_name: studentFullName,
             concept: 'Cuota Mensual',
             amount: debt.paid_amount, // Usar el monto realmente pagado
           });
@@ -290,7 +298,7 @@ export default function PaymentNotifications() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="flex items-center gap-2">
-                      {notification.students?.name}
+                      {getStudentName(notification)}
                       {getStatusBadge(notification.status)}
                     </CardTitle>
                     <CardDescription>
@@ -317,7 +325,7 @@ export default function PaymentNotifications() {
                       <span className="font-medium">Banco:</span> {notification.bank}
                     </div>
                   </div>
-                  
+
                   {notification.rejection_reason && (
                     <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 mt-2">
                       <p className="text-sm font-medium text-red-800 dark:text-red-200">
@@ -346,7 +354,7 @@ export default function PaymentNotifications() {
                     <span className="hidden sm:inline">Ver Detalles</span>
                     <span className="sm:hidden">Ver</span>
                   </Button>
-                  
+
                   {notification.status === 'pending' && userRole === 'master' && (
                     <>
                       <Button
@@ -390,13 +398,13 @@ export default function PaymentNotifications() {
               Información completa del pago informado
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedNotification && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Estudiante</Label>
-                  <p className="font-medium">{selectedNotification.students?.name}</p>
+                  <p className="font-medium">{getStudentName(selectedNotification)}</p>
                 </div>
                 <div>
                   <Label>Monto</Label>
@@ -431,7 +439,7 @@ export default function PaymentNotifications() {
                       {selectedNotification.payment_details.selected_debts.map((debt: any, index: number) => {
                         const paidAmount = debt.paid_amount || debt.amount;
                         const isPartial = debt.paid_amount && debt.paid_amount < debt.amount;
-                        
+
                         return (
                           <div key={index} className="flex justify-between text-sm">
                             <span>
@@ -455,7 +463,7 @@ export default function PaymentNotifications() {
                   ) : (
                     <p className="text-sm text-muted-foreground">No hay deudas específicas seleccionadas</p>
                   )}
-                  
+
                   {selectedNotification.payment_details?.remainder_to_monthly_fees > 0 && (
                     <div className="border-t pt-2 mt-2">
                       <div className="flex justify-between text-sm">
@@ -512,7 +520,7 @@ export default function PaymentNotifications() {
               Indique el motivo del rechazo. El apoderado recibirá esta información.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="rejection-reason">Motivo del rechazo *</Label>
@@ -528,8 +536,8 @@ export default function PaymentNotifications() {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setShowRejectDialog(false);
                 setRejectionReason('');

@@ -83,7 +83,7 @@ export default function Reimbursements() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [proofFiles, setProofFiles] = useState<File[]>([]);
   const [uploadingProof, setUploadingProof] = useState(false);
-  
+
   // Form state
   const [type, setType] = useState<'reimbursement' | 'supplier_payment'>('reimbursement');
   const [amount, setAmount] = useState("");
@@ -110,12 +110,12 @@ export default function Reimbursements() {
       const { data: reimbursementsData, error } = await supabase
         .from('reimbursements')
         .select('*')
-        .order('folio', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       const userIds = [...new Set(reimbursementsData?.map(r => r.user_id) || [])];
-      
+
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, user_name, position')
@@ -158,11 +158,11 @@ export default function Reimbursements() {
     if (files.length === 0) return [];
 
     const uploadedFiles = [];
-    
+
     for (const file of files) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${reimbursementId}/${Math.random()}.${fileExt}`;
-      
+
       const { error: uploadError, data } = await supabase.storage
         .from('reimbursements')
         .upload(fileName, file);
@@ -182,7 +182,7 @@ export default function Reimbursements() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) return;
 
     setUploading(true);
@@ -265,11 +265,11 @@ export default function Reimbursements() {
     if (proofFiles.length === 0) return [];
 
     const uploadedProofs = [];
-    
+
     for (const file of proofFiles) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${reimbursementId}/proof_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      
+
       const { error: uploadError } = await supabase.storage
         .from('reimbursements')
         .upload(fileName, file);
@@ -448,10 +448,10 @@ export default function Reimbursements() {
 
       if (error) throw error;
 
-      const message = selectedReimbursement.expense_folio 
+      const message = selectedReimbursement.expense_folio
         ? (selectedReimbursement.type === 'supplier_payment' ? "Pago y egreso eliminados exitosamente" : "Rendición y egreso eliminados exitosamente")
         : (selectedReimbursement.type === 'supplier_payment' ? "Pago eliminado exitosamente" : "Rendición eliminada exitosamente");
-      
+
       toast.success(message);
       setShowDeleteDialog(false);
       setDetailsOpen(false);
@@ -549,7 +549,7 @@ export default function Reimbursements() {
           <p className="text-sm">{reimbursement.user_display_name || 'Usuario desconocido'}</p>
         </div>
       </div>
-      
+
       {reimbursement.type === 'supplier_payment' && reimbursement.supplier_name && (
         <div>
           <Label className="text-xs font-semibold text-muted-foreground">Proveedor</Label>
@@ -572,7 +572,7 @@ export default function Reimbursements() {
         </Label>
         <p className="text-sm mt-0.5">{reimbursement.subject}</p>
       </div>
-      
+
       <div>
         <Label className="text-xs font-semibold text-muted-foreground">
           {reimbursement.type === 'supplier_payment' ? 'Datos Bancarios' : 'Info Bancaria'}
@@ -642,7 +642,7 @@ export default function Reimbursements() {
           ) : null}
         </div>
       )}
-      
+
       {reimbursement.rejection_reason && (
         <div>
           <Label className="text-xs font-semibold text-destructive">Motivo de Rechazo</Label>
@@ -745,7 +745,7 @@ export default function Reimbursements() {
       {type === 'reimbursement' ? (
         <div className="space-y-4 border-t pt-4">
           <h3 className="font-semibold">Información de Cuenta Bancaria</h3>
-          
+
           <div>
             <Label htmlFor="bank">Banco</Label>
             <Input
@@ -815,7 +815,7 @@ export default function Reimbursements() {
           </div>
 
           <h3 className="font-semibold">Datos Bancarios del Proveedor</h3>
-          
+
           <div>
             <Label htmlFor="bank">Banco</Label>
             <Input
@@ -888,7 +888,7 @@ export default function Reimbursements() {
 
   const handleShareLink = async () => {
     const link = `${window.location.origin}/solicitud-pago-proveedor`;
-    
+
     // Verificar si el dispositivo soporta Web Share API
     if (navigator.share) {
       try {
@@ -932,7 +932,7 @@ export default function Reimbursements() {
             <Share2 className="h-4 w-4 mr-2" />
             {isMobile ? "Compartir" : "Compartir con Proveedor"}
           </Button>
-          
+
           {isMobile ? (
             <>
               <Drawer open={open && type === 'reimbursement'} onOpenChange={(isOpen) => {
@@ -960,7 +960,7 @@ export default function Reimbursements() {
                   </DrawerFooter>
                 </DrawerContent>
               </Drawer>
-              
+
               <Drawer open={open && type === 'supplier_payment'} onOpenChange={(isOpen) => {
                 setOpen(isOpen);
                 if (isOpen) setType('supplier_payment');
@@ -1004,7 +1004,7 @@ export default function Reimbursements() {
                   {renderForm()}
                 </DialogContent>
               </Dialog>
-              
+
               <Dialog open={open && type === 'supplier_payment'} onOpenChange={(isOpen) => {
                 setOpen(isOpen);
                 if (isOpen) setType('supplier_payment');
@@ -1151,11 +1151,11 @@ export default function Reimbursements() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Aprobación</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro que desea aprobar {selectedReimbursement?.type === 'supplier_payment' ? 'este pago a proveedor' : 'esta rendición'}? 
+              ¿Está seguro que desea aprobar {selectedReimbursement?.type === 'supplier_payment' ? 'este pago a proveedor' : 'esta rendición'}?
               Esta acción creará automáticamente un registro de egreso.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           <div className="py-4">
             <Label htmlFor="proof">Comprobantes de Transferencia (opcional)</Label>
             <Input
@@ -1212,7 +1212,7 @@ export default function Reimbursements() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reabrir {selectedReimbursement?.type === 'supplier_payment' ? 'Pago' : 'Rendición'}</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro de que desea reabrir {selectedReimbursement?.type === 'supplier_payment' ? 'este pago' : 'esta rendición'}? 
+              ¿Está seguro de que desea reabrir {selectedReimbursement?.type === 'supplier_payment' ? 'este pago' : 'esta rendición'}?
               Esto eliminará el egreso asociado si existe.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1228,7 +1228,7 @@ export default function Reimbursements() {
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar {selectedReimbursement?.type === 'supplier_payment' ? 'Pago' : 'Rendición'}</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar permanentemente {selectedReimbursement?.type === 'supplier_payment' ? 'este pago' : 'esta rendición'}? 
+              ¿Está seguro de que desea eliminar permanentemente {selectedReimbursement?.type === 'supplier_payment' ? 'este pago' : 'esta rendición'}?
               Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>

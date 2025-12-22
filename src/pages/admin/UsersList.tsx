@@ -35,16 +35,14 @@ export default function UsersList() {
 
     const fetchUsers = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('app_users')
-            .select('*')
-            .order('created_at', { ascending: false });
+        // Usar RPC para traer solo Clients (Dueños de Cursos Independientes)
+        const { data, error } = await supabase.rpc('get_platform_clients' as any);
 
         if (!error && data) {
-            setUsers(data as AppUser[]);
+            setUsers(data as any[]);
         } else if (error) {
             console.error("Error fetching users:", error);
-            toast.error("Error al cargar usuarios");
+            toast.error("Error al cargar clientes");
         }
         setLoading(false);
     };
@@ -72,8 +70,8 @@ export default function UsersList() {
                     Volver
                 </Button>
                 <div>
-                    <h1 className="text-3xl font-bold">Usuarios Globales</h1>
-                    <p className="text-muted-foreground">Gestión de usuarios registrados en la plataforma</p>
+                    <h1 className="text-3xl font-bold">Clientes (Dueños Independientes)</h1>
+                    <p className="text-muted-foreground">Gestión de creadores de cursos sin organización</p>
                 </div>
             </div>
 
@@ -93,9 +91,9 @@ export default function UsersList() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Nombre Completo</TableHead>
+                            <TableHead>Nombre del Cliente</TableHead>
+                            <TableHead>Curso (Propio)</TableHead>
                             <TableHead>Contacto</TableHead>
-                            <TableHead>Rol SuperAdmin</TableHead>
                             <TableHead>Fecha Registro</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
@@ -103,22 +101,25 @@ export default function UsersList() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8">Cargando usuarios...</TableCell>
+                                <TableCell colSpan={5} className="text-center py-8">Cargando clientes...</TableCell>
                             </TableRow>
                         ) : filteredUsers.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} className="text-center py-8">
-                                    No se encontraron usuarios que coincidan con la búsqueda.
+                                    No se encontraron clientes independientes.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredUsers.map((user) => (
-                                <TableRow key={user.id}>
+                            filteredUsers.map((user: any) => (
+                                <TableRow key={user.user_id}>
                                     <TableCell>
                                         <div className="flex flex-col">
                                             <span className="font-medium">{user.full_name || 'Sin Nombre'}</span>
                                             <span className="text-xs text-muted-foreground">{user.email}</span>
                                         </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="font-semibold text-primary">{user.tenant_name}</span>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
@@ -143,19 +144,11 @@ export default function UsersList() {
                                             </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell>
-                                        {user.is_superadmin ? (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                                                SuperAdmin
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
-                                                Usuario
-                                            </span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-right text-muted-foreground text-sm">
+                                    <TableCell className="text-muted-foreground text-sm">
                                         {new Date(user.created_at).toLocaleDateString()}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {/* Actions placeholder */}
                                     </TableCell>
                                 </TableRow>
                             ))

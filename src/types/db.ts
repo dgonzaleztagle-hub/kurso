@@ -51,3 +51,13 @@ export interface StudentGuardian {
     relationship: string | null;
     is_primary: boolean;
 }
+
+export interface MeetingMinute {
+    id: string;
+    tenant_id: string;
+    created_at: string;
+    meeting_date: string;
+    content: string | null;
+    image_url: string | null;
+    created_by: string | null;
+}

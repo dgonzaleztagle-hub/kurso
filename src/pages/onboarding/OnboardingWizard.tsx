@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -12,19 +12,20 @@ import { Loader2, Rocket, CheckCircle2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function OnboardingWizard() {
-    const { user } = useAuth();
-    const { refreshTenants } = useTenant(); // Usar refresh del contexto
+    const { user, appUser } = useAuth();
+    const { refreshTenants, availableTenants } = useTenant(); // Usar refresh del contexto
     const navigate = useNavigate();
     const { toast } = useToast();
     const [courseName, setCourseName] = useState("");
+    const [institutionName, setInstitutionName] = useState("");
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
 
     const handleCreateCourse = async () => {
-        if (!courseName.trim()) {
+        if (!courseName.trim() || !institutionName.trim()) {
             toast({
-                title: "Nombre requerido",
-                description: "Por favor ingresa un nombre para tu curso.",
+                title: "Campos requeridos",
+                description: "Por favor ingresa el nombre de tu colegio y de tu curso.",
                 variant: "destructive"
             });
             return;
@@ -33,9 +34,10 @@ export default function OnboardingWizard() {
         try {
             setLoading(true);
 
-            // 1. Llamada a la RPC segura
-            const { data, error } = await supabase.rpc('create_own_tenant' as any, { // Casting seguro para evitar error de tipos temporal
-                new_tenant_name: courseName.trim()
+            // 1. Llamada a la RPC segura (ahora con Institución)
+            const { data, error } = await supabase.rpc('create_own_tenant' as any, {
+                new_tenant_name: courseName.trim(),
+                new_institution_name: institutionName.trim()
             });
 
             if (error) throw error;
@@ -45,7 +47,7 @@ export default function OnboardingWizard() {
             // 2. Feedback visual premium
             toast({
                 title: "¡Espacio Configurado!",
-                description: `El curso "${courseName}" ha sido creado exitosamente.`,
+                description: `El curso "${courseName}" de "${institutionName}" ha sido creado.`,
                 className: "bg-green-50 dark:bg-green-900 border-green-200"
             });
 
@@ -68,8 +70,20 @@ export default function OnboardingWizard() {
         }
     };
 
+    // AUTO-REDIRECT: If you are already established, get out of here.
+    useEffect(() => {
+        if (!loading && (appUser?.is_superadmin || availableTenants.length > 0)) {
+            if (appUser?.is_superadmin) {
+                navigate("/admin", { replace: true });
+            } else {
+                navigate("/", { replace: true });
+            }
+        }
+    }, [loading, appUser, availableTenants, navigate]);
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/50 p-4">
+
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/50 p-4 pt-16">
             <AnimatePresence mode="wait">
                 {!success ? (
                     <motion.div
@@ -90,14 +104,32 @@ export default function OnboardingWizard() {
                                         Bienvenido a Kurso
                                     </CardTitle>
                                     <CardDescription className="text-lg text-muted-foreground/90">
-                                        Configuremos tu primer curso para empezar.
+                                        Configuremos tu espacio educativo.
                                     </CardDescription>
                                 </div>
                             </CardHeader>
-                            <CardContent className="space-y-8 pt-6">
+                            <CardContent className="space-y-6 pt-6">
+                                <div className="space-y-3">
+                                    <Label htmlFor="institutionName" className="text-base font-medium pl-1">
+                                        ¿Cómo se llama tu Colegio?
+                                    </Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="institutionName"
+                                            placeholder="Ej: Colegio San Agustín"
+                                            value={institutionName}
+                                            onChange={(e) => setInstitutionName(e.target.value)}
+                                            className="h-14 text-lg pl-4 pr-10 shadow-sm transition-all focus:ring-2 focus:ring-primary/20"
+                                            autoFocus
+                                            disabled={loading}
+                                        />
+                                        <Sparkles className="absolute right-3 top-4 h-6 w-6 text-muted-foreground/30" />
+                                    </div>
+                                </div>
+
                                 <div className="space-y-3">
                                     <Label htmlFor="courseName" className="text-base font-medium pl-1">
-                                        ¿Cómo se llama tu curso?
+                                        ¿Cómo se llama tu Curso?
                                     </Label>
                                     <div className="relative">
                                         <Input
@@ -106,14 +138,13 @@ export default function OnboardingWizard() {
                                             value={courseName}
                                             onChange={(e) => setCourseName(e.target.value)}
                                             className="h-14 text-lg pl-4 pr-10 shadow-sm transition-all focus:ring-2 focus:ring-primary/20"
-                                            autoFocus
                                             disabled={loading}
                                             onKeyDown={(e) => e.key === 'Enter' && handleCreateCourse()}
                                         />
                                         <Sparkles className="absolute right-3 top-4 h-6 w-6 text-muted-foreground/30" />
                                     </div>
                                     <p className="text-sm text-muted-foreground pl-1">
-                                        Este nombre será visible para todos los apoderados.
+                                        Tus alumnos verán estos nombres.
                                     </p>
                                 </div>
                             </CardContent>
@@ -121,7 +152,7 @@ export default function OnboardingWizard() {
                                 <Button
                                     className="w-full h-14 text-lg font-semibold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all rounded-xl"
                                     onClick={handleCreateCourse}
-                                    disabled={loading || !courseName.trim()}
+                                    disabled={loading || !courseName.trim() || !institutionName.trim()}
                                 >
                                     {loading ? (
                                         <div className="flex items-center gap-2">

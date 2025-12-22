@@ -16,6 +16,8 @@ import { parseDateFromDB } from "@/lib/dateUtils";
 interface Student {
   id: number;
   name: string;
+  first_name?: string;
+  last_name?: string;
   enrollment_date: string;
 }
 
@@ -62,14 +64,19 @@ export default function DebtReports() {
   const loadData = async () => {
     try {
       const [studentsResult, activitiesResult] = await Promise.all([
-        supabase.from("students").select("*").order("name"),
+        supabase.from("students").select("id, first_name, last_name, enrollment_date").order("last_name"),
         supabase.from("activities").select("*")
       ]);
 
       if (studentsResult.error) throw studentsResult.error;
       if (activitiesResult.error) throw activitiesResult.error;
 
-      setStudents(studentsResult.data || []);
+      const mappedStudents = (studentsResult.data || []).map(s => ({
+        ...s,
+        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
+      }));
+
+      setStudents(mappedStudents);
       setActivities(activitiesResult.data || []);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -84,7 +91,7 @@ export default function DebtReports() {
         .select("student_id, student_name, concept, amount, month_period"),
       supabase
         .from("students")
-        .select("id, name, enrollment_date"),
+        .select("id, first_name, last_name, enrollment_date"),
       supabase
         .from("student_credits")
         .select("student_id, amount"),
@@ -96,19 +103,19 @@ export default function DebtReports() {
 
     const monthlyFee = 3000;
     const months = ["MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    
+
     // Determine max month based on period filter
     const currentMonth = new Date().getMonth(); // 0-11
     const currentYear = new Date().getFullYear();
     const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
     const currentMonthName = monthNames[currentMonth];
-    
+
     let maxMonthIndex = months.length;
     if (monthlyPeriod === "current") {
       maxMonthIndex = months.findIndex(m => m === currentMonthName) + 1;
       if (maxMonthIndex <= 0) maxMonthIndex = months.length;
     }
-    
+
     const debts: MonthlyDebt[] = [];
     const credits = creditsResult.data || [];
 
@@ -128,7 +135,7 @@ export default function DebtReports() {
       // Determinar desde qué mes debe pagar este estudiante
       const startMonth = 2; // Marzo = index 2
       let firstPayableMonthIndex = startMonth;
-      
+
       if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
         firstPayableMonthIndex = enrollmentMonth;
       }
@@ -138,14 +145,14 @@ export default function DebtReports() {
       const expectedTotal = monthsStudentShouldPay * monthlyFee;
 
       // Obtener todos los pagos de cuotas de este estudiante
-      const studentPayments = paymentsResult.data?.filter(p => 
-        p.student_id === student.id && 
+      const studentPayments = paymentsResult.data?.filter(p =>
+        p.student_id === student.id &&
         p.concept?.toUpperCase().includes("CUOTA")
       ) || [];
 
       // Sum ALL payments for monthly fees (regardless of month_period)
       let totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      
+
       // Add payment redirections (negative credit movements that represent covered monthly fees)
       const studentRedirections = creditMovementsResult.data?.filter(cm =>
         cm.student_id === student.id && cm.amount < 0
@@ -157,7 +164,7 @@ export default function DebtReports() {
       // Aplicar crédito del estudiante a la deuda
       const studentCredit = credits.find(c => c.student_id === student.id);
       const creditAmount = studentCredit ? Number(studentCredit.amount) : 0;
-      
+
       // Restar el crédito de la deuda de cuotas mensuales
       const debtAfterCredit = Math.max(0, totalOwed - creditAmount);
 
@@ -165,10 +172,10 @@ export default function DebtReports() {
       if (debtAfterCredit > 0) {
         // Calculate how many months are completely unpaid
         const monthsOwedCount = Math.ceil(debtAfterCredit / monthlyFee);
-        
+
         // Get the months this student should pay (from their enrollment month to max month)
         const studentMonths = months.slice(firstPayableMonthIndex - startMonth, Math.min(maxMonthIndex, months.length));
-        
+
         // Get the last N months from the student's payable months
         const owedMonths = studentMonths.slice(-monthsOwedCount);
 
@@ -253,7 +260,7 @@ export default function DebtReports() {
   const handleConsultDebts = async () => {
     try {
       setLoading(true);
-      
+
       // Mapa para rastrear cuánto crédito se usó en cuotas mensuales por estudiante
       const monthlyCreditsUsed = new Map<number, number>();
 
@@ -261,7 +268,7 @@ export default function DebtReports() {
         // Calcular deudas mensuales y rastrear créditos usados
         const [paymentsResult, studentsDataResult, creditsResult, creditMovementsResult] = await Promise.all([
           supabase.from("payments").select("student_id, student_name, concept, amount, month_period"),
-          supabase.from("students").select("id, name, enrollment_date"),
+          supabase.from("students").select("id, first_name, last_name, enrollment_date"),
           supabase.from("student_credits").select("student_id, amount"),
           supabase.from("credit_movements").select("student_id, amount, type").eq("type", "payment_redirect")
         ]);
@@ -272,7 +279,7 @@ export default function DebtReports() {
         const currentYear = new Date().getFullYear();
         const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
         const currentMonthName = monthNames[currentMonth];
-        
+
         let maxMonthIndex = months.length;
         if (monthlyPeriod === "current") {
           maxMonthIndex = months.findIndex(m => m === currentMonthName) + 1;
@@ -294,7 +301,7 @@ export default function DebtReports() {
 
           const startMonth = 2;
           let firstPayableMonthIndex = startMonth;
-          
+
           if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
             firstPayableMonthIndex = enrollmentMonth;
           }
@@ -302,13 +309,13 @@ export default function DebtReports() {
           const monthsStudentShouldPay = Math.min(maxMonthIndex, months.length) - (firstPayableMonthIndex - startMonth);
           const expectedTotal = monthsStudentShouldPay * monthlyFee;
 
-          const studentPayments = paymentsResult.data?.filter(p => 
-            p.student_id === student.id && 
+          const studentPayments = paymentsResult.data?.filter(p =>
+            p.student_id === student.id &&
             p.concept?.toUpperCase().includes("CUOTA")
           ) || [];
 
           let totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-          
+
           // Add payment redirections
           const studentRedirections = creditMovementsResult.data?.filter(cm =>
             cm.student_id === student.id && cm.amount < 0
@@ -320,7 +327,7 @@ export default function DebtReports() {
           // Obtener y aplicar crédito
           const studentCredit = credits.find(c => c.student_id === student.id);
           const creditAmount = studentCredit ? Number(studentCredit.amount) : 0;
-          
+
           const creditUsedHere = Math.min(totalOwed, creditAmount);
           monthlyCreditsUsed.set(student.id, creditUsedHere);
         });
@@ -330,14 +337,14 @@ export default function DebtReports() {
       } else {
         setPreviewMonthlyDebts([]);
       }
-      
+
       if (reportType === "activities" || reportType === "both") {
         const activityDebts = await calculateActivityDebts(monthlyCreditsUsed);
         setPreviewActivityDebts(activityDebts);
       } else {
         setPreviewActivityDebts([]);
       }
-      
+
       setShowPreview(true);
       toast.success("Deudas consultadas exitosamente");
     } catch (error) {
@@ -351,7 +358,7 @@ export default function DebtReports() {
   const calculateMonthlyCreditsUsed = async (): Promise<Map<number, number>> => {
     const [paymentsResult, studentsDataResult, creditsResult, creditMovementsResult] = await Promise.all([
       supabase.from("payments").select("student_id, concept, amount"),
-      supabase.from("students").select("id, name, enrollment_date"),
+      supabase.from("students").select("id, first_name, last_name, enrollment_date"),
       supabase.from("student_credits").select("student_id, amount"),
       supabase.from("credit_movements").select("student_id, amount, type").eq("type", "payment_redirect")
     ]);
@@ -362,7 +369,7 @@ export default function DebtReports() {
     const currentYear = new Date().getFullYear();
     const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
     const currentMonthName = monthNames[currentMonth];
-    
+
     let maxMonthIndex = months.length;
     if (monthlyPeriod === "current") {
       maxMonthIndex = months.findIndex(m => m === currentMonthName) + 1;
@@ -371,7 +378,7 @@ export default function DebtReports() {
 
     const monthlyCreditsUsed = new Map<number, number>();
     const credits = creditsResult.data || [];
-    
+
     const studentsToProcess = scope === "individual" && selectedStudent
       ? students.filter(s => s.id.toString() === selectedStudent)
       : students;
@@ -386,7 +393,7 @@ export default function DebtReports() {
 
       const startMonth = 2;
       let firstPayableMonthIndex = startMonth;
-      
+
       if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
         firstPayableMonthIndex = enrollmentMonth;
       }
@@ -394,13 +401,13 @@ export default function DebtReports() {
       const monthsStudentShouldPay = Math.min(maxMonthIndex, months.length) - (firstPayableMonthIndex - startMonth);
       const expectedTotal = monthsStudentShouldPay * monthlyFee;
 
-      const studentPayments = paymentsResult.data?.filter(p => 
-        p.student_id === student.id && 
+      const studentPayments = paymentsResult.data?.filter(p =>
+        p.student_id === student.id &&
         p.concept?.toUpperCase().includes("CUOTA")
       ) || [];
 
       let totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      
+
       // Add payment redirections
       const studentRedirections = creditMovementsResult.data?.filter(cm =>
         cm.student_id === student.id && cm.amount < 0
@@ -411,7 +418,7 @@ export default function DebtReports() {
 
       const studentCredit = credits.find(c => c.student_id === student.id);
       const creditAmount = studentCredit ? Number(studentCredit.amount) : 0;
-      
+
       const creditUsedHere = Math.min(totalOwed, creditAmount);
       monthlyCreditsUsed.set(student.id, creditUsedHere);
     });
@@ -423,7 +430,7 @@ export default function DebtReports() {
     try {
       setLoading(true);
       const doc = new jsPDF();
-      
+
       // Load images
       const [logoImg, firmaImg] = await Promise.all([
         new Promise<HTMLImageElement>((resolve) => {
@@ -437,11 +444,11 @@ export default function DebtReports() {
           img.onload = () => resolve(img);
         })
       ]);
-      
+
       // Header background with subtle color
       doc.setFillColor(240, 245, 250);
       doc.rect(0, 0, 210, 36, 'F');
-      
+
       // Add header logo
       doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
 
@@ -450,7 +457,7 @@ export default function DebtReports() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 58, 138); // Dark blue
       doc.text("INFORME DE DEUDAS", 105, 18, { align: "center" });
-      
+
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(71, 85, 105); // Slate gray
@@ -473,10 +480,10 @@ export default function DebtReports() {
         ]);
 
         // Combine debts by student with detailed info
-        const combinedDebts = new Map<string, { 
-          monthlyOwed: number; 
+        const combinedDebts = new Map<string, {
+          monthlyOwed: number;
           monthsOwed: string[];
-          activityOwed: number; 
+          activityOwed: number;
           activities: { name: string; amount: number }[];
           total: number;
         }>();
@@ -512,7 +519,7 @@ export default function DebtReports() {
           // Section title with background
           doc.setFillColor(237, 242, 247);
           doc.rect(15, yPos - 3, 180, 7, 'F');
-          
+
           doc.setFontSize(11);
           doc.setFont("helvetica", "bold");
           doc.setTextColor(30, 58, 138);
@@ -523,11 +530,11 @@ export default function DebtReports() {
 
           let index = 0;
           combinedDebts.forEach((debt, studentName) => {
-            const detailLines = monthlyDetailType === "detailed" 
+            const detailLines = monthlyDetailType === "detailed"
               ? (debt.monthsOwed.length > 0 ? 1 : 0) + (debt.activities.length > 0 ? 1 : 0) + 1
               : 1;
             const itemHeight = 4 + (detailLines * 3.5) + 3;
-            
+
             if (yPos > 270) {
               doc.addPage();
               yPos = 20;
@@ -555,12 +562,12 @@ export default function DebtReports() {
               // Detailed mode
               doc.setFont("helvetica", "normal");
               doc.setTextColor(71, 85, 105);
-              
+
               if (debt.monthsOwed.length > 0) {
                 doc.text(`Cuotas (${debt.monthsOwed.join(", ")}): $${debt.monthlyOwed.toLocaleString("es-CL")}`, 23, yPos);
                 yPos += 3.5;
               }
-              
+
               if (debt.activities.length > 0) {
                 const activitiesText = debt.activities.map(a => a.name).join(", ");
                 doc.text(`Actividades (${activitiesText}): $${debt.activityOwed.toLocaleString("es-CL")}`, 23, yPos);
@@ -580,16 +587,16 @@ export default function DebtReports() {
           yPos += 3;
         }
       }
-      
+
       // Monthly debts only
       else if (reportType === "monthly") {
         const monthlyDebts = await calculateMonthlyDebts();
-        
+
         if (monthlyDebts.length > 0) {
           // Section title with background
           doc.setFillColor(237, 242, 247);
           doc.rect(15, yPos - 3, 180, 7, 'F');
-          
+
           doc.setFontSize(11);
           doc.setFont("helvetica", "bold");
           doc.setTextColor(30, 58, 138);
@@ -654,7 +661,7 @@ export default function DebtReports() {
           // Section title with background
           doc.setFillColor(237, 242, 247);
           doc.rect(15, yPos - 3, 180, 7, 'F');
-          
+
           doc.setFontSize(11);
           doc.setFont("helvetica", "bold");
           doc.setTextColor(30, 58, 138);
@@ -682,7 +689,7 @@ export default function DebtReports() {
             // Activity name with subtle background
             doc.setFillColor(243, 244, 246);
             doc.rect(17, yPos - 2, 176, 5, 'F');
-            
+
             doc.setFont("helvetica", "bold");
             doc.setTextColor(30, 64, 175);
             doc.text(activityName, 18, yPos);
@@ -702,7 +709,7 @@ export default function DebtReports() {
               doc.text(`$${debt.amount_owed.toLocaleString("es-CL")}`, 85, yPos);
               yPos += 3.5;
             });
-            
+
             yPos += 2;
           });
         }
@@ -711,10 +718,10 @@ export default function DebtReports() {
       // Add signature at the bottom of last page
       const pageHeight = doc.internal.pageSize.getHeight();
       const pageWidth = doc.internal.pageSize.getWidth();
-      
+
       // Reserve space for signature (45mm from bottom)
       const signatureSpace = 45;
-      
+
       // Check if there's enough space for signature on current page
       if (yPos > pageHeight - signatureSpace - 5) {
         // Only add new page if we're already far down the page
@@ -727,7 +734,7 @@ export default function DebtReports() {
 
       // Position signature at bottom
       const signatureYPos = pageHeight - 45;
-      
+
       // Add bottom separator line with color
       doc.setDrawColor(59, 130, 246); // Blue
       doc.setLineWidth(0.5);
@@ -746,7 +753,7 @@ export default function DebtReports() {
         fileName = "Informe_Deudas_General";
       }
       fileName += `_${new Date().toISOString().split('T')[0]}.pdf`;
-      
+
       doc.save(fileName);
       toast.success("Informe PDF generado exitosamente");
     } catch (error) {
@@ -762,7 +769,7 @@ export default function DebtReports() {
     try {
       // Calcular créditos usados primero
       const monthlyCreditsUsed = await calculateMonthlyCreditsUsed();
-      
+
       // Calcular deudas de todos los estudiantes
       const monthlyDebts = await calculateMonthlyDebts();
       const activityDebts = await calculateActivityDebts(monthlyCreditsUsed);
@@ -796,7 +803,7 @@ export default function DebtReports() {
 
       // Generar PDF con certificados
       await generateDebtCertificatesPDF(studentsWithDebt);
-      
+
       toast.success(`Certificados generados para ${studentsWithDebt.size} estudiante(s)`);
     } catch (error) {
       console.error("Error generating certificates:", error);
@@ -863,14 +870,14 @@ export default function DebtReports() {
         doc.setFontSize(11);
         doc.text("Cuotas Mensuales:", margin + 5, yPos);
         yPos += 7;
-        
+
         if (debts.months.length > 0) {
           const monthsText = `  Meses: ${debts.months.join(", ")}`;
           const splitMonths = doc.splitTextToSize(monthsText, pageWidth - margin * 2 - 10);
           doc.text(splitMonths, margin + 5, yPos);
           yPos += splitMonths.length * 5;
         }
-        
+
         doc.setFont("helvetica", "bold");
         doc.text(`  Monto: $${debts.monthly.toLocaleString("es-CL")}`, margin + 5, yPos);
         yPos += 10;
@@ -951,7 +958,7 @@ export default function DebtReports() {
       doc.setFont("helvetica", "bold");
       const firmaApoderadoX = margin + 10 + (pageWidth / 2 - 10 - margin - 10) / 2;
       doc.text("Firma del Apoderado", firmaApoderadoX, apoderadoYPos + 5, { align: "center" });
-      
+
       doc.line(pageWidth / 2 + 10, apoderadoYPos, pageWidth - margin - 10, apoderadoYPos);
       const fechaRecepcionX = pageWidth / 2 + 10 + (pageWidth - margin - 10 - pageWidth / 2 - 10) / 2;
       doc.text("Fecha de Recepción", fechaRecepcionX, apoderadoYPos + 5, { align: "center" });
@@ -1049,16 +1056,16 @@ export default function DebtReports() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Button 
-              onClick={handleConsultDebts} 
+            <Button
+              onClick={handleConsultDebts}
               disabled={loading || (scope === "individual" && !selectedStudent)}
               className="w-full sm:flex-1"
             >
               <FileText className="mr-2 h-4 w-4" />
               {loading ? "Consultando..." : "Consultar Deudas"}
             </Button>
-            <Button 
-              onClick={handleGenerateDebtCertificates} 
+            <Button
+              onClick={handleGenerateDebtCertificates}
               disabled={loading}
               variant="secondary"
               className="w-full sm:flex-1"
@@ -1081,8 +1088,8 @@ export default function DebtReports() {
                 </p>
               </div>
               {(previewMonthlyDebts.length > 0 || previewActivityDebts.length > 0) && (
-                <Button 
-                  onClick={generatePDF} 
+                <Button
+                  onClick={generatePDF}
                   disabled={loading}
                   size="sm"
                   className="h-8 md:h-10 text-xs md:text-sm"

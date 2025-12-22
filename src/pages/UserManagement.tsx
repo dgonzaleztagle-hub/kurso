@@ -52,7 +52,7 @@ import { useTenant } from "@/contexts/TenantContext";
 
 export default function UserManagement() {
   const { userRole } = useAuth();
-  const { roleInCurrentTenant } = useTenant();
+  const { roleInCurrentTenant, currentTenant } = useTenant(); // Needed currentTenant for ID
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +86,12 @@ export default function UserManagement() {
   const [updatingPhone, setUpdatingPhone] = useState(false);
 
   useEffect(() => {
-    if (userRole === 'master' || roleInCurrentTenant === 'owner') {
-      fetchUsers();
+    if (userRole === 'master' || roleInCurrentTenant === 'owner' || roleInCurrentTenant === 'admin') {
+      if (currentTenant) {
+        fetchUsers();
+      }
     }
-  }, [userRole, roleInCurrentTenant]);
+  }, [userRole, roleInCurrentTenant, currentTenant]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -102,7 +104,16 @@ export default function UserManagement() {
         return;
       }
 
-      const { data, error } = await supabase.rpc('get_users_managed_by_me');
+      if (!currentTenant) {
+        console.error("No tenant selected");
+        setLoading(false);
+        return;
+      }
+
+      // SECURE CALL: Pass Tenant ID
+      const { data, error } = await supabase.rpc('get_users_by_tenant' as any, {
+        target_tenant_id: currentTenant.id
+      });
 
       if (error) {
         console.error("Error invocando RPC:", error);
@@ -151,8 +162,8 @@ export default function UserManagement() {
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-user`, {
         method: 'POST',
         headers: {
-          // MODO PRUEBA: Sin token de autenticación
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           email: adminEmail,
@@ -160,7 +171,8 @@ export default function UserManagement() {
           name: adminName,
           userName: adminUserName,
           position: adminPosition,
-          phone: adminPhone || null
+          phone: adminPhone || null,
+          tenantId: currentTenant?.id
         })
       });
 
@@ -398,13 +410,13 @@ export default function UserManagement() {
         <CardHeader className="py-3 md:py-6">
           <div className="flex flex-col gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                <UserPlus className="h-4 w-4 md:h-5 md:w-5" />
-                Crear Usuario Admin
-              </CardTitle>
-              <CardDescription className="text-xs md:text-sm mt-1">
-                Crea un nuevo usuario con rol de administrador
-              </CardDescription>
+              <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-primary" />
+                Crear Owner (Gestor)
+              </h2>
+              <p className="text-muted-foreground mb-4">
+                Crea un nuevo usuario con permisos totales de gestión (Owner).
+              </p>
             </div>
             <div className="flex flex-wrap gap-1.5 md:gap-2">
 
@@ -671,22 +683,22 @@ export default function UserManagement() {
           </Card>
         )}
 
-        {/* Admin Users */}
-        {users.filter(u => u.role === 'admin').length > 0 && (
+        {/* Admin/Owner Users */}
+        {users.filter(u => ['admin', 'owner'].includes(u.role)).length > 0 && (
           <Card>
             <CardHeader className="py-3 md:py-6">
-              <CardTitle className="text-base md:text-lg">Usuarios Admin</CardTitle>
+              <CardTitle className="text-base md:text-lg">Gestores (Owners)</CardTitle>
             </CardHeader>
             <CardContent className="p-3 md:p-6">
               <div className="space-y-2">
-                {users.filter(u => u.role === 'admin').map((user) => (
+                {users.filter(u => ['admin', 'owner'].includes(u.role)).map((user) => (
                   <div key={user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 md:p-3 border rounded-lg bg-muted/30">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-sm md:text-base">
                           {user.displayName || user.name || user.email}
                         </p>
-                        <Badge variant="secondary" className="text-xs">Admin</Badge>
+                        <Badge variant="secondary" className="text-xs uppercase">{user.role}</Badge>
                         {user.phone && (
                           <Badge variant="outline" className="text-xs gap-1">
                             <Phone className="h-3 w-3" />

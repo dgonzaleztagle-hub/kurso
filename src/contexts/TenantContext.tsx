@@ -26,7 +26,8 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         // STRICT CHECK: Wait for appUser to be loaded
         if (user && appUser) {
             fetchTenants();
-        } else if (!user && !loading) {
+        } else if (!user) {
+            // If no user, reset text context and stop loading immediately
             setCurrentTenant(null);
             setAvailableTenants([]);
             setLoading(false);

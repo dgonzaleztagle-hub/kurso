@@ -30,7 +30,8 @@ export default function TenantsList() {
             .from('tenants')
             .select(`
                 *,
-                organization:organizations(name)
+                organization:organizations(name),
+                owner:app_users(full_name)
             `)
             .order('created_at', { ascending: false });
 
@@ -73,7 +74,7 @@ export default function TenantsList() {
                         <TableRow>
                             <TableHead>Nombre del Curso</TableHead>
                             <TableHead>Colegio (Organización)</TableHead>
-                            <TableHead>Slug</TableHead>
+                            <TableHead>Responsable (Dueño)</TableHead>
                             <TableHead>Estado</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -101,11 +102,15 @@ export default function TenantsList() {
                                             <span className="text-muted-foreground italic">Sin Organización (Independiente)</span>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-muted-foreground text-sm font-mono">{tenant.slug}</TableCell>
+                                    <TableCell>
+                                        <span className="font-medium text-purple-700 dark:text-purple-300">
+                                            {tenant.owner?.full_name || 'Sin Asignar'}
+                                        </span>
+                                    </TableCell>
                                     <TableCell>
                                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${tenant.subscription_status === 'active'
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                : 'bg-yellow-100 text-yellow-800'
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                            : 'bg-yellow-100 text-yellow-800'
                                             }`}>
                                             {tenant.subscription_status}
                                         </span>

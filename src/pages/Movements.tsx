@@ -22,11 +22,11 @@ interface Activity {
 export default function Movements() {
   const [movementType, setMovementType] = useState<MovementType>(null);
   const [loading, setLoading] = useState(false);
-  
+
   // Common fields
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(formatDateForDB(new Date()));
-  
+
   // Income fields
   const [incomeType, setIncomeType] = useState<IncomeType>(null);
   const [studentId, setStudentId] = useState("");
@@ -36,10 +36,10 @@ export default function Movements() {
   const [incomeGlosas, setIncomeGlosas] = useState<string[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState("");
-  const [students, setStudents] = useState<Array<{id: number, name: string}>>([]);
+  const [students, setStudents] = useState<Array<{ id: number, name: string }>>([]);
   const [pendingMonths, setPendingMonths] = useState<string[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
-  
+
   // Expense fields
   const [supplier, setSupplier] = useState("");
   const [customSupplier, setCustomSupplier] = useState("");
@@ -58,7 +58,7 @@ export default function Movements() {
       .from("payments")
       .select("concept")
       .neq("concept", "CUOTA MENSUAL");
-    
+
     if (data) {
       const uniqueGlosas = Array.from(new Set(data.map(p => p.concept).filter(Boolean)));
       setIncomeGlosas(uniqueGlosas);
@@ -70,7 +70,7 @@ export default function Movements() {
       .from("activities")
       .select("id, name, amount")
       .order("name");
-    
+
     if (data) {
       setActivities(data);
     }
@@ -79,21 +79,26 @@ export default function Movements() {
   const loadStudents = async () => {
     const { data } = await supabase
       .from("students")
-      .select("id, name")
-      .order("name");
-    
+      .select("id, first_name, last_name")
+      .order("last_name");
+
     if (data) {
-      setStudents(data);
+      setStudents(data.map(s => ({
+        id: s.id,
+        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
+      })));
     }
   };
 
   const loadExistingSuppliers = async () => {
+    // Cast to any to bypass outdated types.ts which assumes 'supplier' column exists
     const { data } = await supabase
       .from("expenses")
-      .select("supplier");
-    
+      .select("category" as any);
+
     if (data) {
-      const uniqueSuppliers = Array.from(new Set(data.map(e => e.supplier).filter(Boolean)));
+      // Cast data to any[] to access the dynamic column
+      const uniqueSuppliers = Array.from(new Set((data as any[]).map(e => e.category).filter(Boolean)));
       setExistingSuppliers(uniqueSuppliers);
     }
   };
@@ -117,7 +122,7 @@ export default function Movements() {
   const loadPendingMonths = async (selectedStudentId: string) => {
     const MONTHLY_FEE = 3000;
     const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    
+
     // Obtener fecha de matrícula del estudiante
     const { data: studentData } = await supabase
       .from('students')
@@ -135,7 +140,7 @@ export default function Movements() {
     // Determinar el primer mes a pagar (marzo = 2, o mes de matrícula si es posterior)
     const startMonth = 2; // Marzo
     let firstPayableMonth = startMonth;
-    
+
     if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
       firstPayableMonth = enrollmentMonth;
     }
@@ -229,13 +234,29 @@ export default function Movements() {
 
         const finalSupplier = supplier === "NUEVO" ? customSupplier : supplier;
 
-        const { error } = await supabase.from("expenses").insert({
+        // Try getting tenant_id if possible, otherwise rely on backend trigger/default
+        // The migration mentioned NOT NULL but didn't show DEFAULT. If trigger fails, this might fail.
+        // Let's safe-guard by calling getUser if needed, but previously we just wanted to fix columns.
+        let tenantId = undefined;
+        try {
+          const { data } = await supabase.auth.getUser();
+          tenantId = data.user?.user_metadata?.tenant_id;
+        } catch (e) {
+          // ignore
+        }
+
+        // Explicitly cast to 'any' to bypass outdated TypeScript definitions
+        // Database actually requires: category, description (not supplier, concept)
+        const insertPayload: any = {
           folio,
-          supplier: finalSupplier,
+          tenant_id: tenantId,
+          category: finalSupplier,
           expense_date: date,
           amount: parseFloat(amount),
-          concept: expenseConcept,
-        });
+          description: expenseConcept,
+        };
+
+        const { error } = await supabase.from("expenses").insert(insertPayload);
 
         if (error) throw error;
         toast.success(`Egreso registrado con folio ${folio}`);
@@ -254,10 +275,10 @@ export default function Movements() {
 
   const isFormValid = () => {
     if (!movementType || !amount || !date) return false;
-    
+
     if (movementType === "ingreso") {
       if (!incomeType) return false;
-      
+
       if (incomeType === "actividad") {
         return selectedActivity.trim() !== "" && studentId.trim() !== "";
       } else if (incomeType === "cuota_mensual") {
@@ -337,8 +358,8 @@ export default function Movements() {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="incomeType">Tipo de Ingreso</Label>
-                    <Select 
-                      value={incomeType || ""} 
+                    <Select
+                      value={incomeType || ""}
                       onValueChange={(value: IncomeType) => {
                         setIncomeType(value);
                         setStudentId("");

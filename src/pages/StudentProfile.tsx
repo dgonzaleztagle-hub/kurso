@@ -16,6 +16,8 @@ import { es } from "date-fns/locale";
 interface Student {
   id: number;
   name: string;
+  first_name?: string;
+  last_name?: string;
   enrollment_date: string;
 }
 
@@ -86,11 +88,17 @@ export default function StudentProfile() {
     try {
       const { data, error } = await supabase
         .from("students")
-        .select("*")
-        .order("name");
+        .select("id, first_name, last_name, enrollment_date")
+        .order("last_name");
 
       if (error) throw error;
-      setStudents(data || []);
+
+      const mappedStudents = (data || []).map(s => ({
+        ...s,
+        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
+      }));
+
+      setStudents(mappedStudents);
     } catch (error) {
       console.error("Error loading students:", error);
       toast.error("Error al cargar estudiantes");
@@ -106,7 +114,7 @@ export default function StudentProfile() {
       const currentYear = new Date().getFullYear();
 
       const [studentResult, paymentsResult, activitiesResult, exclusionsResult, scheduledActivitiesResult, notificationsResult, creditResult, creditMovementsResult] = await Promise.all([
-        supabase.from("students").select("name, enrollment_date").eq("id", selectedStudentId).single(),
+        supabase.from("students").select("first_name, last_name, enrollment_date").eq("id", selectedStudentId).single(),
         supabase.from("payments").select("*").eq("student_id", selectedStudentId).order("payment_date", { ascending: false }),
         supabase.from("activities").select("id, name, amount, activity_date"),
         supabase.from("activity_exclusions").select("activity_id").eq("student_id", selectedStudentId),
@@ -119,7 +127,8 @@ export default function StudentProfile() {
       if (studentResult.error) throw studentResult.error;
       if (paymentsResult.error) throw paymentsResult.error;
 
-      setStudentName(studentResult.data.name);
+      const fullName = `${studentResult.data.first_name || ''} ${studentResult.data.last_name || ''}`.trim() || 'Sin Nombre';
+      setStudentName(fullName);
       setPaymentHistory(paymentsResult.data);
       setActivities(scheduledActivitiesResult.data || []);
       setNotifications(notificationsResult.data || []);
@@ -187,30 +196,30 @@ export default function StudentProfile() {
       const activityDebts: { name: string; amount: number }[] = [];
 
       const activityPayments = new Map<number, number>();
-      
+
       for (const activity of activitiesResult.data || []) {
         const relatedPayments = paymentsResult.data.filter(p => {
           if (p.activity_id !== null && p.activity_id === activity.id) {
             return true;
           }
-          
+
           const activityNameNormalized = activity.name.toUpperCase().trim().replace(/\s+/g, ' ');
           const conceptNormalized = (p.concept || '').toUpperCase().trim().replace(/\s+/g, ' ');
-          
+
           return conceptNormalized.includes(activityNameNormalized);
         });
-        
+
         const totalPaidForActivity = relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
         activityPayments.set(activity.id, totalPaidForActivity);
       }
 
       for (const activity of activitiesResult.data || []) {
         if (!activity.activity_date) continue;
-        
+
         const activityDate = new Date(activity.activity_date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         if (activityDate > today) continue;
         if (exclusionsSet.has(activity.id)) continue;
         if (enrollmentDate > activityDate) continue;
@@ -218,7 +227,7 @@ export default function StudentProfile() {
         const paid = activityPayments.get(activity.id) || 0;
         const expectedAmount = Number(activity.amount);
         const owed = Math.max(0, expectedAmount - paid);
-        
+
         if (owed > 0) {
           activityDebts.push({ name: activity.name, amount: owed });
         }
@@ -339,7 +348,7 @@ export default function StudentProfile() {
                 </CardContent>
               </Card>
 
-            {creditBalance > 0 ? (
+              {creditBalance > 0 ? (
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Saldo a Favor</CardTitle>
@@ -394,7 +403,7 @@ export default function StudentProfile() {
                       </span>
                     </div>
                   )}
-                  
+
                   {debtDetail.activityDebts.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-sm font-medium text-muted-foreground">Actividades:</p>

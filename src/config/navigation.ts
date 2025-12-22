@@ -18,6 +18,8 @@ import {
     FileQuestion,
     Coins,
     User,
+    ShieldCheck,
+    NotebookText,
     LucideIcon
 } from "lucide-react";
 
@@ -27,6 +29,7 @@ export type NavItem = {
     icon: LucideIcon;
     module?: string;
     masterOnly?: boolean;
+    allowStudent?: boolean;
 };
 
 export type NavCategory = {
@@ -97,11 +100,20 @@ export const mainNavigation: NavCategory[] = [
         ],
     },
     {
+        name: "Secretaría",
+        icon: NotebookText,
+        isTab: true,
+        items: [
+            { name: "Actas de Reunión", href: "/meeting-minutes", icon: NotebookText, allowStudent: true },
+        ],
+    },
+    {
         name: "Administración",
         icon: UserCog,
         isTab: true,
         items: [
             { name: "Usuarios", href: "/user-management", icon: UserCog, masterOnly: true },
+            { name: "Historial de Cambios", href: "/admin/audit-logs", icon: ShieldCheck, masterOnly: true },
             { name: "Formularios", href: "/formularios", icon: FileQuestion },
         ],
     },

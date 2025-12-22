@@ -61,11 +61,15 @@ export default function PaymentReports() {
     try {
       const { data, error } = await supabase
         .from("students")
-        .select("*")
-        .order("name");
+        .select("id, first_name, last_name")
+        .order("last_name");
 
       if (error) throw error;
-      setStudents(data || []);
+      setStudents((data || []).map(s => ({
+        id: s.id,
+        enrollment_date: "", // Not used in this context really, or default
+        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
+      })));
     } catch (error) {
       console.error("Error loading students:", error);
       toast.error("Error al cargar estudiantes");
@@ -103,7 +107,7 @@ export default function PaymentReports() {
         const currentYear = currentDate.getFullYear();
         const startDate = new Date(currentYear, 0, 1).toISOString();
         const endDate = currentDate.toISOString();
-        
+
         query = query.gte("payment_date", startDate).lte("payment_date", endDate);
       }
 
@@ -135,7 +139,7 @@ export default function PaymentReports() {
         const currentYear = currentDate.getFullYear();
         const startDate = new Date(currentYear, 0, 1).toISOString();
         const endDate = currentDate.toISOString();
-        
+
         query = query.gte("payment_date", startDate).lte("payment_date", endDate);
       }
 
@@ -170,7 +174,7 @@ export default function PaymentReports() {
     try {
       setLoading(true);
       const doc = new jsPDF();
-      
+
       const student = searchType === "student" ? students.find(s => s.id.toString() === selectedStudent) : null;
       const activity = searchType === "activity" ? activities.find(a => a.id.toString() === selectedActivity) : null;
 
@@ -191,7 +195,7 @@ export default function PaymentReports() {
       // Header background
       doc.setFillColor(240, 245, 250);
       doc.rect(0, 0, 210, 36, 'F');
-      
+
       // Logo
       doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
 
@@ -200,7 +204,7 @@ export default function PaymentReports() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 58, 138);
       doc.text("INFORME DE PAGOS REALIZADOS", 105, 18, { align: "center" });
-      
+
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(71, 85, 105);
@@ -234,7 +238,7 @@ export default function PaymentReports() {
       // Table header
       doc.setFillColor(237, 242, 247);
       doc.rect(15, yPos - 3, 180, 8, 'F');
-      
+
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 58, 138);
@@ -268,26 +272,26 @@ export default function PaymentReports() {
 
         doc.text(new Date(payment.payment_date).toLocaleDateString("es-CL"), 20, yPos);
         doc.text(payment.folio.toString(), 45, yPos);
-        
+
         if (searchType === "activity") {
           // Show student name
           const displayText = payment.student_name || "Sin nombre";
-          const truncatedText = displayText.length > 50 
+          const truncatedText = displayText.length > 50
             ? displayText.substring(0, 47) + "..."
             : displayText;
           doc.text(truncatedText, 70, yPos);
         } else {
           // Show concept
-          const concept = payment.concept.length > 50 
+          const concept = payment.concept.length > 50
             ? payment.concept.substring(0, 47) + "..."
             : payment.concept;
           doc.text(concept, 70, yPos);
         }
-        
+
         doc.setTextColor(34, 197, 94);
         doc.text(`$${Number(payment.amount).toLocaleString("es-CL")}`, 190, yPos, { align: "right" });
         doc.setTextColor(51, 65, 85);
-        
+
         total += Number(payment.amount);
         yPos += 6;
       });
@@ -296,7 +300,7 @@ export default function PaymentReports() {
       yPos += 5;
       doc.setFillColor(237, 242, 247);
       doc.rect(15, yPos - 3, 180, 8, 'F');
-      
+
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 58, 138);
       doc.setFontSize(10);
@@ -307,7 +311,7 @@ export default function PaymentReports() {
       // Signature
       const pageHeight = doc.internal.pageSize.getHeight();
       const pageWidth = doc.internal.pageSize.getWidth();
-      
+
       if (yPos > pageHeight - 50) {
         doc.addPage();
         yPos = 20;
@@ -430,8 +434,8 @@ export default function PaymentReports() {
                 </p>
               </div>
               {payments.length > 0 && (
-                <Button 
-                  onClick={generatePDF} 
+                <Button
+                  onClick={generatePDF}
                   disabled={loading}
                 >
                   <FileText className="mr-2 h-4 w-4" />

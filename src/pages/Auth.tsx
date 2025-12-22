@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { School, Eye, EyeOff, KeyRound, ArrowLeft } from "lucide-react";
+import { School, Eye, EyeOff, KeyRound, ArrowLeft, Mail } from "lucide-react";
 import logoImage from "@/assets/logo-santa-cruz.png";
-import { validateRut, generateRutEmail, cleanRutForDB } from "@/lib/rutUtils";
+import { validateRut, generateRutEmail } from "@/lib/rutUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 type ViewMode = "login" | "reset-password" | "signup";
 
@@ -17,12 +17,8 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-
-
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // States for password visibility
   const [showPassword, setShowPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("login");
   const { signIn, signUp, user, userRole } = useAuth();
@@ -67,16 +63,9 @@ export default function Auth() {
 
       // Check if input looks like a RUT (has numbers and maybe K) and NOT an email (@)
       if (!email.includes("@")) {
-        // Normalize for validation check (optional, but good for UX)
-        // Actually, our validateRut handles dots/dashes
         if (validateRut(email)) {
           finalEmail = generateRutEmail(email);
           console.log("RUT detected. Converted to:", finalEmail);
-        } else {
-          // Not a valid RUT, and not an email. Let it fail as email or warn?
-          // Let's assume it might represent a username if we supported that, but we don't.
-          // We'll let SignIn try it as email, it will fail naturally.
-          // Or better, warn if it looks like they tried a RUT but failed digit check.
         }
       }
 
@@ -90,7 +79,6 @@ export default function Auth() {
       } else {
         const { error } = await signIn(finalEmail, password);
         if (error) {
-          // Improve error message for RUT users
           if (error.message.includes("Invalid login credentials")) {
             toast.error("Credenciales inválidas. Si usa RUT, verifique que esté correcto.");
           } else {
@@ -108,10 +96,32 @@ export default function Auth() {
     }
   };
 
-  // ... (Reset Password logic remains same)
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Ingrese su correo electrónico");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/auth?mode=update",
+      });
+      if (error) throw error;
+      toast.success("Se ha enviado un correo de recuperación", {
+        description: "Revise su bandeja de entrada (y spam) para restablecer su contraseña.",
+        duration: 5000,
+      });
+      setViewMode("login");
+    } catch (error: any) {
+      console.error("Error sending reset email:", error);
+      toast.error("Error al enviar correo", { description: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (viewMode === "reset-password") {
-    // ... (Keep existing reset password UI)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10 p-4">
         <Card className="w-full max-w-md">
@@ -122,10 +132,10 @@ export default function Auth() {
             <div className="text-center space-y-2">
               <div className="flex items-center justify-center gap-2">
                 <KeyRound className="h-6 w-6 text-primary" />
-                <CardTitle className="text-2xl">Cambiar Contraseña</CardTitle>
+                <CardTitle className="text-2xl">Recuperar Contraseña</CardTitle>
               </div>
               <CardDescription>
-                Ingrese su correo y una nueva contraseña
+                Recibirá un enlace temporal en su correo para iniciar sesión y crear una nueva clave.
               </CardDescription>
             </div>
           </CardHeader>
@@ -133,53 +143,23 @@ export default function Auth() {
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="reset-email">Correo Electrónico</Label>
-                <Input
-                  id="reset-email"
-                  type="email"
-                  placeholder="nombre.apellido@pagos.cl"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">Nueva Contraseña</Label>
                 <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="new-password"
-                    type={showNewPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    disabled={loading}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
-                <div className="relative">
-                  <Input
-                    id="confirm-password"
-                    type={showNewPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    id="reset-email"
+                    type="email"
+                    className="pl-9"
+                    placeholder="nombre@ejemplo.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
                     required
                   />
                 </div>
               </div>
+
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Procesando..." : "Cambiar Contraseña"}
+                {loading ? "Enviando..." : "Enviar Enlace de Recuperación"}
               </Button>
               <Button
                 type="button"
@@ -187,8 +167,6 @@ export default function Auth() {
                 className="w-full"
                 onClick={() => {
                   setViewMode("login");
-                  setNewPassword("");
-                  setConfirmPassword("");
                 }}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -263,7 +241,10 @@ export default function Auth() {
                   type="button"
                   variant="link"
                   className="w-full text-sm h-auto p-0"
-                  onClick={() => setViewMode("reset-password")}
+                  onClick={() => {
+                    setViewMode("reset-password");
+                    setEmail(""); // Clear email logic if needed, or keep it if they typed it
+                  }}
                 >
                   ¿Olvidó su contraseña?
                 </Button>
@@ -285,7 +266,6 @@ export default function Auth() {
         </CardContent>
       </Card>
 
-      {/* Footer ... */}
       <footer className="mt-8 text-center">
         <p className="text-sm text-muted-foreground/80">
           Plataforma de Gestión Educativa

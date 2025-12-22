@@ -18,6 +18,8 @@ import Expenses from "./pages/Expenses";
 import DebtReports from "./pages/DebtReports";
 import PaymentReports from "./pages/PaymentReports";
 import Balance from "./pages/Balance";
+import AuditLogs from "./pages/admin/AuditLogs";
+import MeetingMinutes from "./pages/MeetingMinutes";
 import ImportData from "./pages/ImportData";
 import Movements from "./pages/Movements";
 import Activities from "./pages/Activities";
@@ -130,6 +132,11 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/" element={<IndexSwitcher />} />
+      <Route path="/dashboard" element={
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+          <Layout><Dashboard /></Layout>
+        </ProtectedRoute>
+      } />
       <Route path="/student-dashboard" element={
         <ProtectedRoute allowedRoles={['alumnos']}>
           <Layout><StudentDashboard /></Layout>
@@ -213,6 +220,16 @@ function AppRoutes() {
       <Route path="/scheduled-activities" element={
         <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="scheduled_activities">
           <Layout><ScheduledActivities /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/audit-logs" element={
+        <ProtectedRoute allowedRoles={['master', 'owner', 'admin']}>
+          <Layout><AuditLogs /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/meeting-minutes" element={
+        <ProtectedRoute allowedRoles={['master', 'owner', 'admin', 'alumnos']}>
+          <Layout><MeetingMinutes /></Layout>
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />

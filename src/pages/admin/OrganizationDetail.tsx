@@ -42,6 +42,23 @@ export default function OrganizationDetail() {
     const [newTenantName, setNewTenantName] = useState("");
     const [creating, setCreating] = useState(false);
 
+    // Create Owner States
+    const [isAssignOpen, setIsAssignOpen] = useState(false);
+    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+    const [newUserEmail, setNewUserEmail] = useState("");
+    const [newUserName, setNewUserName] = useState("");
+    const [newUserPassword, setNewUserPassword] = useState("");
+    const [assigning, setAssigning] = useState(false);
+
+    // View Credentials States
+    const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
+    const [ownerDetails, setOwnerDetails] = useState<{ full_name: string, email: string } | null>(null);
+
+    // Org Edit State
+    const [isEditingOrg, setIsEditingOrg] = useState(false);
+    const [orgName, setOrgName] = useState("");
+    const [updatingOrg, setUpdatingOrg] = useState(false);
+
     useEffect(() => {
         if (id) {
             fetchDetails();
@@ -98,7 +115,7 @@ export default function OrganizationDetail() {
         // Slug generation logic: name-orgname + timestamp
         const slug = `${newTenantName.toLowerCase().replace(/\s+/g, '-')}-${org.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`.replace(/[^a-z0-9-]/g, '');
 
-        // We need auth user id as owner_id
+        // We need auth user id as initial technical owner_id
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
             toast.error("Sesión inválida");
@@ -111,7 +128,7 @@ export default function OrganizationDetail() {
             .insert([{
                 name: newTenantName,
                 organization_id: org.id,
-                owner_id: user.id, // SuperAdmin es el owner técnico por ahora
+                owner_id: user.id, // SuperAdmin technically owns it until assigned
                 subscription_status: 'active',
                 slug: slug,
                 settings: {}
@@ -129,6 +146,77 @@ export default function OrganizationDetail() {
             setNewTenantName("");
         }
         setCreating(false);
+    };
+
+    const handleAssignOwner = async () => {
+        if (!selectedTenant || !newUserEmail.trim() || !newUserName.trim() || !newUserPassword.trim()) {
+            toast.error("Complete todos los campos");
+            return;
+        }
+        setAssigning(true);
+
+        try {
+            const { data, error } = await supabase.functions.invoke('create-admin-user', {
+                body: {
+                    name: newUserName,
+                    userName: newUserEmail.split('@')[0], // Fallback username
+                    email: newUserEmail,
+                    password: newUserPassword,
+                    tenantId: selectedTenant.id
+                }
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            toast.success(`Dueño creado y asignado con éxito: ${newUserName}`);
+            setIsAssignOpen(false);
+            setNewUserEmail("");
+            setNewUserName("");
+            setNewUserPassword("");
+            fetchDetails();
+        } catch (error: any) {
+            console.error("Error creating owner:", error);
+            toast.error(error.message || "Error al crear encargado");
+        } finally {
+            setAssigning(false);
+        }
+    };
+
+    const handleUpdateOrg = async () => {
+        if (!org || !orgName.trim()) return;
+        setUpdatingOrg(true);
+        const { error } = await supabase
+            .from('organizations')
+            .update({ name: orgName })
+            .eq('id', org.id);
+
+        if (error) {
+            toast.error("Error al actualizar organización");
+        } else {
+            toast.success("Organización actualizada");
+            setOrg({ ...org, name: orgName });
+        }
+        setUpdatingOrg(false);
+        setIsEditingOrg(false);
+    };
+
+    const handleViewCredentials = async (tenant: Tenant) => {
+        setSelectedTenant(tenant);
+        setOwnerDetails(null);
+        setIsCredentialsOpen(true);
+
+        if (!tenant.owner_id) return;
+
+        const { data, error } = await supabase
+            .from('app_users')
+            .select('full_name, email')
+            .eq('id', tenant.owner_id)
+            .single();
+
+        if (!error && data) {
+            setOwnerDetails(data);
+        }
     };
 
     if (loading) {
@@ -238,9 +326,15 @@ export default function OrganizationDetail() {
                                 ) : (
                                     tenants.map((tenant) => (
                                         <TableRow key={tenant.id}>
-                                            <TableCell className="font-medium flex items-center gap-2">
-                                                <GraduationCap className="h-4 w-4 text-primary" />
-                                                {tenant.name}
+                                            <TableCell className="font-medium">
+                                                <Button
+                                                    variant="link"
+                                                    className="p-0 h-auto font-medium flex items-center gap-2 text-foreground hover:no-underline"
+                                                    onClick={() => handleViewCredentials(tenant)}
+                                                >
+                                                    <GraduationCap className="h-4 w-4 text-primary" />
+                                                    {tenant.name}
+                                                </Button>
                                             </TableCell>
                                             <TableCell>
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
@@ -248,9 +342,31 @@ export default function OrganizationDetail() {
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreVertical className="h-4 w-4" />
-                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => {
+                                                            setSelectedTenant(tenant);
+                                                            setIsAssignOpen(true);
+                                                        }}>
+                                                            <GraduationCap className="mr-2 h-4 w-4" />
+                                                            Asignar/Crear Encargado
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleViewCredentials(tenant)}>
+                                                            Ver Credenciales
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => toast.info("Próximamente: Renombrar")}>
+                                                            Renombrar
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive" onClick={() => toast.info("Próximamente: Desactivar")}>
+                                                            Desactivar
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -264,11 +380,130 @@ export default function OrganizationDetail() {
                     <CardHeader>
                         <CardTitle>Configuración</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <p className="text-muted-foreground text-sm">Próximamente: Editar datos de facturación, contactos y límites del plan.</p>
+                    <CardContent className="space-y-4">
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium">Nombre de la Organización</label>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={isEditingOrg ? orgName : org.name}
+                                    onChange={(e) => setOrgName(e.target.value)}
+                                    disabled={!isEditingOrg}
+                                />
+                                {isEditingOrg ? (
+                                    <>
+                                        <Button onClick={handleUpdateOrg} disabled={updatingOrg}>Guardar</Button>
+                                        <Button variant="ghost" onClick={() => setIsEditingOrg(false)}>Cancelar</Button>
+                                    </>
+                                ) : (
+                                    <Button variant="outline" onClick={() => {
+                                        setOrgName(org.name);
+                                        setIsEditingOrg(true);
+                                    }}>Editar</Button>
+                                )}
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium">Plan Actual</label>
+                            <Input value={org.plan_type} disabled />
+                        </div>
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Dialog for Creating Owner */}
+            <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Crear Encargado del Curso</DialogTitle>
+                        <DialogDescription>
+                            Crea una cuenta nueva para el <b>Director/Profesor</b> de <b>{selectedTenant?.name}</b>.
+                            Se asignará automáticamente como Owner.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2 space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Nombre Completo</label>
+                            <Input
+                                placeholder="Ej: Juan Pérez"
+                                value={newUserName}
+                                onChange={(e) => setNewUserName(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Email Institucional</label>
+                            <Input
+                                placeholder="profesor@colegio.com"
+                                value={newUserEmail}
+                                onChange={(e) => setNewUserEmail(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Contraseña Inicial</label>
+                            <Input
+                                type="text"
+                                placeholder="Mínimo 6 caracteres"
+                                value={newUserPassword}
+                                onChange={(e) => setNewUserPassword(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">Comparte esta contraseña con el usuario.</p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAssignOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleAssignOwner} disabled={assigning}>
+                            {assigning ? "Creando..." : "Crear y Asignar"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog for Viewing Credentials */}
+            <Dialog open={isCredentialsOpen} onOpenChange={setIsCredentialsOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Credenciales del Curso</DialogTitle>
+                        <DialogDescription>
+                            Información del encargado y acceso al curso <b>{selectedTenant?.name}</b>.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4 space-y-4">
+                        {!selectedTenant?.owner_id ? (
+                            <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md text-sm border border-yellow-200">
+                                Este curso aún no tiene un encargado asignado.
+                            </div>
+                        ) : ownerDetails ? (
+                            <>
+                                <div className="grid gap-1">
+                                    <label className="text-sm font-medium text-muted-foreground">Encargado (Owner)</label>
+                                    <div className="text-lg font-medium select-all">{ownerDetails.full_name || "Sin Nombre"}</div>
+                                </div>
+                                <div className="grid gap-1">
+                                    <label className="text-sm font-medium text-muted-foreground">Email de Acceso</label>
+                                    <div className="text-lg font-medium select-all">{ownerDetails.email}</div>
+                                </div>
+                                <div className="grid gap-1">
+                                    <label className="text-sm font-medium text-muted-foreground">Contraseña</label>
+                                    <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                                        •••••••• (Oculta por seguridad)
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Si el usuario olvidó su contraseña, deberá usar la opción "Recuperar Contraseña" en el login.
+                                    </p>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button onClick={() => setIsCredentialsOpen(false)}>Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

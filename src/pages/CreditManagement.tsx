@@ -73,7 +73,7 @@ export default function CreditManagement() {
       // 1. Fetch Students
       const { data: studentsData, error: studentsError } = await supabase
         .from("students")
-        .select("id, name");
+        .select("id, first_name, last_name");
 
       if (studentsError) throw studentsError;
 
@@ -93,7 +93,7 @@ export default function CreditManagement() {
 
       const studentsWithCredit = (studentsData || []).map(s => ({
         id: s.id,
-        name: s.name,
+        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre',
         credit_amount: creditMap.get(s.id) || 0
       }));
 

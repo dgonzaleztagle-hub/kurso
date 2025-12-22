@@ -123,17 +123,14 @@ export default function Students() {
 
       // 2. Create Account (Optional but recommended)
       if (createAccount && studentData) {
-        // We trigger the bulk creation function just for simplicity, or we could call a specific endpoint.
-        // Since we don't have "create-single-student-account", we can either:
-        // A) Call 'create-student-accounts' (it will find this new student and process it).
-        // B) Implement single creation here.
-        // Option A is easiest and consistent.
         try {
           toast.info("Generando cuenta de acceso...");
-          const { error: fnError } = await supabase.functions.invoke('create-student-accounts', {
-            body: { tenantId: currentTenant.id }
+          // Use the DB RPC instead of the Edge Function
+          const { error: rpcError } = await supabase.rpc('generate_missing_accounts', {
+            p_tenant_id: currentTenant.id
           });
-          if (fnError) throw fnError;
+
+          if (rpcError) throw rpcError;
           toast.success("Cuenta de acceso creada exitosamente");
         } catch (accError) {
           console.error("Error creating account:", accError);

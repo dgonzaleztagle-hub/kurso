@@ -12,10 +12,9 @@ import { Loader2 } from "lucide-react";
 export const IndexSwitcher = () => {
     const { user, appUser, loading } = useAuth();
     const { toast } = useToast();
+    const { availableTenants, loading: tenantLoading } = useTenant();
 
-    // Debug effect removed
-
-    if (loading) return null; // Or a nice spinner
+    if (loading || tenantLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
     if (!user) {
         return <Landing />;
@@ -26,21 +25,26 @@ export const IndexSwitcher = () => {
         return <Navigate to="/admin" replace />;
     }
 
-    // Safety Net: Logged in but no AppUser profile? (Ghost User from Wipeout)
-    if (user && !appUser) {
-        // ... (existing error handling)
-    }
-
     // NEW USER FLOW: If no tenants found, force Onboarding to create the first course
-    // But check if we are already on onboarding to avoid loop is handled by Router, but here we render components.
-    // IndexSwitcher is usually invoked by "/" route.
-
-    // Check if the user has any tenants
-    const { availableTenants, loading: tenantLoading } = useTenant();
-
-    if (loading || tenantLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-
     if (availableTenants.length === 0) {
+        // DEBUG TRIGGER: If user thinks they are SuperAdmin but checking fails
+        if (appUser) {
+            console.log("DEBUG: Redirecting to Onboarding. User:", appUser);
+            // Render debug info explicitly if we HAVE a user but are redirecting
+            return (
+                <div className="p-8 text-white bg-slate-900 h-screen">
+                    <h1 className="text-xl font-bold text-red-500 mb-4">MODO DIAGNÓSTICO (Temporal)</h1>
+                    <p>El sistema te está enviando a Onboarding porque:</p>
+                    <ul className="list-disc ml-6 mb-4">
+                        <li>is_superadmin: {appUser.is_superadmin ? "TRUE (Deberías entrar)" : "FALSE (No eres admin)"}</li>
+                        <li>Tenants encontrados: {availableTenants.length}</li>
+                        <li>Email: {appUser.email}</li>
+                        <li>ID: {appUser.id}</li>
+                    </ul>
+                    <p>Si dice FALSE, ejecuta el script SQL de nuevo. Si dice TRUE, hay un bug en el condicional.</p>
+                </div>
+            );
+        }
         return <Navigate to="/onboarding" replace />;
     }
 

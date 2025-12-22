@@ -1,41 +1,3 @@
-import { ReactNode } from 'react';
-
-// DESACTIVADO TEMPORALMENTE: Autenticación deshabilitada para desarrollo
-// Para reactivar, descomentar el código original abajo
-
-type AppModule =
-  | 'dashboard'
-  | 'students'
-  | 'income'
-  | 'expenses'
-  | 'debt_reports'
-  | 'payment_reports'
-  | 'balance'
-  | 'import'
-  | 'movements'
-  | 'activities'
-  | 'activity_exclusions'
-  | 'activity_payments'
-  | 'monthly_fees'
-  | 'payment_notifications'
-  | 'reimbursements'
-  | 'scheduled_activities'
-  | 'student_profile'
-  | 'credit_management'
-  | 'credit_movements';
-
-interface ProtectedRouteProps {
-  children: ReactNode;
-  allowedRoles?: ('master' | 'admin' | 'alumnos')[];
-  requiredModule?: AppModule;
-}
-
-// Versión sin autenticación - permite acceso libre
-export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  return <>{children}</>;
-};
-
-/* CÓDIGO ORIGINAL - Descomentar para reactivar autenticación
 import { ReactNode, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -63,7 +25,7 @@ type AppModule =
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  allowedRoles?: ('master' | 'admin' | 'alumnos')[];
+  allowedRoles?: ('master' | 'admin' | 'alumnos' | 'owner')[];
   requiredModule?: AppModule;
 }
 
@@ -103,4 +65,3 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: Prote
 
   return <>{children}</>;
 };
-*/

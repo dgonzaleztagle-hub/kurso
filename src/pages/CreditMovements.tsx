@@ -45,13 +45,16 @@ export default function CreditMovements() {
   const loadMovements = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch movements with student info
       const { data: movementsData, error: movementsError } = await supabase
         .from("credit_movements")
         .select(`
           *,
-          students!credit_movements_student_id_fkey(name)
+          students!credit_movements_student_id_fkey(
+            first_name,
+            last_name
+          )
         `)
         .order('created_at', { ascending: false });
 
@@ -59,7 +62,7 @@ export default function CreditMovements() {
 
       // Get unique creator IDs
       const creatorIds = [...new Set(movementsData?.map(m => m.created_by).filter(Boolean))];
-      
+
       // Fetch creator names
       const { data: creatorsData } = await supabase
         .from("user_roles")
@@ -70,12 +73,17 @@ export default function CreditMovements() {
         creatorsData?.map(c => [c.user_id, c.user_name]) || []
       );
 
-      const enrichedMovements: CreditMovement[] = movementsData?.map(m => ({
-        ...m,
-        student_name: m.students?.name,
-        creator_name: creatorsMap.get(m.created_by) || 'Sistema',
-        details: Array.isArray(m.details) ? m.details as Array<{ concept: string; amount: number }> : []
-      })) || [];
+      const enrichedMovements: CreditMovement[] = movementsData?.map(m => {
+        const student = m.students as any;
+        const studentName = student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'Sin Nombre';
+
+        return {
+          ...m,
+          student_name: studentName,
+          creator_name: creatorsMap.get(m.created_by) || 'Sistema',
+          details: Array.isArray(m.details) ? m.details as Array<{ concept: string; amount: number }> : []
+        };
+      }) || [];
 
       setMovements(enrichedMovements);
     } catch (error) {
@@ -92,7 +100,7 @@ export default function CreditMovements() {
     // Filter by search term (student name or description)
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(m => 
+      filtered = filtered.filter(m =>
         m.student_name?.toLowerCase().includes(term) ||
         m.description.toLowerCase().includes(term)
       );
@@ -100,13 +108,13 @@ export default function CreditMovements() {
 
     // Filter by date range
     if (dateFrom) {
-      filtered = filtered.filter(m => 
+      filtered = filtered.filter(m =>
         new Date(m.created_at) >= new Date(dateFrom)
       );
     }
 
     if (dateTo) {
-      filtered = filtered.filter(m => 
+      filtered = filtered.filter(m =>
         new Date(m.created_at) <= new Date(dateTo + 'T23:59:59')
       );
     }
@@ -156,7 +164,7 @@ export default function CreditMovements() {
       // Fetch student info
       const { data: studentData } = await supabase
         .from("students")
-        .select("name")
+        .select("first_name, last_name")
         .eq("id", movement.student_id)
         .single();
 
@@ -169,10 +177,11 @@ export default function CreditMovements() {
 
       const details = movement.details || [];
       const isCredit = movement.amount > 0;
+      const studentName = studentData ? `${studentData.first_name || ''} ${studentData.last_name || ''}`.trim() : `Estudiante ${movement.student_id}`;
 
       await generateTransferReceipt({
         studentId: movement.student_id,
-        studentName: studentData?.name || `Estudiante ${movement.student_id}`,
+        studentName: studentName,
         transferDate: movement.created_at.split('T')[0],
         amount: Math.abs(movement.amount),
         originalConcept: paymentData?.concept || movement.description,
@@ -348,9 +357,8 @@ export default function CreditMovements() {
                       <TableCell className="px-2 sm:px-4 max-w-[200px] truncate">
                         {movement.description}
                       </TableCell>
-                      <TableCell className={`px-2 sm:px-4 text-right font-medium ${
-                        movement.amount > 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
+                      <TableCell className={`px-2 sm:px-4 text-right font-medium ${movement.amount > 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
                         {movement.amount > 0 ? '+' : ''}{formatCurrency(movement.amount)}
                       </TableCell>
                       <TableCell className="px-2 sm:px-4">{movement.creator_name}</TableCell>
