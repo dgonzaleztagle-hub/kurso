@@ -58,7 +58,10 @@ interface Donation {
   };
 }
 
+import { useTenant } from "@/contexts/TenantContext";
+
 export default function StudentProfile() {
+  const { currentTenant } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [studentName, setStudentName] = useState("");
@@ -75,8 +78,10 @@ export default function StudentProfile() {
   const [creditBalance, setCreditBalance] = useState(0);
 
   useEffect(() => {
-    loadStudents();
-  }, []);
+    if (currentTenant) {
+      loadStudents();
+    }
+  }, [currentTenant]);
 
   useEffect(() => {
     if (selectedStudentId) {
@@ -85,10 +90,13 @@ export default function StudentProfile() {
   }, [selectedStudentId]);
 
   const loadStudents = async () => {
+    if (!currentTenant) return;
+
     try {
       const { data, error } = await supabase
         .from("students")
         .select("id, first_name, last_name, enrollment_date")
+        .eq("tenant_id", currentTenant.id)
         .order("last_name");
 
       if (error) throw error;
@@ -114,14 +122,14 @@ export default function StudentProfile() {
       const currentYear = new Date().getFullYear();
 
       const [studentResult, paymentsResult, activitiesResult, exclusionsResult, scheduledActivitiesResult, notificationsResult, creditResult, creditMovementsResult] = await Promise.all([
-        supabase.from("students").select("first_name, last_name, enrollment_date").eq("id", selectedStudentId).single(),
-        supabase.from("payments").select("*").eq("student_id", selectedStudentId).order("payment_date", { ascending: false }),
-        supabase.from("activities").select("id, name, amount, activity_date"),
-        supabase.from("activity_exclusions").select("activity_id").eq("student_id", selectedStudentId),
-        supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").order("scheduled_date", { ascending: false }),
-        supabase.from("dashboard_notifications").select("id, message, created_at").eq("is_active", true).order("created_at", { ascending: false }).limit(5),
-        supabase.from("student_credits").select("amount").eq("student_id", selectedStudentId).maybeSingle(),
-        supabase.from("credit_movements").select("amount, type").eq("student_id", selectedStudentId).eq("type", "payment_redirect"),
+        supabase.from("students").select("first_name, last_name, enrollment_date").eq("id", selectedStudentId).single() as unknown as Promise<any>,
+        supabase.from("payments").select("*").eq("student_id", selectedStudentId).order("payment_date", { ascending: false }) as unknown as Promise<any>,
+        supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", currentTenant?.id) as unknown as Promise<any>,
+        supabase.from("activity_exclusions").select("activity_id").eq("student_id", selectedStudentId) as unknown as Promise<any>,
+        supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").eq("tenant_id", currentTenant?.id).order("scheduled_date", { ascending: false }) as unknown as Promise<any>,
+        supabase.from("dashboard_notifications").select("id, message, created_at").eq("is_active", true).order("created_at", { ascending: false }).limit(5) as unknown as Promise<any>,
+        supabase.from("student_credits").select("amount").eq("student_id", selectedStudentId).maybeSingle() as unknown as Promise<any>,
+        supabase.from("credit_movements").select("amount, type").eq("student_id", selectedStudentId).eq("type", "payment_redirect") as unknown as Promise<any>,
       ]);
 
       if (studentResult.error) throw studentResult.error;
@@ -165,7 +173,12 @@ export default function StudentProfile() {
       setTotalPaid(totalPaidAmount);
 
       // Calcular deudas de cuotas mensuales
-      const MONTHLY_FEE = 3000;
+      // TODO: Get from Tenant Settings
+      const settings = currentTenant?.settings as any;
+      let monthlyFeeRaw = settings?.monthly_fee ? Number(settings.monthly_fee) : 3000;
+      if (isNaN(monthlyFeeRaw)) monthlyFeeRaw = 3000;
+      const MONTHLY_FEE = monthlyFeeRaw;
+
       const startMonth = 2; // Marzo
       const enrollmentDate = parseDateFromDB(studentResult.data.enrollment_date);
       const enrollmentMonth = enrollmentDate.getMonth();
@@ -176,7 +189,27 @@ export default function StudentProfile() {
         firstPaymentMonth = enrollmentMonth;
       }
 
-      const monthsToPay = Math.max(0, currentMonth - firstPaymentMonth + 1);
+      let monthsToPay = 0;
+      if (currentYear > enrollmentYear) {
+        // Past years or current active year logic
+        monthsToPay = Math.max(0, currentMonth - firstPaymentMonth + 1) + 12 * (currentYear - enrollmentYear);
+        // Simplifying for single-year logic:
+        // If we are significantly ahead, assume full debt?
+        // For now, let's keep it scoped to current year logic:
+        monthsToPay = Math.max(0, 11 - startMonth + 1); // Full year debt?
+        // Let's refine:
+        // If enrollment was 2026, and we are 2027 => Full 2026 debt + 2027 debt. 
+        // But "monthsToPay" usually means "THIS YEAR's months".
+        // Let's follow the original intent which was "months up to NOW".
+        // If currentYear > enrollmentYear, we owe ALL months of this year (up to now).
+        monthsToPay = Math.max(0, currentMonth - startMonth + 1);
+      } else if (currentYear === enrollmentYear) {
+        monthsToPay = Math.max(0, currentMonth - firstPaymentMonth + 1);
+      } else {
+        // currentYear < enrollmentYear (Future)
+        monthsToPay = 0;
+      }
+
       const expectedMonthlyFees = monthsToPay * MONTHLY_FEE;
 
       let paidMonthlyFees = paymentsResult.data
@@ -255,14 +288,22 @@ export default function StudentProfile() {
     }).format(amount);
   };
 
+  if (!currentTenant) return <div className="flex justify-center items-center h-screen">Cargando curso...</div>;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-2 sm:p-4">
       <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center space-y-2 sm:space-y-4">
-          <img src={logoImage} alt="Colegio Santa Cruz" className="h-16 sm:h-20 mx-auto" />
+          <img
+            src={(currentTenant.settings as any)?.logo_url || logoImage}
+            alt={currentTenant.name}
+            className="h-16 sm:h-20 mx-auto object-contain"
+          />
           <div>
-            <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">Pre Kinder B</h1>
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white capitalize">
+              {currentTenant.name}
+            </h1>
             <p className="text-base sm:text-lg text-purple-600 dark:text-purple-400 font-semibold mt-1">¡Siempre Subir!</p>
           </div>
         </div>
@@ -297,7 +338,7 @@ export default function StudentProfile() {
           </CardContent>
         </Card>
 
-        {selectedStudentId && !loading && (
+        {selectedStudentId && !isNaN(selectedStudentId) && !loading && (
           <>
             {/* Welcome Message */}
             <Card className="bg-gradient-to-r from-purple-500 to-blue-500 text-white">

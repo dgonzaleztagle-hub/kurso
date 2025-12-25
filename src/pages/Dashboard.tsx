@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, TrendingUp, TrendingDown, Users, AlertCircle, Bell, Calendar, Send } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { DollarSign, TrendingUp, TrendingDown, Users, AlertCircle, Bell, Calendar, Send, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,8 +51,12 @@ export default function Dashboard() {
   const [showManageNotifications, setShowManageNotifications] = useState(false);
 
   useEffect(() => {
+    if (currentTenant) {
+      console.log("DEBUG: Tenant Status:", currentTenant.status);
+      toast.info(`Debug: Estado del curso: ${currentTenant.status || 'SIN ESTADO'}`, { duration: 5000 });
+    }
     loadStats();
-  }, []);
+  }, [currentTenant]);
 
   const loadStats = async () => {
     try {
@@ -60,31 +64,67 @@ export default function Dashboard() {
       const currentYear = new Date().getFullYear();
       const firstDayOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
 
-      const [paymentsResult, expensesResult, studentsResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, creditMovementsResult] = await Promise.all([
-        supabase.from("payments").select("amount, student_id, concept, activity_id"),
-        supabase.from("expenses").select("amount"),
-        supabase.from("students").select("id, first_name, last_name, enrollment_date"),
-        supabase.from("payment_notifications").select("id").eq("status", "pending"),
-        supabase.from("reimbursements").select("id, type").eq("status", "pending"),
-        supabase.from("payments").select("amount").gte("payment_date", firstDayOfMonth),
-        supabase.from("activities").select("id, name, amount, activity_date"),
-        supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("credit_movements").select("student_id, amount, type").eq("type", "payment_redirect"),
+      // 1. Fetch Students FIRST (Tenant Scope)
+      const studentsResult = await supabase
+        .from("students")
+        .select("id, first_name, last_name, enrollment_date")
+        .eq("tenant_id", currentTenant.id);
+
+      if (studentsResult.error) throw studentsResult.error;
+      const studentsData = studentsResult.data || [];
+      const studentIds = studentsData.map(s => s.id);
+
+      // 2. Fetch Dependent Data (Student Scope)
+      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, creditMovementsResult] = await Promise.all([
+        // Payments: Filter by student_id
+        (studentIds.length > 0
+          ? supabase.from("payments").select("amount, student_id, concept, activity_id").in("student_id", studentIds)
+          : { data: [], error: null }) as unknown as Promise<any>,
+
+        // Expenses: Global/RLS Scope (No tenant_id column)
+        supabase.from("expenses").select("amount") as unknown as Promise<any>,
+
+        // Notifications: Assuming user scope or global? Leaving as is but checking schema might be good. 
+        // For now, if it fails, it fails. But let's assume it's okay or remove if unsure.
+        // Original: .eq("tenant_id", currentTenant.id). Schema says: dashboard_notifications has no tenant_id. 
+        // payment_notifications has no tenant_id. 
+        // FIX: Remove invalid filter. relying on RLS (user_id).
+        supabase.from("payment_notifications").select("id").eq("status", "pending") as unknown as Promise<any>,
+
+        supabase.from("reimbursements").select("id, type").eq("status", "pending") as unknown as Promise<any>,
+
+        // Monthly Payments: Filter by student_id + date
+        (studentIds.length > 0
+          ? supabase.from("payments").select("amount").gte("payment_date", firstDayOfMonth).in("student_id", studentIds)
+          : { data: [], error: null }) as unknown as Promise<any>,
+
+        // Activities: Tenant Scope (Correct)
+        supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", currentTenant.id) as unknown as Promise<any>,
+
+        // Exclusions: Student Scope
+        (studentIds.length > 0
+          ? supabase.from("activity_exclusions").select("student_id, activity_id").in("student_id", studentIds)
+          : { data: [], error: null }) as unknown as Promise<any>,
+
+        // Credit Movements: Student Scope
+        (studentIds.length > 0
+          ? supabase.from("credit_movements").select("student_id, amount, type").eq("type", "payment_redirect").in("student_id", studentIds)
+          : { data: [], error: null }) as unknown as Promise<any>,
       ]);
 
       if (paymentsResult.error) throw paymentsResult.error;
       if (expensesResult.error) throw expensesResult.error;
-      if (studentsResult.error) throw studentsResult.error;
+      // if (studentsResult.error) throw studentsResult.error; // Already handled above
 
       // Map students to include full name
-      const students = studentsResult.data.map(s => ({
+      const students = studentsData.map(s => ({
         ...s,
         name: `${s.first_name} ${s.last_name}`.trim()
       }));
 
-      const totalIncome = paymentsResult.data.reduce((sum, p) => sum + Number(p.amount), 0);
-      const totalExpenses = expensesResult.data.reduce((sum, e) => sum + Number(e.amount), 0);
-      const monthlyIncome = monthlyPaymentsResult.data?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+      const totalIncome = (paymentsResult.data as any[]).reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      const totalExpenses = (expensesResult.data as any[]).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      const monthlyIncome = (monthlyPaymentsResult.data as any[])?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
 
       // Calcular deuda total y detalles
       let totalDebt = 0;
@@ -108,14 +148,14 @@ export default function Dashboard() {
       for (const activity of activitiesResult.data || []) {
         const activityNameUpper = activity.name.toUpperCase();
 
-        paymentsResult.data
-          .filter(p => {
+        (paymentsResult.data as any[])
+          .filter((p: any) => {
             // Buscar si el concepto del pago contiene el nombre de la actividad
             const conceptUpper = (p.concept || '').toUpperCase();
             return conceptUpper.includes(activityNameUpper) ||
               (p.activity_id !== null && p.activity_id === activity.id);
           })
-          .forEach(p => {
+          .forEach((p: any) => {
             const key = `${p.student_id}_${activity.id}`;
             const current = activityPayments.get(key) || 0;
             activityPayments.set(key, current + Number(p.amount));
@@ -133,7 +173,19 @@ export default function Dashboard() {
           firstPaymentMonth = enrollmentMonth;
         }
 
-        const monthsToPay = Math.max(0, currentMonthIndex - firstPaymentMonth + 1);
+        let monthsToPay = 0;
+        if (currentYear > enrollmentYear) {
+          // Assume full year debt if we are past enrollment year?
+          // Following logic from StudentProfile:
+          monthsToPay = Math.max(0, currentMonthIndex - startMonth + 1);
+        } else if (currentYear === enrollmentYear) {
+          monthsToPay = Math.max(0, currentMonthIndex - firstPaymentMonth + 1);
+        } else {
+          // Future enrollment
+          monthsToPay = 0;
+        }
+
+        if (isNaN(monthsToPay)) monthsToPay = 0;
         const expectedMonthlyFees = monthsToPay * MONTHLY_FEE;
 
         // Sumar redirecciones de pago (montos negativos representan cuotas cubiertas)
@@ -153,10 +205,10 @@ export default function Dashboard() {
           if (!activity.activity_date) continue;
 
           const activityDate = new Date(activity.activity_date);
-          if (activityDate > new Date()) continue;
+          // if (activityDate > new Date()) continue; // Allow seeing future/rollover debts
 
           if (exclusionsMap.get(student.id)?.has(activity.id)) continue;
-          if (enrollmentDate > activityDate) continue;
+          // if (enrollmentDate > activityDate) continue; // Allow same-day enrollment/activity matches (common in migrations)
 
           const key = `${student.id}_${activity.id}`;
           const paid = activityPayments.get(key) || 0;
@@ -272,6 +324,79 @@ export default function Dashboard() {
             <CardContent className="h-24 bg-muted/50" />
           </Card>
         ))}
+      </div>
+    );
+  }
+
+  if (currentTenant?.status === 'archived') {
+    return (
+      <div className="space-y-8 py-8 animate-in fade-in duration-500">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center p-3 bg-orange-100 rounded-full mb-4">
+              <Clock className="w-8 h-8 text-orange-600" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">Año Escolar Finalizado</h1>
+            <p className="text-muted-foreground text-lg">
+              El curso <b>{currentTenant.name}</b> se encuentra archivado en modo solo lectura.
+            </p>
+          </div>
+
+          {/* Action Card */}
+          <Card className="border-2 border-primary/20 shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-3 opacity-10">
+              <Calendar className="w-32 h-32" />
+            </div>
+            <CardHeader>
+              <CardTitle className="text-xl">Continuidad Académica</CardTitle>
+              <CardDescription>
+                Puedes iniciar el proceso para crear el siguiente año escolar basado en los datos de este curso.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="lg"
+                  className="w-full text-lg h-12 gap-2 shadow-md"
+                  onClick={() => navigate(`/admin/rollover?from=${currentTenant.id}`)}
+                >
+                  <TrendingUp className="w-5 h-5" />
+                  Comenzar Año Escolar {currentTenant.fiscal_year ? currentTenant.fiscal_year + 1 : new Date().getFullYear() + 1}
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Esto iniciará el asistente de migración para alumnos y saldos.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Read Only Stats Review */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Recaudado</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(stats.totalIncome)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Deuda Final</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">{formatCurrency(stats.totalDebt)}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex justify-center">
+            <Button variant="link" className="text-muted-foreground" onClick={() => navigate('/admin/organizations')}>
+              Volver al Panel de Administración
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

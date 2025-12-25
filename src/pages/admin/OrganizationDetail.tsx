@@ -115,6 +115,33 @@ export default function OrganizationDetail() {
 
 
 
+    // Archive / Close Year State
+    const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+    const [archiving, setArchiving] = useState(false);
+
+    // ... existing handles ...
+
+    const handleArchiveTenant = async () => {
+        if (!selectedTenant) return;
+        setArchiving(true);
+        try {
+            const { error } = await supabase
+                .from('tenants')
+                .update({ status: 'archived' })
+                .eq('id', selectedTenant.id);
+
+            if (error) throw error;
+            toast.success("Curso finalizado y archivado correctamente");
+            setIsArchiveOpen(false);
+            fetchDetails();
+        } catch (error: any) {
+            console.error("Error archiving:", error);
+            toast.error("Error al archivar curso");
+        } finally {
+            setArchiving(false);
+        }
+    };
+
     // Helper calculate valid_until
     const calculateValidUntil = (months: number) => {
         const date = new Date();
@@ -488,6 +515,37 @@ export default function OrganizationDetail() {
                     </CardContent>
                 </Card>
 
+                {/* Dialog: Archive Confirmation */}
+                <Dialog open={isArchiveOpen} onOpenChange={setIsArchiveOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Finalizar Año Escolar</DialogTitle>
+                            <DialogDescription>
+                                ¿Estás seguro que deseas cerrar el año para <b>{selectedTenant?.name}</b>?
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4 space-y-3 text-sm text-muted-foreground">
+                            <p className="flex items-start gap-2">
+                                <span className="text-orange-600 font-bold">⚠</span>
+                                El curso pasará a estado <b>ARCHIVADO</b> (Solo Lectura).
+                            </p>
+                            <p className="flex items-start gap-2">
+                                <span className="text-primary font-bold">ℹ</span>
+                                Podrás iniciar el proceso de <b>Nuevo Año</b> desde el Dashboard principal.
+                            </p>
+                            <p>
+                                Esta acción no se puede deshacer fácilmente. Asegúrate de que todas las operaciones del año estén concluidas.
+                            </p>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsArchiveOpen(false)}>Cancelar</Button>
+                            <Button variant="destructive" onClick={handleArchiveTenant} disabled={archiving}>
+                                {archiving ? "Archivando..." : "Sí, Finalizar Año"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Configuración</CardTitle>
@@ -522,7 +580,6 @@ export default function OrganizationDetail() {
                 </Card>
             </div>
 
-            {/* Dialog: Detail View */}
             <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
@@ -531,85 +588,87 @@ export default function OrganizationDetail() {
                             Información completa de suscripción y estado.
                         </DialogDescription>
                     </DialogHeader>
-                    {selectedTenant && (
-                        <div className="grid gap-6 py-4">
-                            {/* Basic Info */}
-                            <div className="space-y-3">
-                                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                    <GraduationCap className="h-4 w-4" />
-                                    Información General
-                                </h4>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-muted-foreground">Nombre</p>
-                                        <p className="font-medium">{selectedTenant.name}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-muted-foreground">Creado el</p>
-                                        <p className="font-medium">{formatDate(selectedTenant.created_at)}</p>
+                    {
+                        selectedTenant && (
+                            <div className="grid gap-6 py-4">
+                                {/* Basic Info */}
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                        <GraduationCap className="h-4 w-4" />
+                                        Información General
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <p className="text-muted-foreground">Nombre</p>
+                                            <p className="font-medium">{selectedTenant.name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-muted-foreground">Creado el</p>
+                                            <p className="font-medium">{formatDate(selectedTenant.created_at)}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="h-px bg-border" />
+                                <div className="h-px bg-border" />
 
-                            {/* Subscription Info */}
-                            <div className="space-y-3">
-                                <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                    <Clock className="h-4 w-4" />
-                                    Estado de Suscripción
-                                </h4>
-                                <div className="space-y-3 bg-muted/40 p-3 rounded-md border">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">Estado Actual</span>
-                                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full uppercase
+                                {/* Subscription Info */}
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                        <Clock className="h-4 w-4" />
+                                        Estado de Suscripción
+                                    </h4>
+                                    <div className="space-y-3 bg-muted/40 p-3 rounded-md border">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm text-muted-foreground">Estado Actual</span>
+                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full uppercase
                                              ${selectedTenant.subscription_status === 'active' ? 'bg-green-100 text-green-700' :
-                                                selectedTenant.subscription_status === 'trial' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-gray-100 text-gray-700'}`}>
-                                            {selectedTenant.subscription_status || 'SIN ESTADO'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">Trial Vence</span>
-                                        <span className="text-sm font-mono font-medium">
-                                            {selectedTenant.trial_ends_at ? formatDate(selectedTenant.trial_ends_at) : 'N/A'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">Plan Válido Hasta</span>
-                                        <span className="text-sm font-mono font-medium">
-                                            {selectedTenant.valid_until ? formatDate(selectedTenant.valid_until) : 'Indefinido'}
-                                        </span>
+                                                    selectedTenant.subscription_status === 'trial' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-gray-100 text-gray-700'}`}>
+                                                {selectedTenant.subscription_status || 'SIN ESTADO'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm text-muted-foreground">Trial Vence</span>
+                                            <span className="text-sm font-mono font-medium">
+                                                {selectedTenant.trial_ends_at ? formatDate(selectedTenant.trial_ends_at) : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm text-muted-foreground">Plan Válido Hasta</span>
+                                            <span className="text-sm font-mono font-medium">
+                                                {selectedTenant.valid_until ? formatDate(selectedTenant.valid_until) : 'Indefinido'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="space-y-2">
-                                <Button
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => {
-                                        if (selectedTenant.owner_id) {
-                                            handleViewCredentials(selectedTenant);
-                                        } else {
-                                            setIsAssignOpen(true);
-                                        }
-                                    }}
-                                >
-                                    <UserCog className="mr-2 h-4 w-4" />
-                                    {selectedTenant.owner_id ? 'Ver Credenciales Encargado' : 'Asignar Encargado'}
-                                </Button>
+                                <div className="space-y-2">
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        onClick={() => {
+                                            if (selectedTenant.owner_id) {
+                                                handleViewCredentials(selectedTenant);
+                                            } else {
+                                                setIsAssignOpen(true);
+                                            }
+                                        }}
+                                    >
+                                        <UserCog className="mr-2 h-4 w-4" />
+                                        {selectedTenant.owner_id ? 'Ver Credenciales Encargado' : 'Asignar Encargado'}
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )
+                    }
                     <DialogFooter>
                         <Button onClick={() => setIsDetailOpen(false)}>Cerrar</Button>
                     </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                </DialogContent >
+            </Dialog >
 
             {/* Dialog for Creating Owner */}
-            <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
+            < Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen} >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Crear Encargado del Curso</DialogTitle>
@@ -653,10 +712,10 @@ export default function OrganizationDetail() {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Dialog for Viewing Credentials */}
-            <Dialog open={isCredentialsOpen} onOpenChange={setIsCredentialsOpen}>
+            < Dialog open={isCredentialsOpen} onOpenChange={setIsCredentialsOpen} >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Credenciales del Curso</DialogTitle>
@@ -701,10 +760,10 @@ export default function OrganizationDetail() {
                         <Button onClick={() => setIsCredentialsOpen(false)}>Cerrar</Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Dialog: Extend Trial */}
-            <Dialog open={isExtendTrialOpen} onOpenChange={setIsExtendTrialOpen}>
+            < Dialog open={isExtendTrialOpen} onOpenChange={setIsExtendTrialOpen} >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Extender Periodo de Prueba</DialogTitle>
@@ -730,10 +789,10 @@ export default function OrganizationDetail() {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Dialog: Activate Plan */}
-            <Dialog open={isActivatePlanOpen} onOpenChange={setIsActivatePlanOpen}>
+            < Dialog open={isActivatePlanOpen} onOpenChange={setIsActivatePlanOpen} >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Activar Plan Institucional</DialogTitle>
@@ -760,7 +819,7 @@ export default function OrganizationDetail() {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
-        </div>
+            </Dialog >
+        </div >
     );
 }

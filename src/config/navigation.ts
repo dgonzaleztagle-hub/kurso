@@ -20,6 +20,7 @@ import {
     User,
     ShieldCheck,
     NotebookText,
+    Archive,
     LucideIcon
 } from "lucide-react";
 
@@ -105,6 +106,7 @@ export const mainNavigation: NavCategory[] = [
         isTab: true,
         items: [
             { name: "Actas de Reunión", href: "/meeting-minutes", icon: NotebookText, allowStudent: true },
+            { name: "Anuncios y Comunicados", href: "/posts", icon: Bell },
         ],
     },
     {
@@ -115,6 +117,7 @@ export const mainNavigation: NavCategory[] = [
             { name: "Usuarios", href: "/user-management", icon: UserCog, masterOnly: true },
             { name: "Historial de Cambios", href: "/admin/audit-logs", icon: ShieldCheck, masterOnly: true },
             { name: "Formularios", href: "/formularios", icon: FileQuestion },
+            { name: "Cierre de Año", href: "/close-year", icon: Archive, masterOnly: true }, // Restricted to admins/owners
         ],
     },
 ];

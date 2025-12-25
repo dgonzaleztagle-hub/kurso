@@ -68,7 +68,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             id,
             name,
             subscription_status,
-            owner_id
+            owner_id,
+            status,
+            fiscal_year,
+            previous_tenant_id,
+            next_tenant_id
           )
         `)
                 .eq('user_id', user?.id)
@@ -93,14 +97,30 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
             setAvailableTenants(uniqueTenants);
 
-            // 3. Seleccionar tenant inicial (el primero o el último visitado)
-            if (uniqueTenants.length > 0 && !currentTenant) {
-                // TODO: Recuperar de localStorage 'last_tenant_id'
-                const lastTenantId = localStorage.getItem('kurso_last_tenant');
-                const target = uniqueTenants.find(t => t.id === lastTenantId) || uniqueTenants[0];
+            // 3. Seleccionar o Actualizar tenant
+            if (uniqueTenants.length > 0) {
+                let target: Tenant | undefined;
 
-                setCurrentTenant(target);
-                await determineRole(target.id, user!.id);
+                if (currentTenant) {
+                    // Update existing currentTenant with fresh data
+                    target = uniqueTenants.find(t => t.id === currentTenant.id);
+                    if (target) {
+                        setCurrentTenant(target);
+                        // If role might depend on data, re-run determineRole? Usually role is static per user/tenant, but safe to keep.
+                        await determineRole(target.id, user!.id);
+                    }
+                }
+
+                // Initial load or if current was removed
+                if (!currentTenant || !target) {
+                    const lastTenantId = localStorage.getItem('kurso_last_tenant');
+                    target = uniqueTenants.find(t => t.id === lastTenantId) || uniqueTenants[0];
+                    setCurrentTenant(target);
+                    await determineRole(target.id, user!.id);
+                }
+            } else {
+                // No tenants available
+                setCurrentTenant(null);
             }
         } catch (error) {
             console.error('Error fetching tenants:', error);

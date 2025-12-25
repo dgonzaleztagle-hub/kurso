@@ -33,6 +33,7 @@ import PaymentNotifications from "./pages/PaymentNotifications";
 import Reimbursements from "./pages/Reimbursements";
 import ScheduledActivities from "./pages/ScheduledActivities";
 import SupplierPaymentRequest from "./pages/SupplierPaymentRequest";
+import PostManagement from "./pages/PostManagement";
 
 import CreditManagement from "./pages/CreditManagement";
 import CreditMovements from "./pages/CreditMovements";
@@ -46,12 +47,22 @@ import FormResponses from "./pages/FormResponses";
 import PublicForm from "./pages/PublicForm";
 import { AdminRoute } from "./components/AdminRoute";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import YearRolloverWizard from "./pages/admin/YearRolloverWizard";
 import Organizations from "./pages/admin/Organizations";
 import OrganizationDetail from "./pages/admin/OrganizationDetail";
+import CloseYear from "./pages/admin/CloseYear";
 import TenantsList from "./pages/admin/TenantsList";
 import UsersList from "./pages/admin/UsersList";
 import OnboardingWizard from "./pages/onboarding/OnboardingWizard";
 import { AdminLayout } from "./layouts/AdminLayout";
+
+import { MobileLayout } from "./components/layouts/MobileLayout";
+import MobileHome from "./pages/mobile/MobileHome";
+import MobileFinances from "./pages/mobile/MobileFinances";
+import MobileAgenda from "./pages/mobile/MobileAgenda";
+import MobileActas from "./pages/mobile/MobileActas";
+import MobileBoard from "./pages/mobile/MobileBoard";
+import MobileProfile from "./pages/mobile/MobileProfile";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +88,15 @@ function AppRoutes() {
           <Route path="/admin/users" element={<UsersList />} />
         </Route>
       </Route>
+
+      {/* Tenant Admin Routes */}
+      <Route path="/close-year" element={
+        <ProtectedRoute allowedRoles={['owner', 'master', 'admin']}>
+          <Layout>
+            <CloseYear />
+          </Layout>
+        </ProtectedRoute>
+      } />
 
       <Route path="/solicitud-pago-proveedor" element={<SupplierPaymentRequest />} />
       <Route path="/formulario/:id" element={<PublicForm />} />
@@ -132,16 +152,23 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/" element={<IndexSwitcher />} />
+      <Route path="/admin/rollover" element={
+        <ProtectedRoute allowedRoles={['owner', 'master', 'admin']}>
+          <YearRolloverWizard />
+        </ProtectedRoute>
+      } />
       <Route path="/dashboard" element={
         <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <Layout><Dashboard /></Layout>
         </ProtectedRoute>
       } />
+
       <Route path="/student-dashboard" element={
         <ProtectedRoute allowedRoles={['alumnos']}>
           <Layout><StudentDashboard /></Layout>
         </ProtectedRoute>
       } />
+
       <Route path="/students" element={
         <ProtectedRoute allowedRoles={['master']} requiredModule="students">
           <Layout><Students /></Layout>
@@ -232,6 +259,26 @@ function AppRoutes() {
           <Layout><MeetingMinutes /></Layout>
         </ProtectedRoute>
       } />
+      <Route path="/posts" element={
+        <ProtectedRoute allowedRoles={['master', 'owner', 'admin']}>
+          <Layout><PostManagement /></Layout>
+        </ProtectedRoute>
+      } />
+
+      {/* STITCH MOBILE ROUTES */}
+      <Route path="/mobile" element={
+        <ProtectedRoute allowedRoles={['master', 'owner', 'admin', 'alumnos']}>
+          <MobileLayout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<MobileBoard />} />
+        <Route path="board" element={<MobileBoard />} />
+        <Route path="finances" element={<MobileFinances />} />
+        <Route path="agenda" element={<MobileAgenda />} />
+        <Route path="actas" element={<MobileActas />} />
+        <Route path="profile" element={<MobileProfile />} />
+      </Route>
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

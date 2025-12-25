@@ -31,6 +31,10 @@ export interface Tenant {
     trial_ends_at: string | null;
     valid_until: string | null;
     settings: Record<string, any>;
+    status?: 'active' | 'archived' | 'pending_setup';
+    fiscal_year?: number;
+    previous_tenant_id?: string | null;
+    next_tenant_id?: string | null;
     created_at: string;
 }
 

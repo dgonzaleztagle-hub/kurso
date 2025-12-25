@@ -11,6 +11,7 @@ import jsPDF from "jspdf";
 import logoImage from "@/assets/logo-colegio.png";
 import firmaImage from "@/assets/firma-directiva.png";
 import { StudentCombobox } from "@/components/StudentCombobox";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Student {
   id: number;
@@ -35,6 +36,7 @@ interface Payment {
 }
 
 export default function PaymentReports() {
+  const { currentTenant } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -45,9 +47,11 @@ export default function PaymentReports() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadStudents();
-    loadActivities();
-  }, []);
+    if (currentTenant?.id) {
+      loadStudents();
+      loadActivities();
+    }
+  }, [currentTenant?.id]);
 
   useEffect(() => {
     if (searchType === "student" && selectedStudent) {
@@ -58,10 +62,12 @@ export default function PaymentReports() {
   }, [searchType, selectedStudent, selectedActivity, period]);
 
   const loadStudents = async () => {
+    if (!currentTenant?.id) return;
     try {
       const { data, error } = await supabase
         .from("students")
         .select("id, first_name, last_name")
+        .eq("tenant_id", currentTenant?.id) // Filter by Tenant
         .order("last_name");
 
       if (error) throw error;
@@ -77,10 +83,12 @@ export default function PaymentReports() {
   };
 
   const loadActivities = async () => {
+    if (!currentTenant?.id) return;
     try {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
+        .eq("tenant_id", currentTenant?.id) // Filter by Tenant
         .order("activity_date", { ascending: false });
 
       if (error) throw error;
@@ -208,7 +216,7 @@ export default function PaymentReports() {
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(71, 85, 105);
-      doc.text("Pre Kinder B - Colegio Santa Cruz", 105, 24, { align: "center" });
+      doc.text(`${currentTenant?.name || "Colegio Santa Cruz"} - Colegio Santa Cruz`, 105, 24, { align: "center" });
       doc.text(`Fecha: ${new Date().toLocaleDateString("es-CL")}`, 105, 28, { align: "center" });
 
       // Separator line
