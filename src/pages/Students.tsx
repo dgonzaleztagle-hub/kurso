@@ -272,7 +272,7 @@ export default function Students() {
 
 
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3 text-blue-800 text-sm">
+      <div className="rounded-lg border border-primary/25 bg-primary/10 p-4 flex gap-3 text-foreground text-sm">
         <div className="mt-0.5">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-info"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
         </div>
@@ -321,7 +321,7 @@ export default function Students() {
                 {filteredStudents.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell className="font-medium capitalize">{student.name.toLowerCase()}</TableCell>
-                    <TableCell>{student.rut || <span className="text-gray-400 italic">--</span>}</TableCell>
+                    <TableCell>{student.rut || <span className="text-muted-foreground italic">--</span>}</TableCell>
                     <TableCell>
                       {formatDateForDisplay(student.enrollment_date)}
                     </TableCell>

@@ -172,11 +172,11 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
     const invalidCount = data.filter(d => d.rut && !d.isValidRut).length;
 
     return (
-        <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+        <div className="space-y-4 rounded-lg border bg-card p-4 text-card-foreground">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div>
                     <h3 className="text-lg font-medium">Importación Masiva</h3>
-                    <p className="text-sm text-gray-500">Carga alumnos desde Excel (Nombre, RUT).</p>
+                    <p className="text-sm text-muted-foreground">Carga alumnos desde Excel (Nombre, RUT).</p>
                 </div>
                 <Button variant="outline" onClick={handleDownloadTemplate} size="sm">
                     <Download className="mr-2 h-4 w-4" />
@@ -190,7 +190,7 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
                     accept=".xlsx, .xls"
                     onChange={handleFileUpload}
                     disabled={analyzing || importing}
-                    className="bg-white"
+                    className="bg-background"
                 />
             </div>
 
@@ -203,7 +203,7 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
                         )}
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto border rounded bg-white p-2 text-sm">
+                    <div className="max-h-60 overflow-y-auto rounded border bg-background p-2 text-sm">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b">
@@ -214,13 +214,13 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
                             </thead>
                             <tbody>
                                 {data.map((row, idx) => (
-                                    <tr key={idx} className={`border-b last:border-0 ${row.status === 'error' ? 'bg-red-50' : row.status === 'success' ? 'bg-green-50' : ''}`}>
+                                    <tr key={idx} className={`border-b last:border-0 ${row.status === 'error' ? 'bg-destructive/10' : row.status === 'success' ? 'bg-emerald-500/10' : ''}`}>
                                         <td className="p-2">{row.name}</td>
                                         <td className={`p-2 ${!row.isValidRut && row.rut ? 'text-red-500 font-bold' : ''}`}>
-                                            {row.rut || <span className="text-gray-400 italic">Sin RUT</span>}
+                                            {row.rut || <span className="text-muted-foreground italic">Sin RUT</span>}
                                         </td>
                                         <td className="p-2">
-                                            {row.status === 'pending' && <span className="text-gray-500">Pendiente</span>}
+                                            {row.status === 'pending' && <span className="text-muted-foreground">Pendiente</span>}
                                             {row.status === 'success' && <span className="text-green-600 font-medium">Importado</span>}
                                             {row.status === 'error' && <span className="text-red-600 truncate max-w-[200px]" title={row.errorMessage}>{row.errorMessage || 'Error'}</span>}
                                         </td>
