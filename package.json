@@ -9,6 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "generate-accounts": "tsx scripts/generate_accounts.ts",
     "supa": "supabase",
     "supa:link": "supabase link --project-ref wkwztjpvtsmwvgumywfi",
@@ -76,6 +78,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
