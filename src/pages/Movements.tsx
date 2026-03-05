@@ -91,14 +91,12 @@ export default function Movements() {
   };
 
   const loadExistingSuppliers = async () => {
-    // Cast to any to bypass outdated types.ts which assumes 'supplier' column exists
     const { data } = await supabase
       .from("expenses")
-      .select("category" as any);
+      .select("supplier");
 
     if (data) {
-      // Cast data to any[] to access the dynamic column
-      const uniqueSuppliers = Array.from(new Set((data as any[]).map(e => e.category).filter(Boolean)));
+      const uniqueSuppliers = Array.from(new Set((data as any[]).map(e => e.supplier).filter(Boolean)));
       setExistingSuppliers(uniqueSuppliers);
     }
   };
@@ -234,26 +232,12 @@ export default function Movements() {
 
         const finalSupplier = supplier === "NUEVO" ? customSupplier : supplier;
 
-        // Try getting tenant_id if possible, otherwise rely on backend trigger/default
-        // The migration mentioned NOT NULL but didn't show DEFAULT. If trigger fails, this might fail.
-        // Let's safe-guard by calling getUser if needed, but previously we just wanted to fix columns.
-        let tenantId = undefined;
-        try {
-          const { data } = await supabase.auth.getUser();
-          tenantId = data.user?.user_metadata?.tenant_id;
-        } catch (e) {
-          // ignore
-        }
-
-        // Explicitly cast to 'any' to bypass outdated TypeScript definitions
-        // Database actually requires: category, description (not supplier, concept)
         const insertPayload: any = {
           folio,
-          tenant_id: tenantId,
-          category: finalSupplier,
+          supplier: finalSupplier,
           expense_date: date,
           amount: parseFloat(amount),
-          description: expenseConcept,
+          concept: expenseConcept,
         };
 
         const { error } = await supabase.from("expenses").insert(insertPayload);
@@ -265,9 +249,9 @@ export default function Movements() {
       resetForm();
       loadIncomeGlosas();
       loadExistingSuppliers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al registrar movimiento:", error);
-      toast.error("Error al registrar el movimiento");
+      toast.error(error?.message || "Error al registrar el movimiento");
     } finally {
       setLoading(false);
     }

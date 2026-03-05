@@ -47,9 +47,9 @@ export function MassNotificationDialog({ open, onOpenChange }: MassNotificationD
       toast.success("Notificación publicada en el dashboard de todos los alumnos");
       setMessage("");
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending mass notification:", error);
-      toast.error("Error al publicar la notificación");
+      toast.error(error?.message || "Error al publicar la notificación");
     } finally {
       setSending(false);
     }
