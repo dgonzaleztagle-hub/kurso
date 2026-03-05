@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
   slug text UNIQUE,
   owner_id uuid REFERENCES public.app_users(id),
   subscription_status public.subscription_status DEFAULT 'trial',
-  trial_ends_at timestamptz DEFAULT (now() + interval '10 days'),
+  trial_ends_at timestamptz DEFAULT (now() + interval '7 days'),
   valid_until date,
   settings jsonb DEFAULT '{}'::jsonb,
   status text DEFAULT 'active' CHECK (status IN ('active','archived','pending_setup')),

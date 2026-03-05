@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     
     -- Ciclo de Vida
     subscription_status subscription_status DEFAULT 'trial',
-    trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '10 days'), -- 7 trial + 3 grace
+    trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days'), -- trial base de 7 días
     valid_until DATE, -- Fecha límite de pago (para suscripciones activas)
     
     settings JSONB DEFAULT '{}'::jsonb,
