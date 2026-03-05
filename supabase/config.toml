@@ -1,4 +1,4 @@
-project_id = "gsebgpnbzzeglzgvkieh"
+project_id = "wkwztjpvtsmwvgumywfi"
 
 # MODO PRUEBA: Funciones sin verificación JWT
 [functions.create-student-accounts]

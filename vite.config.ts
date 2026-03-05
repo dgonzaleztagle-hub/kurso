@@ -15,26 +15,81 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['pwa-icon-512.png', 'pwa-icon-192.png'],
+      includeAssets: ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon-180.png', 'kurso-logo-full.png'],
       manifest: {
-        name: 'Sistema de Gestión de Pagos - Pre Kinder B',
-        short_name: 'Pre Kinder B',
-        description: 'Sistema completo de gestión de pagos escolares',
-        theme_color: '#0ea5e9',
+        id: '/',
+        name: 'Kurso - Kuentas y Kontrol',
+        short_name: 'Kurso',
+        description: 'Sistema de gestion escolar: finanzas, alumnos y comunicacion del curso.',
+        start_url: '/',
+        scope: '/',
+        lang: 'es-CL',
+        dir: 'ltr',
+        theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui', 'browser'],
         orientation: 'portrait',
+        categories: ['education', 'productivity', 'finance'],
+        screenshots: [
+          {
+            src: '/app-dashboard.png',
+            sizes: '1024x557',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Panel principal de finanzas y estado del curso'
+          },
+          {
+            src: '/app-menu-finanzas.png',
+            sizes: '1024x556',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Vista de reportes y resumen financiero'
+          },
+          {
+            src: '/app-menu-pagos.png',
+            sizes: '1024x544',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Gestion de pagos y seguimiento'
+          }
+        ],
+        shortcuts: [
+          {
+            name: 'Dashboard',
+            short_name: 'Inicio',
+            description: 'Abrir panel principal',
+            url: '/dashboard'
+          },
+          {
+            name: 'Alumnos',
+            short_name: 'Alumnos',
+            description: 'Abrir gestion de alumnos',
+            url: '/students'
+          },
+          {
+            name: 'Movimientos',
+            short_name: 'Movimientos',
+            description: 'Registrar ingresos y egresos',
+            url: '/movements'
+          }
+        ],
         icons: [
           {
-            src: '/pwa-icon-192.png',
+            src: '/icon-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/pwa-icon-512.png',
+            src: '/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: '/icon-512-maskable.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'maskable'
           }
         ]
       },

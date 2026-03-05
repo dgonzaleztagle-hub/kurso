@@ -72,17 +72,25 @@ export default function Auth() {
       if (viewMode === 'signup') {
         const { error } = await signUp(finalEmail, password);
         if (error) {
-          toast.error(error.message);
+          const msg = error?.message || "";
+          if (msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch")) {
+            toast.error("Error de conexion con el servidor de autenticacion. Actualiza la app y vuelve a intentar.");
+          } else {
+            toast.error(msg);
+          }
         } else {
           toast.success("Cuenta creada exitosamente. !Bienvenido!");
         }
       } else {
         const { error } = await signIn(finalEmail, password);
         if (error) {
-          if (error.message.includes("Invalid login credentials")) {
+          const msg = error?.message || "";
+          if (msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch")) {
+            toast.error("Error de conexion con el servidor de autenticacion. Actualiza la app y vuelve a intentar.");
+          } else if (msg.includes("Invalid login credentials")) {
             toast.error("Credenciales inválidas. Si usa RUT, verifique que esté correcto.");
           } else {
-            toast.error(error.message);
+            toast.error(msg);
           }
         } else {
           toast.success("Sesión iniciada exitosamente");
