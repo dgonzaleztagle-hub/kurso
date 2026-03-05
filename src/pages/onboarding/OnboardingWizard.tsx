@@ -12,7 +12,7 @@ import { Loader2, Rocket, CheckCircle2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function OnboardingWizard() {
-    const { user, appUser } = useAuth();
+    const { user, appUser, signOut } = useAuth();
     const { refreshTenants, availableTenants } = useTenant(); // Usar refresh del contexto
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -96,6 +96,20 @@ export default function OnboardingWizard() {
                     >
                         <Card className="shadow-2xl border-primary/10 backdrop-blur-sm bg-card/95">
                             <CardHeader className="text-center space-y-6 pb-2">
+                                <div className="flex justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={loading}
+                                        onClick={async () => {
+                                            await signOut();
+                                            navigate("/auth", { replace: true });
+                                        }}
+                                    >
+                                        Cerrar sesion
+                                    </Button>
+                                </div>
                                 <div className="mx-auto bg-primary/10 p-4 rounded-2xl w-20 h-20 flex items-center justify-center ring-4 ring-primary/5">
                                     <Rocket className="w-10 h-10 text-primary" />
                                 </div>

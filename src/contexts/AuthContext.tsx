@@ -77,11 +77,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAppUser(appData as AppUser);
 
       // 2. Fetch User Roles (Global/First Login check)
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleRows, error: roleError } = await supabase
         .from('user_roles')
         .select('role, first_login')
         .eq('user_id', userId)
-        .single(); // Assuming one role entry per user for simple cases, or take first
+        .limit(1);
+
+      if (roleError && roleError.code !== 'PGRST116') {
+        console.error('Error fetching user role:', roleError);
+      }
+
+      const roleData = roleRows?.[0];
 
       if (roleData) {
         // Normalize role
