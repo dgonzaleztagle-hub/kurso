@@ -46,6 +46,8 @@ interface PaymentNotification {
 export default function PaymentNotifications() {
   const { user, userRole } = useAuth();
   const { roleInCurrentTenant } = useTenant();
+  const effectiveRole = roleInCurrentTenant || userRole;
+  const canProcessPayments = ['master', 'owner', 'admin'].includes(effectiveRole || '');
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<PaymentNotification[]>([]);
@@ -568,5 +570,3 @@ export default function PaymentNotifications() {
     </div>
   );
 }
-  const effectiveRole = roleInCurrentTenant || userRole;
-  const canProcessPayments = ['master', 'owner', 'admin'].includes(effectiveRole || '');

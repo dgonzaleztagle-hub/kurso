@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { getE2ECreds, login } from "./utils/auth";
+import { login } from "./utils/auth";
 
 const desktopRoutes = [
   "/",
@@ -30,7 +30,10 @@ function attachRuntimeWatchers(page: any) {
   });
 
   page.on("requestfailed", (req: any) => {
-    failedRequests.push(`${req.method()} ${req.url()} :: ${req.failure()?.errorText || "unknown"}`);
+    const reason = req.failure()?.errorText || "unknown";
+    // Ignore browser-aborted requests during route transitions in SPA navigation.
+    if (reason.includes("ERR_ABORTED")) return;
+    failedRequests.push(`${req.method()} ${req.url()} :: ${reason}`);
   });
 
   page.on("response", (res: any) => {
@@ -45,9 +48,8 @@ function attachRuntimeWatchers(page: any) {
 
 test.describe("authenticated smoke", () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!getE2ECreds().enabled, "E2E creds missing: set E2E_EMAIL and E2E_PASSWORD");
     const loggedIn = await login(page);
-    test.skip(!loggedIn, "Could not log in with provided E2E credentials");
+    test.skip(!loggedIn, "Could not log in with E2E user");
   });
 
   test("desktop routes load without critical runtime failures", async ({ page }) => {
@@ -79,4 +81,3 @@ test.describe("authenticated smoke", () => {
     expect(failedRequests, `Network/server failures: ${failedRequests.join("\n")}`).toEqual([]);
   });
 });
-
