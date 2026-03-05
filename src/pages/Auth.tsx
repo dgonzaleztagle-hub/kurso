@@ -25,6 +25,37 @@ export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const getFriendlyAuthError = (rawError: any) => {
+    const msg = String(rawError?.message || rawError || "").toLowerCase();
+
+    if (
+      msg.includes("load failed") ||
+      msg.includes("failed to fetch") ||
+      msg.includes("err_name_not_resolved") ||
+      msg.includes("networkerror")
+    ) {
+      return "No se pudo conectar con Supabase. Recarga la pagina y vuelve a intentar.";
+    }
+
+    if (msg.includes("invalid login credentials")) {
+      return "Credenciales invalidas. Revisa correo/RUT y contraseña.";
+    }
+
+    if (msg.includes("user already registered")) {
+      return "Ese correo ya esta registrado. Inicia sesion o recupera tu contraseña.";
+    }
+
+    if (msg.includes("email not confirmed")) {
+      return "Tu correo aun no esta confirmado. Revisa tu bandeja de entrada.";
+    }
+
+    if (msg.includes("password should be at least")) {
+      return "La contraseña debe tener al menos 6 caracteres.";
+    }
+
+    return rawError?.message || "Error de autenticacion. Intenta nuevamente.";
+  };
+
   useEffect(() => {
     // Detectar modo desde URL (ej: /auth?mode=signup)
     const searchParams = new URLSearchParams(location.search);
@@ -70,28 +101,17 @@ export default function Auth() {
       }
 
       if (viewMode === 'signup') {
-        const { error } = await signUp(finalEmail, password);
+        const redirectTo = `${window.location.origin}/auth?mode=login`;
+        const { error } = await signUp(finalEmail, password, undefined, redirectTo);
         if (error) {
-          const msg = error?.message || "";
-          if (msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch")) {
-            toast.error("Error de conexion con el servidor de autenticacion. Actualiza la app y vuelve a intentar.");
-          } else {
-            toast.error(msg);
-          }
+          toast.error(getFriendlyAuthError(error));
         } else {
           toast.success("Cuenta creada exitosamente. !Bienvenido!");
         }
       } else {
         const { error } = await signIn(finalEmail, password);
         if (error) {
-          const msg = error?.message || "";
-          if (msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch")) {
-            toast.error("Error de conexion con el servidor de autenticacion. Actualiza la app y vuelve a intentar.");
-          } else if (msg.includes("Invalid login credentials")) {
-            toast.error("Credenciales inválidas. Si usa RUT, verifique que esté correcto.");
-          } else {
-            toast.error(msg);
-          }
+          toast.error(getFriendlyAuthError(error));
         } else {
           toast.success("Sesión iniciada exitosamente");
         }
@@ -123,7 +143,7 @@ export default function Auth() {
       setViewMode("login");
     } catch (error: any) {
       console.error("Error sending reset email:", error);
-      toast.error("Error al enviar correo", { description: error.message });
+      toast.error(getFriendlyAuthError(error));
     } finally {
       setLoading(false);
     }
