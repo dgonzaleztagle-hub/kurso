@@ -15,7 +15,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 export default function MeetingMinutes() {
     const { userRole } = useAuth();
-    const { currentTenant } = useTenant();
+    const { currentTenant, roleInCurrentTenant } = useTenant();
     const { toast } = useToast();
 
     const [minutes, setMinutes] = useState<MeetingMinute[]>([]);
@@ -28,7 +28,8 @@ export default function MeetingMinutes() {
     const [file, setFile] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
-    const isAdmin = ['owner', 'admin', 'master'].includes(userRole || '');
+    const effectiveRole = roleInCurrentTenant || userRole || '';
+    const isAdmin = ['owner', 'admin', 'master'].includes(effectiveRole);
 
     useEffect(() => {
         if (currentTenant) {

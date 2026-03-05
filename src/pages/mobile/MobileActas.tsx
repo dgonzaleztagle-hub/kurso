@@ -9,11 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Minute {
-    id: number;
-    title: string;
+    id: string;
     content: string;
     meeting_date: string;
-    status: string;
+    image_url?: string | null;
 }
 
 export default function MobileActas() {
@@ -34,7 +33,6 @@ export default function MobileActas() {
                 .from("meeting_minutes")
                 .select("*")
                 .eq("tenant_id", currentTenant?.id)
-                .eq("status", "published") // Only published minutes
                 .order("meeting_date", { ascending: false });
 
             if (error) throw error;
@@ -91,7 +89,7 @@ export default function MobileActas() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-start">
                                             <h3 className={`font-bold text-sm leading-tight ${isOpen ? 'text-blue-600' : 'text-[#111418] dark:text-gray-200'}`}>
-                                                {minute.title}
+                                                Acta del {format(parseISO(minute.meeting_date), "d MMM yyyy", { locale: es })}
                                             </h3>
                                             {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                                         </div>
@@ -109,6 +107,16 @@ export default function MobileActas() {
                                     <div className="p-4 pt-0 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap border-t border-gray-100 dark:border-gray-800 mt-2">
                                         {minute.content}
                                     </div>
+                                    {minute.image_url && (
+                                        <a
+                                            href={minute.image_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="mx-4 mb-2 inline-block text-xs font-semibold text-blue-600"
+                                        >
+                                            Ver imagen adjunta
+                                        </a>
+                                    )}
                                     <div className="p-2 bg-gray-50 dark:bg-gray-800/50 text-center">
                                         <button className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
                                             Descargar PDF (Próximamente)
