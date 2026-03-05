@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +73,7 @@ interface ReimbursementWithUser extends Reimbursement {
 
 export default function Reimbursements() {
   const { user, userRole } = useAuth();
+  const { roleInCurrentTenant } = useTenant();
   const isMobile = useIsMobile();
   const [reimbursements, setReimbursements] = useState<ReimbursementWithUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,8 @@ export default function Reimbursements() {
   const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const isMaster = userRole === 'master';
+  const effectiveRole = roleInCurrentTenant || userRole;
+  const canProcessReimbursements = ['master', 'owner', 'admin'].includes(effectiveRole || '');
 
   useEffect(() => {
     fetchReimbursements();
@@ -650,7 +653,7 @@ export default function Reimbursements() {
         </div>
       )}
 
-      {isMaster && reimbursement.status === 'pending' && (
+      {canProcessReimbursements && reimbursement.status === 'pending' && (
         <div className="flex gap-2 pt-4">
           <Button
             onClick={() => {
@@ -678,7 +681,7 @@ export default function Reimbursements() {
         </div>
       )}
 
-      {isMaster && (reimbursement.status === 'approved' || reimbursement.status === 'rejected') && (
+      {canProcessReimbursements && (reimbursement.status === 'approved' || reimbursement.status === 'rejected') && (
         <div className="flex gap-2 pt-4">
           <Button
             onClick={() => {
@@ -1107,7 +1110,7 @@ export default function Reimbursements() {
                         >
                           <FileText className="w-4 h-4" />
                         </Button>
-                        {isMaster && reimbursement.status === 'pending' && (
+                        {canProcessReimbursements && reimbursement.status === 'pending' && (
                           <>
                             <Button
                               variant="outline"

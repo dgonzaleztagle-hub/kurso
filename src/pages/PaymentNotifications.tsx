@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ interface PaymentNotification {
 
 export default function PaymentNotifications() {
   const { user, userRole } = useAuth();
+  const { roleInCurrentTenant } = useTenant();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<PaymentNotification[]>([]);
@@ -102,10 +104,10 @@ export default function PaymentNotifications() {
   };
 
   const handleApprove = async (notification: PaymentNotification) => {
-    if (userRole !== 'master') {
+    if (!canProcessPayments) {
       toast({
         title: 'Acceso denegado',
-        description: 'Solo master puede aprobar pagos',
+        description: 'No tienes permisos para aprobar pagos',
         variant: 'destructive',
       });
       return;
@@ -197,10 +199,10 @@ export default function PaymentNotifications() {
   };
 
   const confirmReject = async () => {
-    if (userRole !== 'master') {
+    if (!canProcessPayments) {
       toast({
         title: 'Acceso denegado',
-        description: 'Solo master puede rechazar pagos',
+        description: 'No tienes permisos para rechazar pagos',
         variant: 'destructive',
       });
       return;
@@ -355,7 +357,7 @@ export default function PaymentNotifications() {
                     <span className="sm:hidden">Ver</span>
                   </Button>
 
-                  {notification.status === 'pending' && userRole === 'master' && (
+                  {notification.status === 'pending' && canProcessPayments && (
                     <>
                       <Button
                         variant="default"
@@ -483,7 +485,7 @@ export default function PaymentNotifications() {
             <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
               Cerrar
             </Button>
-            {selectedNotification?.status === 'pending' && userRole === 'master' && (
+            {selectedNotification?.status === 'pending' && canProcessPayments && (
               <>
                 <Button
                   variant="destructive"
@@ -566,3 +568,5 @@ export default function PaymentNotifications() {
     </div>
   );
 }
+  const effectiveRole = roleInCurrentTenant || userRole;
+  const canProcessPayments = ['master', 'owner', 'admin'].includes(effectiveRole || '');

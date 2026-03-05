@@ -19,7 +19,7 @@ export default function MobileActas() {
     const { currentTenant } = useTenant();
     const [minutes, setMinutes] = useState<Minute[]>([]);
     const [loading, setLoading] = useState(true);
-    const [openItems, setOpenItems] = useState<number[]>([]);
+    const [openItems, setOpenItems] = useState<string[]>([]);
 
     useEffect(() => {
         if (currentTenant) {
@@ -44,7 +44,7 @@ export default function MobileActas() {
         }
     };
 
-    const toggleItem = (id: number) => {
+    const toggleItem = (id: string) => {
         if (openItems.includes(id)) {
             setOpenItems(openItems.filter(i => i !== id));
         } else {

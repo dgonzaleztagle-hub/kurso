@@ -1,6 +1,7 @@
 import { ReactNode, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 
 type AppModule =
   | 'dashboard'
@@ -31,28 +32,30 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: ProtectedRouteProps) => {
   const { user, userRole, loading, hasPermission } = useAuth();
+  const { roleInCurrentTenant, loading: tenantLoading } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
+  const effectiveRole = roleInCurrentTenant || userRole;
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !tenantLoading) {
       if (!user) {
         navigate('/auth', {
           state: { from: location.pathname + location.search },
         });
-      } else if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
-        if (userRole === 'alumnos') {
-          navigate('/student-dashboard');
+      } else if (allowedRoles && (!effectiveRole || !allowedRoles.includes(effectiveRole as any))) {
+        if (effectiveRole === 'alumnos' || effectiveRole === 'student') {
+          navigate('/mobile');
         } else {
           navigate('/');
         }
-      } else if (requiredModule && userRole === 'admin' && !hasPermission(requiredModule)) {
+      } else if (requiredModule && effectiveRole === 'admin' && !hasPermission(requiredModule)) {
         navigate('/');
       }
     }
-  }, [user, userRole, loading, navigate, allowedRoles, requiredModule, hasPermission, location]);
+  }, [user, effectiveRole, loading, tenantLoading, navigate, allowedRoles, requiredModule, hasPermission, location]);
 
-  if (loading) {
+  if (loading || tenantLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

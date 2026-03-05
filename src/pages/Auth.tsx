@@ -21,7 +21,7 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("login");
-  const { signIn, signUp, user, userRole } = useAuth();
+  const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -68,11 +68,10 @@ export default function Auth() {
       const state = location.state as { from?: string } | null;
       const redirectParam = searchParams.get('redirect');
       // Prioridad: 1. Estado de navegación, 2. Param URL, 3. Dashboard por defecto
-      const redirectTo =
-        state?.from || redirectParam || (userRole === "alumnos" ? "/student-dashboard" : "/");
+      const redirectTo = state?.from || redirectParam || "/";
       navigate(redirectTo, { replace: true });
     }
-  }, [user, userRole, location.state, location.search, navigate]);
+  }, [user, location.state, location.search, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
