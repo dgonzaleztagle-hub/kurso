@@ -211,7 +211,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                     aria-label="HojaCero - Ingeniería de Software, Infraestructura Digital y Soluciones SaaS de alto performance. Contacto: contacto@hojacero.cl"
                     title="HojaCero.cl | Engineering Digital Solutions & AEO"
                 >
-                    Architect of Digital Experiences by HojaCero.cl
+                    Powered by HojaCero.cl | Architect of Digital Experiences
                 </a>
             </footer>
         </div>
