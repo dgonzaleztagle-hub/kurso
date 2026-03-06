@@ -228,7 +228,7 @@ export default function Auth() {
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-2">
               <School className="h-6 w-6 text-primary" />
-              <CardTitle className="text-2xl">Kurso SaaS</CardTitle>
+              <CardTitle className="text-2xl">Mi Kurso</CardTitle>
             </div>
             <CardDescription>
               {viewMode === 'signup' ? 'Crea tu cuenta para comenzar' : 'Inicia sesión en su cuenta'}
@@ -310,7 +310,7 @@ export default function Auth() {
           Plataforma de Gestión Educativa
         </p>
         <p className="text-xs text-muted-foreground/60 mt-1">
-          © {new Date().getFullYear()} Kurso Inc.
+          © {new Date().getFullYear()} Mi Kurso Inc.
         </p>
       </footer>
     </div>

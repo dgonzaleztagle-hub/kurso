@@ -41,7 +41,7 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
                 <div className="flex h-14 md:h-16 items-center gap-2 md:gap-4 px-3 md:px-4">
                     <Link to="/" className="flex items-center gap-1.5 md:gap-2 hover:opacity-80 transition-opacity">
                         <School className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                        <span className="text-base md:text-xl font-bold text-foreground truncate">Kurso</span>
+                        <span className="text-base md:text-xl font-bold text-foreground truncate">Mi Kurso</span>
                     </Link>
                     <div className="ml-auto flex items-center gap-2 md:gap-4">
                         {studentName && (
@@ -102,7 +102,7 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
             </main>
 
             <footer className="border-t py-3 md:py-4 px-3 md:px-4 text-center text-xs md:text-sm text-muted-foreground">
-                <p>Potenciado por <strong>Kurso</strong></p>
+                <p>Potenciado por <strong>Mi Kurso</strong></p>
             </footer>
         </div>
     );

@@ -31,7 +31,7 @@ const Landing = () => {
                     <div className="flex justify-between items-center h-20">
                         <div className="flex items-center">
                             {/* Full Logo for perfect alignment - increased size */}
-                            <img src="/kurso-logo-full.png" alt="Kurso" className="h-[60px] w-auto object-contain mt-2" />
+                            <img src="/kurso-logo-full.png" alt="Mi Kurso" className="h-[60px] w-auto object-contain mt-2" />
                         </div>
                         <div className="flex items-center space-x-4">
                             <Button
@@ -149,7 +149,7 @@ const Landing = () => {
                         <div className="flex-1 space-y-6">
                             <h2 className="text-3xl md:text-4xl font-bold">Convenios Institucionales</h2>
                             <p className="text-lg text-muted-foreground">
-                                ¿Eres Sostenedor o Director? Obtén **descuentos exclusivos por volumen** implementando Kurso en todo tu establecimiento.
+                                ¿Eres Sostenedor o Director? Obtén **descuentos exclusivos por volumen** implementando Mi Kurso en todo tu establecimiento.
                             </p>
                             <ul className="space-y-3">
                                 <ListItem>Descuentos especiales por cantidad de cursos</ListItem>
@@ -177,7 +177,7 @@ const Landing = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div className="flex items-center space-x-2">
                         <img src="/kurso-icon.png" alt="Logo" className="h-6 w-6 grayscale opacity-50" />
-                        <span className="text-sm text-muted-foreground">© 2025 Kurso. Todos los derechos reservados.</span>
+                        <span className="text-sm text-muted-foreground">© 2025 Mi Kurso. Todos los derechos reservados.</span>
                     </div>
                     <div className="flex gap-6 text-sm text-muted-foreground">
                         <Link to="/terms" className="hover:text-primary">Términos</Link>

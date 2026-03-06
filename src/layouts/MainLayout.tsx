@@ -85,7 +85,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                     <div className="flex items-center gap-2">
                         <School className="h-5 w-5 text-primary" />
                         <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-                            <span className="text-sm font-medium hidden sm:inline-block">Kurso SaaS</span>
+                            <span className="text-sm font-medium hidden sm:inline-block">Mi Kurso</span>
                             {institutionName && (
                                 <span className="text-xs text-muted-foreground font-light hidden sm:inline-block">
                                     | {institutionName}
@@ -202,7 +202,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
             </main>
 
             <footer className="border-t py-3 px-4 text-center text-xs text-muted-foreground">
-                <p>Potenciado por <strong>Kurso</strong></p>
+                <p>Potenciado por <strong>Mi Kurso</strong></p>
             </footer>
         </div>
     );

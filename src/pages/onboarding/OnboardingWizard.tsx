@@ -115,7 +115,7 @@ export default function OnboardingWizard() {
                                 </div>
                                 <div className="space-y-2">
                                     <CardTitle className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600">
-                                        Bienvenido a Kurso
+                                        Bienvenido a Mi Kurso
                                     </CardTitle>
                                     <CardDescription className="text-lg text-muted-foreground/90">
                                         Configuremos tu espacio educativo.

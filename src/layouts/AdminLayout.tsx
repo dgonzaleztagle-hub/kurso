@@ -40,7 +40,7 @@ export const AdminLayout = () => {
                 <div className="p-6 border-b flex items-center gap-2">
                     <img src="/kurso-icon.png" className="h-8 w-8" alt="Logo" />
                     <div>
-                        <h2 className="font-bold text-lg">Kurso Admin</h2>
+                        <h2 className="font-bold text-lg">Mi Kurso Admin</h2>
                         <span className="text-xs text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">SuperAdmin</span>
                     </div>
                 </div>

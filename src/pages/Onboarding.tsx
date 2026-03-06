@@ -82,7 +82,7 @@ export default function Onboarding() {
                         <Rocket className="h-10 w-10 text-primary" />
                     </div>
                     <div className="space-y-2">
-                        <CardTitle className="text-2xl font-bold">¡Bienvenido a Kurso!</CardTitle>
+                        <CardTitle className="text-2xl font-bold">¡Bienvenido a Mi Kurso!</CardTitle>
                         <CardDescription>
                             Para comenzar tu prueba gratis de 7 días, <br />
                             necesitamos crear tu primer espacio de trabajo.
