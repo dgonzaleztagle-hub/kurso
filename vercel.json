@@ -4,5 +4,16 @@
       "source": "/((?!.*\\..*).*)",
       "destination": "/index.html"
     }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Powered-By",
+          "value": "HojaCero"
+        }
+      ]
+    }
   ]
 }

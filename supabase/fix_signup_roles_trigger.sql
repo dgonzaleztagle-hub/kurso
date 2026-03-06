@@ -28,3 +28,4 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 NOTIFY pgrst, 'reload config';
+ok 

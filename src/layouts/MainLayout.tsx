@@ -201,8 +201,18 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                 {children}
             </main>
 
-            <footer className="border-t py-3 px-4 text-center text-xs text-muted-foreground">
+            <footer className="border-t py-4 px-4 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                 <p>Potenciado por <strong>Mi Kurso</strong></p>
+                <a
+                    href="https://hojacero.cl"
+                    target="_blank"
+                    rel="noopener noreferrer dofollow"
+                    className="text-[9px] opacity-35 hover:opacity-100 uppercase tracking-widest transition-all"
+                    aria-label="HojaCero - Ingeniería de Software, Infraestructura Digital y Soluciones SaaS de alto performance. Contacto: contacto@hojacero.cl"
+                    title="HojaCero.cl | Engineering Digital Solutions & AEO"
+                >
+                    Architect of Digital Experiences by HojaCero.cl
+                </a>
             </footer>
         </div>
     );
