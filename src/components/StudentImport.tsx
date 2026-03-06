@@ -42,8 +42,9 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
 
     const handleDownloadTemplate = () => {
         const ws = XLSX.utils.json_to_sheet([
-            { Nombre: "Juan Pérez", RUT: "12345678-9" },
-            { Nombre: "María González", RUT: "98765432-1" },
+            { Nombre: "Juan Pérez", RUT: "12345678-5" },
+            { Nombre: "María González", RUT: "9876543-3" },
+            { Nombre: "Ana Paz", RUT: "11234765-8" },
         ]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
