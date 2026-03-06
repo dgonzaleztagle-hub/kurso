@@ -187,7 +187,8 @@ export default function Reimbursements() {
     e.preventDefault();
 
     if (!user) return;
-    if (!currentTenant?.id) {
+    const resolvedTenantId = currentTenant?.id || localStorage.getItem("kurso_last_tenant");
+    if (!resolvedTenantId) {
       toast.error("No se pudo detectar el curso activo");
       return;
     }
@@ -205,7 +206,7 @@ export default function Reimbursements() {
       };
 
       const reimbursementData: any = {
-        tenant_id: currentTenant.id,
+        tenant_id: resolvedTenantId,
         amount: parseFloat(amount),
         subject,
         account_info: accountInfo,
