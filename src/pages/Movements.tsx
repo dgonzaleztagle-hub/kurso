@@ -255,6 +255,18 @@ export default function Movements() {
           error = retry.error;
         }
 
+        // Older legacy schemas can miss `supplier` too.
+        if (error?.message?.includes("Could not find the 'supplier' column")) {
+          const noSupplierPayload: any = {
+            folio,
+            expense_date: date,
+            amount: parseFloat(amount),
+            description: `${expenseConcept}${finalSupplier ? ` | Destinatario: ${finalSupplier}` : ""}`,
+          };
+          const retryNoSupplier = await supabase.from("expenses").insert(noSupplierPayload);
+          error = retryNoSupplier.error;
+        }
+
         if (error) throw error;
         toast.success(`Egreso registrado con folio ${folio}`);
       }
