@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface MassNotificationDialogProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface MassNotificationDialogProps {
 export function MassNotificationDialog({ open, onOpenChange }: MassNotificationDialogProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const { currentTenant } = useTenant();
 
   const handleSend = async () => {
     if (!message.trim()) {
@@ -32,11 +34,17 @@ export function MassNotificationDialog({ open, onOpenChange }: MassNotificationD
         setSending(false);
         return;
       }
+      if (!currentTenant?.id) {
+        toast.error("No se pudo detectar el curso activo");
+        setSending(false);
+        return;
+      }
 
       // Crear notificación en el dashboard
       const { error } = await supabase
         .from('dashboard_notifications')
         .insert({
+          tenant_id: currentTenant.id,
           message: message.trim(),
           created_by: user.id,
           is_active: true
