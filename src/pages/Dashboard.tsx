@@ -51,10 +51,13 @@ export default function Dashboard() {
   const [showManageNotifications, setShowManageNotifications] = useState(false);
 
   useEffect(() => {
-    loadStats();
+    if (currentTenant?.id) {
+      loadStats();
+    }
   }, [currentTenant]);
 
   const loadStats = async () => {
+    if (!currentTenant?.id) return;
     try {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
@@ -77,17 +80,11 @@ export default function Dashboard() {
           ? supabase.from("payments").select("amount, student_id, concept, activity_id").in("student_id", studentIds)
           : { data: [], error: null }) as unknown as Promise<any>,
 
-        // Expenses: Global/RLS Scope (No tenant_id column)
-        supabase.from("expenses").select("amount") as unknown as Promise<any>,
+        supabase.from("expenses").select("amount").eq("tenant_id", currentTenant.id) as unknown as Promise<any>,
 
-        // Notifications: Assuming user scope or global? Leaving as is but checking schema might be good. 
-        // For now, if it fails, it fails. But let's assume it's okay or remove if unsure.
-        // Original: .eq("tenant_id", currentTenant.id). Schema says: dashboard_notifications has no tenant_id. 
-        // payment_notifications has no tenant_id. 
-        // FIX: Remove invalid filter. relying on RLS (user_id).
-        supabase.from("payment_notifications").select("id").eq("status", "pending") as unknown as Promise<any>,
+        supabase.from("payment_notifications").select("id").eq("tenant_id", currentTenant.id).eq("status", "pending") as unknown as Promise<any>,
 
-        supabase.from("reimbursements").select("id, type").eq("status", "pending") as unknown as Promise<any>,
+        supabase.from("reimbursements").select("id, type").eq("tenant_id", currentTenant.id).eq("status", "pending") as unknown as Promise<any>,
 
         // Monthly Payments: Filter by student_id + date
         (studentIds.length > 0

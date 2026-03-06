@@ -19,6 +19,7 @@ import { formatDateForDisplay } from "@/lib/dateUtils";
 import { Download, Search, X, FileText, Pencil, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { generatePaymentReceipt } from "@/lib/receiptGenerator";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,7 @@ interface Payment {
 }
 
 export default function Income() {
+  const { currentTenant } = useTenant();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,9 @@ export default function Income() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
-    loadPayments();
+    if (currentTenant?.id) {
+      loadPayments();
+    }
 
     // Suscripción a cambios en tiempo real
     const channel = supabase
@@ -98,18 +102,20 @@ export default function Income() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentTenant?.id]);
 
   useEffect(() => {
     applyFilters();
   }, [payments, searchStudent, searchConcept, searchFolio, startDate, endDate]);
 
   const loadPayments = async () => {
+    if (!currentTenant?.id) return;
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from("payments")
         .select("*")
+        .eq("tenant_id", currentTenant.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -267,6 +273,7 @@ export default function Income() {
           amount: editFormData.amount,
           student_name: editFormData.student_name || null,
         })
+        .eq("tenant_id", currentTenant?.id)
         .eq("id", editingPayment.id);
 
       if (error) throw error;
@@ -293,6 +300,7 @@ export default function Income() {
       const { error } = await supabase
         .from("payments")
         .delete()
+        .eq("tenant_id", currentTenant?.id)
         .eq("id", deletingPayment.id);
 
       if (error) throw error;

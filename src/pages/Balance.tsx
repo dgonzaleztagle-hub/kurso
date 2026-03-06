@@ -11,6 +11,7 @@ import logoImage from "@/assets/logo-colegio.png";
 import firmaImage from "@/assets/firma-directiva.png";
 import { ArrowUpCircle, ArrowDownCircle, Wallet, FileText } from "lucide-react";
 import jsPDF from "jspdf";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Payment {
   id: number;
@@ -36,6 +37,7 @@ const normalizeConcept = (value?: string | null, fallback = "Sin concepto") =>
   (value && value.trim()) || fallback;
 
 export default function Balance() {
+  const { currentTenant } = useTenant();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [viewType, setViewType] = useState<"detailed" | "summary">("summary");
@@ -45,15 +47,18 @@ export default function Balance() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (currentTenant?.id) {
+      loadData();
+    }
+  }, [currentTenant?.id]);
 
   const loadData = async () => {
+    if (!currentTenant?.id) return;
     try {
       setLoading(true);
       const [paymentsResult, expensesResult] = await Promise.all([
-        supabase.from("payments").select("*"),
-        supabase.from("expenses").select("*")
+        supabase.from("payments").select("*").eq("tenant_id", currentTenant.id),
+        supabase.from("expenses").select("*").eq("tenant_id", currentTenant.id)
       ]);
 
       if (paymentsResult.error) throw paymentsResult.error;

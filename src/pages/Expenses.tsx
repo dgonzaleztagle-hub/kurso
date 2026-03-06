@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { formatDateForDisplay } from "@/lib/dateUtils";
 import * as XLSX from "xlsx";
 import { generateExpenseReceipt } from "@/lib/receiptGenerator";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,7 @@ interface Expense {
 }
 
 export default function Expenses() {
+  const { currentTenant } = useTenant();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -38,8 +40,10 @@ export default function Expenses() {
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
   useEffect(() => {
-    loadExpenses();
-  }, []);
+    if (currentTenant?.id) {
+      loadExpenses();
+    }
+  }, [currentTenant?.id]);
 
   useEffect(() => {
     const filtered = expenses.filter(
@@ -51,10 +55,12 @@ export default function Expenses() {
   }, [searchTerm, expenses]);
 
   const loadExpenses = async () => {
+    if (!currentTenant?.id) return;
     try {
       const { data, error } = await supabase
         .from("expenses")
         .select("*")
+        .eq("tenant_id", currentTenant.id)
         .order("expense_date", { ascending: false });
 
       if (error) throw error;
@@ -128,6 +134,7 @@ export default function Expenses() {
       const { error } = await supabase
         .from("expenses")
         .delete()
+        .eq("tenant_id", currentTenant?.id)
         .eq("id", expenseToDelete.id);
 
       if (error) throw error;

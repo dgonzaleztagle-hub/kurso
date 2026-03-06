@@ -79,19 +79,33 @@ export default function StudentDashboard() {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
 
-      const [studentResult, paymentsResult, activitiesResult, exclusionsResult, scheduledActivitiesResult, notificationsResult, creditResult, creditMovementsResult] = await Promise.all([
-        supabase.from("students").select("first_name, last_name, enrollment_date").eq("id", studentId).single(),
+      const [studentResult, paymentsResult, exclusionsResult, creditResult, creditMovementsResult] = await Promise.all([
+        supabase.from("students").select("first_name, last_name, enrollment_date, tenant_id").eq("id", studentId).single(),
         supabase.from("payments").select("*").eq("student_id", studentId).order("payment_date", { ascending: false }),
-        supabase.from("activities").select("id, name, amount, activity_date"),
         supabase.from("activity_exclusions").select("activity_id").eq("student_id", studentId),
-        supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").order("scheduled_date", { ascending: false }),
-        supabase.from("dashboard_notifications").select("id, message, created_at").eq("is_active", true).order("created_at", { ascending: false }).limit(5),
         supabase.from("student_credits").select("amount").eq("student_id", studentId).single(),
         supabase.from("credit_movements").select("amount, type").eq("student_id", studentId).eq("type", "payment_redirect"),
       ]);
 
       if (studentResult.error) throw studentResult.error;
       if (paymentsResult.error) throw paymentsResult.error;
+      if (creditResult.error && creditResult.error.code !== "PGRST116") throw creditResult.error;
+      if (creditMovementsResult.error) throw creditMovementsResult.error;
+
+      const tenantId = studentResult.data.tenant_id;
+      if (!tenantId) {
+        throw new Error("No se pudo detectar el curso del alumno");
+      }
+
+      const [activitiesResult, scheduledActivitiesResult, notificationsResult] = await Promise.all([
+        supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", tenantId),
+        supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").eq("tenant_id", tenantId).order("scheduled_date", { ascending: false }),
+        supabase.from("dashboard_notifications").select("id, message, created_at").eq("tenant_id", tenantId).eq("is_active", true).order("created_at", { ascending: false }).limit(5),
+      ]);
+
+      if (activitiesResult.error) throw activitiesResult.error;
+      if (scheduledActivitiesResult.error) throw scheduledActivitiesResult.error;
+      if (notificationsResult.error) throw notificationsResult.error;
 
       const fullName = `${studentResult.data.first_name || ''} ${studentResult.data.last_name || ''}`.trim() || 'Sin Nombre';
       setStudentName(fullName);

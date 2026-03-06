@@ -111,14 +111,15 @@ export default function MonthlyFees() {
   const loadMonthlyFeeStatuses = async (feeAmount: number) => {
     try {
       setLoading(true);
+      if (!currentTenant?.id) return;
       // Recalculate based on the passed feeAmount
       const calculatedTotalRequired = feeAmount * TOTAL_MONTHS;
 
       // Get all students
       const [studentsResult, paymentsResult, creditMovementsResult] = await Promise.all([
-        supabase.from("students").select("id, first_name, last_name").order("last_name"),
-        supabase.from("payments").select("student_id, amount").or('concept.ilike.Cuota%,concept.ilike.CUOTA%'),
-        supabase.from("credit_movements").select("student_id, amount, type").eq("type", "payment_redirect")
+        supabase.from("students").select("id, first_name, last_name").eq("tenant_id", currentTenant.id).order("last_name"),
+        supabase.from("payments").select("student_id, amount").eq("tenant_id", currentTenant.id).or('concept.ilike.Cuota%,concept.ilike.CUOTA%'),
+        supabase.from("credit_movements").select("student_id, amount, type").eq("tenant_id", currentTenant.id).eq("type", "payment_redirect")
       ]);
 
       if (studentsResult.error) throw studentsResult.error;

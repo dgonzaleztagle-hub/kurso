@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ interface Exclusion {
 export default function ActivityExclusions() {
   const navigate = useNavigate();
   const { userRole, hasPermission, loading: authLoading } = useAuth();
+  const { currentTenant } = useTenant();
   const isMobile = useIsMobile();
   const [exclusions, setExclusions] = useState<Exclusion[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -47,8 +49,10 @@ export default function ActivityExclusions() {
   });
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (currentTenant?.id) {
+      loadData();
+    }
+  }, [currentTenant?.id]);
 
   const loadData = async () => {
     try {
@@ -56,9 +60,10 @@ export default function ActivityExclusions() {
         supabase
           .from("activity_exclusions")
           .select("*, students(first_name, last_name), activities(name, activity_date)")
+          .eq("tenant_id", currentTenant?.id)
           .order("id", { ascending: false }),
-        supabase.from("students").select("id, first_name, last_name").order("last_name"),
-        supabase.from("activities").select("id, name, activity_date").order("id", { ascending: false }),
+        supabase.from("students").select("id, first_name, last_name").eq("tenant_id", currentTenant?.id).order("last_name"),
+        supabase.from("activities").select("id, name, activity_date").eq("tenant_id", currentTenant?.id).order("id", { ascending: false }),
       ]);
 
       if (exclusionsRes.error) throw exclusionsRes.error;
@@ -107,9 +112,14 @@ export default function ActivityExclusions() {
       toast.error("Por favor seleccione estudiante y actividad");
       return;
     }
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       const { error } = await supabase.from("activity_exclusions").insert({
+        tenant_id: currentTenant.id,
         student_id: parseInt(newExclusion.student_id),
         activity_id: parseInt(newExclusion.activity_id),
       });
@@ -135,11 +145,16 @@ export default function ActivityExclusions() {
 
   const handleDeleteExclusion = async (id: number) => {
     if (!confirm("¿Está seguro de eliminar esta exclusión?")) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       const { error } = await supabase
         .from("activity_exclusions")
         .delete()
+        .eq("tenant_id", currentTenant.id)
         .eq("id", id);
 
       if (error) throw error;

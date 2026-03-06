@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -31,12 +32,15 @@ interface PaymentStatus {
 }
 
 export default function ActivityPayments() {
+  const { currentTenant } = useTenant();
   const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPaymentStatuses();
-  }, []);
+    if (currentTenant?.id) {
+      loadPaymentStatuses();
+    }
+  }, [currentTenant?.id]);
 
   const loadPaymentStatuses = async () => {
     try {
@@ -44,6 +48,7 @@ export default function ActivityPayments() {
       const { data: students, error: studentsError } = await supabase
         .from("students")
         .select("id, first_name, last_name, enrollment_date")
+        .eq("tenant_id", currentTenant?.id)
         .order("last_name");
 
       if (studentsError) throw studentsError;
@@ -51,21 +56,24 @@ export default function ActivityPayments() {
       // Get all activities with dates
       const { data: activities, error: activitiesError } = await supabase
         .from("activities")
-        .select("id, name, amount, activity_date");
+        .select("id, name, amount, activity_date")
+        .eq("tenant_id", currentTenant?.id);
 
       if (activitiesError) throw activitiesError;
 
       // Get all exclusions
       const { data: exclusions, error: exclusionsError } = await supabase
         .from("activity_exclusions")
-        .select("student_id, activity_id");
+        .select("student_id, activity_id")
+        .eq("tenant_id", currentTenant?.id);
 
       if (exclusionsError) throw exclusionsError;
 
       // Get all payments (we'll match by concept name)
       const { data: payments, error: paymentsError } = await supabase
         .from("payments")
-        .select("student_id, concept, amount");
+        .select("student_id, concept, amount")
+        .eq("tenant_id", currentTenant?.id);
 
       if (paymentsError) throw paymentsError;
 
