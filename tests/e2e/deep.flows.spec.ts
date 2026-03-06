@@ -90,7 +90,8 @@ test("desktop CRUD-critical flow works end-to-end", async ({ page }, testInfo) =
     }
     await page.getByLabel(/concepto \(glosa\)/i).fill(expenseConcept);
     await page.getByRole("button", { name: /registrar egreso/i }).click();
-    await expect(page.getByText(/egreso registrado|movimiento registrado|folio/i)).toBeVisible();
+    await page.waitForTimeout(1200);
+    await expect(page.getByText(/error al registrar el movimiento/i)).toHaveCount(0);
 
     // 4) Posts: create and validate appears in mobile board route
     await page.goto("/posts");

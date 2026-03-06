@@ -240,7 +240,20 @@ export default function Movements() {
           concept: expenseConcept,
         };
 
-        const { error } = await supabase.from("expenses").insert(insertPayload);
+        let { error } = await supabase.from("expenses").insert(insertPayload);
+
+        // Backward compatibility for legacy schemas where expenses uses `description` instead of `concept`.
+        if (error?.message?.includes("Could not find the 'concept' column")) {
+          const legacyPayload: any = {
+            folio,
+            supplier: finalSupplier,
+            expense_date: date,
+            amount: parseFloat(amount),
+            description: expenseConcept,
+          };
+          const retry = await supabase.from("expenses").insert(legacyPayload);
+          error = retry.error;
+        }
 
         if (error) throw error;
         toast.success(`Egreso registrado con folio ${folio}`);
