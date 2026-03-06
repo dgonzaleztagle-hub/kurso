@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { formatDateForDB, parseDateFromDB } from "@/lib/dateUtils";
+import { useTenant } from "@/contexts/TenantContext";
 
 type MovementType = "ingreso" | "egreso" | null;
 type IncomeType = "actividad" | "cuota_mensual" | "otros" | null;
@@ -20,6 +21,7 @@ interface Activity {
 }
 
 export default function Movements() {
+  const { currentTenant } = useTenant();
   const [movementType, setMovementType] = useState<MovementType>(null);
   const [loading, setLoading] = useState(false);
 
@@ -206,6 +208,7 @@ export default function Movements() {
 
         const insertData: any = {
           folio,
+          tenant_id: currentTenant?.id,
           student_id: studentId ? parseInt(studentId) : null,
           student_name: studentName,
           payment_date: date,
@@ -221,7 +224,14 @@ export default function Movements() {
           insertData.month_period = monthPeriod;
         }
 
-        const { error } = await supabase.from("payments").insert(insertData);
+        let { error } = await supabase.from("payments").insert(insertData);
+
+        // Compatibility with legacy schemas where payments table has no tenant_id.
+        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+          const { tenant_id, ...legacyInsertData } = insertData;
+          const retry = await supabase.from("payments").insert(legacyInsertData as any);
+          error = retry.error;
+        }
 
         if (error) throw error;
         toast.success(`Ingreso registrado con folio ${folio}`);
@@ -234,6 +244,7 @@ export default function Movements() {
 
         const insertPayload: any = {
           folio,
+          tenant_id: currentTenant?.id,
           supplier: finalSupplier,
           expense_date: date,
           amount: parseFloat(amount),
@@ -246,6 +257,7 @@ export default function Movements() {
         if (error?.message?.includes("Could not find the 'concept' column")) {
           const legacyPayload: any = {
             folio,
+            tenant_id: currentTenant?.id,
             supplier: finalSupplier,
             expense_date: date,
             amount: parseFloat(amount),
@@ -259,12 +271,48 @@ export default function Movements() {
         if (error?.message?.includes("Could not find the 'supplier' column")) {
           const noSupplierPayload: any = {
             folio,
+            tenant_id: currentTenant?.id,
             expense_date: date,
             amount: parseFloat(amount),
             description: `${expenseConcept}${finalSupplier ? ` | Destinatario: ${finalSupplier}` : ""}`,
           };
           const retryNoSupplier = await supabase.from("expenses").insert(noSupplierPayload);
           error = retryNoSupplier.error;
+        }
+
+        // Compatibility with legacy schemas where expenses table has no tenant_id.
+        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+          const retryPayloads: any[] = [
+            {
+              folio,
+              supplier: finalSupplier,
+              expense_date: date,
+              amount: parseFloat(amount),
+              concept: expenseConcept,
+            },
+            {
+              folio,
+              supplier: finalSupplier,
+              expense_date: date,
+              amount: parseFloat(amount),
+              description: expenseConcept,
+            },
+            {
+              folio,
+              expense_date: date,
+              amount: parseFloat(amount),
+              description: `${expenseConcept}${finalSupplier ? ` | Destinatario: ${finalSupplier}` : ""}`,
+            },
+          ];
+
+          for (const payload of retryPayloads) {
+            const retry = await supabase.from("expenses").insert(payload);
+            if (!retry.error) {
+              error = null;
+              break;
+            }
+            error = retry.error;
+          }
         }
 
         if (error) throw error;
