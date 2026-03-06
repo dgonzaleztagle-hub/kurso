@@ -164,8 +164,6 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             setCurrentTenant(target);
             localStorage.setItem('kurso_last_tenant', tenantId);
             await determineRole(tenantId, user.id);
-            // Forced reload to ensure all contexts are clean
-            window.location.reload();
         }
     };
 

@@ -51,10 +51,6 @@ export default function Dashboard() {
   const [showManageNotifications, setShowManageNotifications] = useState(false);
 
   useEffect(() => {
-    if (currentTenant) {
-      console.log("DEBUG: Tenant Status:", currentTenant.status);
-      toast.info(`Debug: Estado del curso: ${currentTenant.status || 'SIN ESTADO'}`, { duration: 5000 });
-    }
     loadStats();
   }, [currentTenant]);
 
