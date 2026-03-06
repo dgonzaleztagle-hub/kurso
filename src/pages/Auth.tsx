@@ -101,11 +101,23 @@ export default function Auth() {
 
       if (viewMode === 'signup') {
         const redirectTo = `${window.location.origin}/auth?mode=login`;
-        const { error } = await signUp(finalEmail, password, undefined, redirectTo);
+        const { data, error } = await signUp(finalEmail, password, undefined, redirectTo);
         if (error) {
           toast.error(getFriendlyAuthError(error));
         } else {
-          toast.success("Cuenta creada exitosamente. !Bienvenido!");
+          // Supabase can return no error for already-registered emails (anti-enumeration).
+          const maybeExistingUser =
+            data?.user &&
+            Array.isArray(data.user.identities) &&
+            data.user.identities.length === 0;
+
+          if (maybeExistingUser) {
+            toast.error("Ese correo ya esta registrado. Inicia sesion o recupera tu contraseña.");
+          } else if (data?.session) {
+            toast.success("Cuenta creada exitosamente. !Bienvenido!");
+          } else {
+            toast.success("Cuenta creada. Revisa tu correo para confirmar y luego inicia sesion.");
+          }
         }
       } else {
         const { error } = await signIn(finalEmail, password);
