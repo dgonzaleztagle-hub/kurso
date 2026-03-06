@@ -70,7 +70,7 @@ const queryClient = new QueryClient();
 function AppRoutes() {
   // CHECK: First Login
   const { firstLogin, userRole, refreshUserData } = useAuth();
-  if (firstLogin && (userRole === 'alumnos' || userRole === 'admin' || userRole === 'master')) {
+  if (firstLogin && (userRole === 'alumnos' || userRole === 'admin' || userRole === 'master' || userRole === 'owner')) {
     return <FirstLoginPasswordChange onPasswordChanged={refreshUserData} />;
   }
 

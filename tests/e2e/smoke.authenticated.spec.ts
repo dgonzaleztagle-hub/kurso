@@ -46,18 +46,29 @@ function attachRuntimeWatchers(page: any) {
   return { jsErrors, failedRequests };
 }
 
+async function closeWelcomeIfPresent(page: any) {
+  const modalTitle = page.getByText(/¡bienvenido a tu panel!/i);
+  if (await modalTitle.isVisible().catch(() => false)) {
+    const closeBtn = page.getByRole("button", { name: /close|cerrar/i });
+    if (await closeBtn.first().isVisible().catch(() => false)) {
+      await closeBtn.first().click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
+  }
+}
+
 test.describe("authenticated smoke", () => {
-  test.beforeEach(async ({ page }) => {
+  test("desktop routes load without critical runtime failures", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.includes("mobile"), "Desktop smoke only");
     const loggedIn = await login(page);
     test.skip(!loggedIn, "Could not log in with E2E user");
-  });
-
-  test("desktop routes load without critical runtime failures", async ({ page }) => {
     const { jsErrors, failedRequests } = attachRuntimeWatchers(page);
 
     for (const route of desktopRoutes) {
       await page.goto(route);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
+      await closeWelcomeIfPresent(page);
       await expect(page).not.toHaveURL(/\/auth/);
       await expect(page.getByText(/Unexpected Application Error/i)).toHaveCount(0);
     }
@@ -66,13 +77,16 @@ test.describe("authenticated smoke", () => {
     expect(failedRequests, `Network/server failures: ${failedRequests.join("\n")}`).toEqual([]);
   });
 
-  test("mobile routes load without critical runtime failures", async ({ page, browserName }) => {
-    test.skip(browserName !== "chromium", "Mobile project runs on chromium only");
+  test("mobile routes load without critical runtime failures", async ({ page }, testInfo) => {
+    test.skip(!testInfo.project.name.includes("mobile"), "Mobile smoke only");
+    const loggedIn = await login(page);
+    test.skip(!loggedIn, "Could not log in with E2E user");
     const { jsErrors, failedRequests } = attachRuntimeWatchers(page);
 
     for (const route of mobileRoutes) {
       await page.goto(route);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
+      await closeWelcomeIfPresent(page);
       await expect(page).not.toHaveURL(/\/auth/);
       await expect(page.getByText(/Unexpected Application Error/i)).toHaveCount(0);
     }

@@ -2,6 +2,7 @@ import { ReactNode, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
+import { hasAnyRoleAccess } from '@/lib/roles';
 
 type AppModule =
   | 'dashboard'
@@ -43,7 +44,7 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: Prote
         navigate('/auth', {
           state: { from: location.pathname + location.search },
         });
-      } else if (allowedRoles && (!effectiveRole || !allowedRoles.includes(effectiveRole as any))) {
+      } else if (allowedRoles && !hasAnyRoleAccess(effectiveRole, allowedRoles)) {
         if (effectiveRole === 'alumnos' || effectiveRole === 'student') {
           navigate('/mobile');
         } else {

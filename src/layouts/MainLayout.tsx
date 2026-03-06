@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { mainNavigation } from "@/config/navigation";
+import { hasRoleAccess } from "@/lib/roles";
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -50,13 +51,12 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     const filteredCategories = mainNavigation
         .map(category => {
             if (!category.items) {
-                if ((category as any).masterOnly && activeRole !== 'master') return null;
+                if ((category as any).masterOnly && !hasRoleAccess(activeRole, "master")) return null;
                 return category;
             }
 
             const filteredItems = category.items.filter((item: any) => {
-                if (activeRole === 'master') return true;
-                if (activeRole === 'owner') return true; // Owners see everything master sees usually
+                if (hasRoleAccess(activeRole, "master")) return true;
                 if (item.masterOnly) return false;
 
                 // For admin/members, we might check permissions or role mapping
