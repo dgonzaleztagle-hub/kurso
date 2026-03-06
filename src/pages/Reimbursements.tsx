@@ -925,7 +925,19 @@ export default function Reimbursements() {
       toast.error("No se pudo detectar el curso activo");
       return;
     }
-    const link = `${window.location.origin}/solicitud-pago-proveedor?tenant_id=${encodeURIComponent(currentTenant.id)}`;
+    const { data, error } = await supabase.functions.invoke('create-supplier-request-link', {
+      body: {
+        tenantId: currentTenant.id,
+        origin: window.location.origin,
+      },
+    });
+
+    if (error || !data?.url) {
+      toast.error("No se pudo generar el link seguro para proveedor");
+      return;
+    }
+
+    const link = data.url as string;
 
     // Verificar si el dispositivo soporta Web Share API
     if (navigator.share) {

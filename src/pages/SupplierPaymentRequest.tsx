@@ -30,7 +30,7 @@ const BANKS = [
 
 export default function SupplierPaymentRequest() {
   const navigate = useNavigate();
-  const tenantId = new URLSearchParams(window.location.search).get("tenant_id");
+  const signedToken = new URLSearchParams(window.location.search).get("token");
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     supplier_name: "",
@@ -47,13 +47,21 @@ export default function SupplierPaymentRequest() {
   });
   const [files, setFiles] = useState<File[]>([]);
 
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error(`No se pudo leer el archivo ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (!tenantId) {
-        toast.error("Solicitud inválida: falta identificar el curso");
+      if (!signedToken) {
+        toast.error("Solicitud inválida o vencida");
         setLoading(false);
         return;
       }
@@ -72,56 +80,39 @@ export default function SupplierPaymentRequest() {
         return;
       }
 
-      // Subir archivos adjuntos
-      const attachmentUrls: string[] = [];
+      const encodedFiles = [];
       for (const file of files) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `supplier-requests/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('reimbursements')
-          .upload(fileName, file);
-
-        if (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          toast.error(`Error al subir archivo: ${file.name}`);
-          continue;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('reimbursements')
-          .getPublicUrl(fileName);
-
-        attachmentUrls.push(publicUrl);
+        const dataUrl = await fileToDataUrl(file);
+        encodedFiles.push({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          dataUrl,
+        });
       }
 
-      // Crear solicitud de pago a proveedor (el trigger asignará el folio automáticamente)
-      const { error: insertError } = await supabase
-        .from('reimbursements')
-        .insert({
-          tenant_id: tenantId,
-          user_id: '00000000-0000-0000-0000-000000000000', // ID especial para solicitudes públicas
-          type: 'supplier_payment',
-          status: 'pending',
-          supplier_name: formData.supplier_name,
-          amount: amount,
-          subject: formData.subject,
-          account_info: {
+      const { data, error: submitError } = await supabase.functions.invoke("submit-supplier-payment-request", {
+        body: {
+          token: signedToken,
+          formData: {
+            supplier_name: formData.supplier_name,
+            rut: formData.rut,
+            email: formData.email,
+            phone: formData.phone,
             bank: formData.bank,
             account_type: formData.account_type,
             account_number: formData.account_number,
             holder_name: formData.holder_name,
             holder_rut: formData.holder_rut,
-            supplier_rut: formData.rut,
-            supplier_email: formData.email,
-            supplier_phone: formData.phone,
+            amount,
+            subject: formData.subject,
           },
-          attachments: attachmentUrls,
-        });
+          files: encodedFiles,
+        },
+      });
 
-      if (insertError) {
-        console.error('Error creating request:', insertError);
-        toast.error("Error al crear la solicitud");
+      if (submitError || !data?.success) {
+        console.error('Error creating request:', submitError || data);
+        toast.error(data?.error || "Error al crear la solicitud");
         setLoading(false);
         return;
       }
@@ -161,7 +152,7 @@ export default function SupplierPaymentRequest() {
             Solicitud de Pago a Proveedor
           </h1>
           <p className="text-sm md:text-base text-muted-foreground">
-            Pre Kinder B - Colegio Santa Cruz de Chicureo
+            Portal externo de proveedores
           </p>
         </div>
 
