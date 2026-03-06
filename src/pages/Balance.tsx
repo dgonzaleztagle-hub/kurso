@@ -32,6 +32,9 @@ interface DetailedItem {
   amount: number;
 }
 
+const normalizeConcept = (value?: string | null, fallback = "Sin concepto") =>
+  (value && value.trim()) || fallback;
+
 export default function Balance() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -56,8 +59,22 @@ export default function Balance() {
       if (paymentsResult.error) throw paymentsResult.error;
       if (expensesResult.error) throw expensesResult.error;
 
-      setPayments(paymentsResult.data || []);
-      setExpenses(expensesResult.data || []);
+      const normalizedPayments: Payment[] = (paymentsResult.data || []).map((row: any) => ({
+        id: row.id,
+        concept: normalizeConcept(row.concept ?? row.description, "Sin concepto de ingreso"),
+        amount: Number(row.amount || 0),
+        payment_date: row.payment_date || new Date().toISOString().split("T")[0],
+      }));
+
+      const normalizedExpenses: Expense[] = (expensesResult.data || []).map((row: any) => ({
+        id: row.id,
+        concept: normalizeConcept(row.concept ?? row.description, "Sin concepto de egreso"),
+        amount: Number(row.amount || 0),
+        expense_date: row.expense_date || new Date().toISOString().split("T")[0],
+      }));
+
+      setPayments(normalizedPayments);
+      setExpenses(normalizedExpenses);
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Error al cargar datos");

@@ -44,8 +44,8 @@ export default function Expenses() {
   useEffect(() => {
     const filtered = expenses.filter(
       (expense) =>
-        expense.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.concept.toLowerCase().includes(searchTerm.toLowerCase())
+        (expense.supplier || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (expense.concept || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredExpenses(filtered);
   }, [searchTerm, expenses]);
@@ -58,8 +58,18 @@ export default function Expenses() {
         .order("expense_date", { ascending: false });
 
       if (error) throw error;
-      setExpenses(data || []);
-      setFilteredExpenses(data || []);
+
+      const normalized = (data || []).map((row: any) => ({
+        id: row.id,
+        folio: row.folio,
+        expense_date: row.expense_date,
+        amount: Number(row.amount || 0),
+        supplier: row.supplier || row.provider || "Sin destinatario",
+        concept: row.concept || row.description || "Sin concepto",
+      })) as Expense[];
+
+      setExpenses(normalized);
+      setFilteredExpenses(normalized);
     } catch (error) {
       console.error("Error loading expenses:", error);
       toast.error("Error al cargar egresos");
