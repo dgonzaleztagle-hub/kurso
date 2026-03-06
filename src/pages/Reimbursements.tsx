@@ -73,7 +73,7 @@ interface ReimbursementWithUser extends Reimbursement {
 
 export default function Reimbursements() {
   const { user, userRole } = useAuth();
-  const { roleInCurrentTenant } = useTenant();
+  const { roleInCurrentTenant, currentTenant } = useTenant();
   const isMobile = useIsMobile();
   const [reimbursements, setReimbursements] = useState<ReimbursementWithUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,6 +187,10 @@ export default function Reimbursements() {
     e.preventDefault();
 
     if (!user) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     setUploading(true);
 
@@ -201,6 +205,7 @@ export default function Reimbursements() {
       };
 
       const reimbursementData: any = {
+        tenant_id: currentTenant.id,
         amount: parseFloat(amount),
         subject,
         account_info: accountInfo,
@@ -890,7 +895,11 @@ export default function Reimbursements() {
   );
 
   const handleShareLink = async () => {
-    const link = `${window.location.origin}/solicitud-pago-proveedor`;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
+    const link = `${window.location.origin}/solicitud-pago-proveedor?tenant_id=${encodeURIComponent(currentTenant.id)}`;
 
     // Verificar si el dispositivo soporta Web Share API
     if (navigator.share) {

@@ -30,6 +30,7 @@ const BANKS = [
 
 export default function SupplierPaymentRequest() {
   const navigate = useNavigate();
+  const tenantId = new URLSearchParams(window.location.search).get("tenant_id");
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     supplier_name: "",
@@ -51,6 +52,12 @@ export default function SupplierPaymentRequest() {
     setLoading(true);
 
     try {
+      if (!tenantId) {
+        toast.error("Solicitud inválida: falta identificar el curso");
+        setLoading(false);
+        return;
+      }
+
       // Validaciones
       if (!formData.supplier_name || !formData.amount || !formData.subject) {
         toast.error("Por favor complete todos los campos obligatorios");
@@ -92,6 +99,7 @@ export default function SupplierPaymentRequest() {
       const { error: insertError } = await supabase
         .from('reimbursements')
         .insert({
+          tenant_id: tenantId,
           user_id: '00000000-0000-0000-0000-000000000000', // ID especial para solicitudes públicas
           type: 'supplier_payment',
           status: 'pending',
