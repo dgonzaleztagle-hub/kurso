@@ -174,15 +174,31 @@ const Landing = () => {
 
             {/* Footer */}
             <footer className="border-t py-12 bg-background">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center space-x-2">
-                        <img src="/kurso-icon.png" alt="Logo" className="h-6 w-6 grayscale opacity-50" />
-                        <span className="text-sm text-muted-foreground">© 2025 Mi Kurso. Todos los derechos reservados.</span>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col justify-between items-center gap-6">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6 w-full">
+                        <div className="flex items-center space-x-2">
+                            <img src="/kurso-icon.png" alt="Logo" className="h-6 w-6 grayscale opacity-50" />
+                            <span className="text-sm text-muted-foreground">© 2025 Mi Kurso. Todos los derechos reservados.</span>
+                        </div>
+                        <div className="flex gap-6 text-sm text-muted-foreground">
+                            <Link to="/terms" className="hover:text-primary">Términos</Link>
+                            <Link to="/privacy" className="hover:text-primary">Privacidad</Link>
+                            <Link to="/contact" className="hover:text-primary">Contacto</Link>
+                        </div>
                     </div>
-                    <div className="flex gap-6 text-sm text-muted-foreground">
-                        <Link to="/terms" className="hover:text-primary">Términos</Link>
-                        <Link to="/privacy" className="hover:text-primary">Privacidad</Link>
-                        <Link to="/contact" className="hover:text-primary">Contacto</Link>
+
+                    {/* Factory Brand AEO Link */}
+                    <div className="mt-8 w-full flex justify-center">
+                        <a
+                            href="https://hojacero.cl"
+                            target="_blank"
+                            rel="noopener noreferrer dofollow"
+                            className="text-[9px] opacity-35 hover:opacity-100 uppercase tracking-widest transition-all"
+                            aria-label="HojaCero - Ingeniería de Software, Infraestructura Digital y Soluciones SaaS de alto performance. Contacto: contacto@hojacero.cl"
+                            title="HojaCero.cl | Engineering Digital Solutions & AEO"
+                        >
+                            Architect of Digital Experiences by HojaCero.cl
+                        </a>
                     </div>
                 </div>
             </footer>
