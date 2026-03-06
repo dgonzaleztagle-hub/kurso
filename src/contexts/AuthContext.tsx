@@ -148,7 +148,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Legacy Permission Check
   const hasPermission = (module: AppModule) => {
-    if (userRole === 'master' || userRole === 'owner') return true;
+    if (userRole === 'master' || userRole === 'owner' || userRole === 'admin') return true;
     return false; // TODO: Implement permissions from TenantContext
   };
 

@@ -49,16 +49,20 @@ export default function Movements() {
   const [existingSuppliers, setExistingSuppliers] = useState<string[]>([]);
 
   useEffect(() => {
-    loadIncomeGlosas();
-    loadExistingSuppliers();
-    loadActivities();
-    loadStudents();
-  }, []);
+    if (currentTenant?.id) {
+      loadIncomeGlosas();
+      loadExistingSuppliers();
+      loadActivities();
+      loadStudents();
+    }
+  }, [currentTenant?.id]);
 
   const loadIncomeGlosas = async () => {
+    if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("payments")
       .select("concept")
+      .eq("tenant_id", currentTenant.id)
       .neq("concept", "CUOTA MENSUAL");
 
     if (data) {
@@ -68,9 +72,11 @@ export default function Movements() {
   };
 
   const loadActivities = async () => {
+    if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("activities")
       .select("id, name, amount")
+      .eq("tenant_id", currentTenant.id)
       .order("name");
 
     if (data) {
@@ -79,9 +85,11 @@ export default function Movements() {
   };
 
   const loadStudents = async () => {
+    if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("students")
       .select("id, first_name, last_name")
+      .eq("tenant_id", currentTenant.id)
       .order("last_name");
 
     if (data) {
@@ -93,9 +101,11 @@ export default function Movements() {
   };
 
   const loadExistingSuppliers = async () => {
+    if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("expenses")
-      .select("supplier");
+      .select("supplier")
+      .eq("tenant_id", currentTenant.id);
 
     if (data) {
       const uniqueSuppliers = Array.from(new Set((data as any[]).map(e => e.supplier).filter(Boolean)));
@@ -120,6 +130,7 @@ export default function Movements() {
   };
 
   const loadPendingMonths = async (selectedStudentId: string) => {
+    if (!currentTenant?.id) return;
     const MONTHLY_FEE = 3000;
     const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
@@ -127,6 +138,7 @@ export default function Movements() {
     const { data: studentData } = await supabase
       .from('students')
       .select('enrollment_date')
+      .eq('tenant_id', currentTenant.id)
       .eq('id', parseInt(selectedStudentId))
       .single();
 
@@ -149,12 +161,14 @@ export default function Movements() {
     const { data: previousPayments } = await supabase
       .from('payments')
       .select('amount')
+      .eq('tenant_id', currentTenant.id)
       .eq('student_id', parseInt(selectedStudentId))
       .or('concept.ilike.%cuota%,concept.ilike.%CUOTA%');
 
     const { data: creditMovements } = await supabase
       .from('credit_movements')
       .select('amount')
+      .eq('tenant_id', currentTenant.id)
       .eq('student_id', parseInt(selectedStudentId))
       .eq('type', 'payment_redirect')
       .lt('amount', 0);
@@ -180,6 +194,10 @@ export default function Movements() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!movementType) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -208,7 +226,7 @@ export default function Movements() {
 
         const insertData: any = {
           folio,
-          tenant_id: currentTenant?.id,
+          tenant_id: currentTenant.id,
           student_id: studentId ? parseInt(studentId) : null,
           student_name: studentName,
           payment_date: date,
@@ -244,7 +262,7 @@ export default function Movements() {
 
         const insertPayload: any = {
           folio,
-          tenant_id: currentTenant?.id,
+          tenant_id: currentTenant.id,
           supplier: finalSupplier,
           expense_date: date,
           amount: parseFloat(amount),

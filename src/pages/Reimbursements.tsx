@@ -105,14 +105,17 @@ export default function Reimbursements() {
   const canProcessReimbursements = ['master', 'owner', 'admin'].includes(effectiveRole || '');
 
   useEffect(() => {
-    fetchReimbursements();
-  }, []);
+    if (currentTenant?.id) {
+      fetchReimbursements();
+    }
+  }, [currentTenant?.id]);
 
   const fetchReimbursements = async () => {
     try {
       const { data: reimbursementsData, error } = await supabase
         .from('reimbursements')
         .select('*')
+        .eq('tenant_id', currentTenant?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -240,6 +243,7 @@ export default function Reimbursements() {
         const { error: updateError } = await supabase
           .from('reimbursements')
           .update({ attachments: uploadedFiles })
+          .eq('tenant_id', resolvedTenantId)
           .eq('id', data.id);
 
         if (updateError) throw updateError;
@@ -299,6 +303,10 @@ export default function Reimbursements() {
 
   const handleApprove = async () => {
     if (!selectedReimbursement) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     setUploadingProof(true);
     try {
@@ -316,6 +324,7 @@ export default function Reimbursements() {
           processed_at: new Date().toISOString(),
           payment_proof: paymentProofs.length > 0 ? paymentProofs : null,
         })
+        .eq('tenant_id', currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -359,6 +368,10 @@ export default function Reimbursements() {
       toast.error("Debe ingresar un motivo de rechazo");
       return;
     }
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -369,6 +382,7 @@ export default function Reimbursements() {
           processed_at: new Date().toISOString(),
           rejection_reason: rejectionReason,
         })
+        .eq('tenant_id', currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -408,6 +422,10 @@ export default function Reimbursements() {
 
   const handleReopen = async () => {
     if (!selectedReimbursement) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -419,6 +437,7 @@ export default function Reimbursements() {
           rejection_reason: null,
           payment_proof: null,
         })
+        .eq('tenant_id', currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -434,6 +453,10 @@ export default function Reimbursements() {
 
   const handleDelete = async () => {
     if (!selectedReimbursement) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       // Si tiene egreso asociado, eliminarlo primero
@@ -441,6 +464,7 @@ export default function Reimbursements() {
         const { error: expenseError } = await supabase
           .from('expenses')
           .delete()
+          .eq('tenant_id', currentTenant?.id)
           .eq('folio', selectedReimbursement.expense_folio);
 
         if (expenseError) {
@@ -453,6 +477,7 @@ export default function Reimbursements() {
       const { error } = await supabase
         .from('reimbursements')
         .delete()
+        .eq('tenant_id', currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;

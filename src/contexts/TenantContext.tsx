@@ -16,15 +16,15 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export const TenantProvider = ({ children }: { children: ReactNode }) => {
     // Dependencia de appUser para saber si es superadmin
-    const { user, appUser } = useAuth();
+    const { user, appUser, loading: authLoading } = useAuth();
     const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
     const [availableTenants, setAvailableTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(true);
     const [roleInCurrentTenant, setRoleInCurrentTenant] = useState<string | null>(null);
 
     useEffect(() => {
-        // STRICT CHECK: Wait for appUser to be loaded
-        if (user && appUser) {
+        // Wait for auth to settle, then load tenants even if app_users row is missing.
+        if (user && !authLoading) {
             fetchTenants();
         } else if (!user) {
             // If no user, reset text context and stop loading immediately
@@ -32,7 +32,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             setAvailableTenants([]);
             setLoading(false);
         }
-    }, [user, appUser]);
+    }, [user, authLoading, appUser?.is_superadmin]);
 
     const fetchTenants = async () => {
         try {

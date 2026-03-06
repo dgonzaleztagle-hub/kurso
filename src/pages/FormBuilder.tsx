@@ -17,6 +17,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { cn } from '@/lib/utils';
 import { FieldTypeSelector } from '@/components/form-builder/FieldTypeSelector';
 import { FieldEditor } from '@/components/form-builder/FieldEditor';
@@ -28,6 +29,7 @@ export default function FormBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const isEditing = !!id;
   
   const [loading, setLoading] = useState(false);
@@ -156,6 +158,9 @@ export default function FormBuilder() {
     
     setSaving(true);
     try {
+      if (!currentTenant?.id) {
+        throw new Error('No se pudo detectar el curso activo');
+      }
       let formId = id;
       
       if (isEditing) {
@@ -179,6 +184,7 @@ export default function FormBuilder() {
         const { data: newForm, error } = await supabase
           .from('forms')
           .insert({
+            tenant_id: currentTenant.id,
             title: form.title,
             description: form.description,
             is_active: form.is_active,

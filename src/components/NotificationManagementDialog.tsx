@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface NotificationManagementDialogProps {
   open: boolean;
@@ -22,14 +23,15 @@ interface Notification {
 }
 
 export function NotificationManagementDialog({ open, onOpenChange }: NotificationManagementDialogProps) {
+  const { currentTenant } = useTenant();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && currentTenant?.id) {
       loadNotifications();
     }
-  }, [open]);
+  }, [open, currentTenant?.id]);
 
   const loadNotifications = async () => {
     setLoading(true);
@@ -37,6 +39,7 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
       const { data, error } = await supabase
         .from('dashboard_notifications')
         .select('*')
+        .eq('tenant_id', currentTenant?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -54,6 +57,7 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
       const { error } = await supabase
         .from('dashboard_notifications')
         .update({ is_active: false })
+        .eq('tenant_id', currentTenant?.id)
         .eq('id', id);
 
       if (error) throw error;
@@ -71,6 +75,7 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
       const { error } = await supabase
         .from('dashboard_notifications')
         .delete()
+        .eq('tenant_id', currentTenant?.id)
         .eq('id', id);
 
       if (error) throw error;

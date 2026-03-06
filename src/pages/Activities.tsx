@@ -33,14 +33,17 @@ export default function Activities() {
   });
 
   useEffect(() => {
-    loadActivities();
-  }, []);
+    if (currentTenant?.id) {
+      loadActivities();
+    }
+  }, [currentTenant?.id]);
 
   const loadActivities = async () => {
     try {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
+        .eq("tenant_id", currentTenant?.id)
         .order("activity_date", { ascending: false });
 
       if (error) throw error;
@@ -58,6 +61,10 @@ export default function Activities() {
     
     if (!newActivity.name || !newActivity.amount) {
       toast.error("Por favor complete todos los campos obligatorios");
+      return;
+    }
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
       return;
     }
 
@@ -101,6 +108,10 @@ export default function Activities() {
     e.preventDefault();
     
     if (!editingActivity) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -111,7 +122,8 @@ export default function Activities() {
           activity_date: editingActivity.activity_date || null,
           can_redirect_to_fees: editingActivity.can_redirect_to_fees,
         })
-        .eq("id", editingActivity.id);
+        .eq("id", editingActivity.id)
+        .eq("tenant_id", currentTenant.id);
 
       if (error) throw error;
 
@@ -140,12 +152,17 @@ export default function Activities() {
 
   const handleDeleteActivity = async (id: number) => {
     if (!confirm("¿Está seguro de eliminar esta actividad?")) return;
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     try {
       const { error } = await supabase
         .from("activities")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("tenant_id", currentTenant.id);
 
       if (error) throw error;
 

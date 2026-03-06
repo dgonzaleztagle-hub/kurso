@@ -1,26 +1,22 @@
 project_id = "wkwztjpvtsmwvgumywfi"
 
-# MODO PRUEBA: Funciones sin verificación JWT
 [functions.create-student-accounts]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-users-with-roles]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-admin-user]
-verify_jwt = false
+verify_jwt = true
 
 [functions.delete-user]
-verify_jwt = false
+verify_jwt = true
 
 [functions.reset-user-password]
-verify_jwt = false
-
-[functions.fix-student-emails]
-verify_jwt = false
+verify_jwt = true
 
 [functions.check-default-password]
-verify_jwt = false
+verify_jwt = true
 
 [functions.reset-password-by-email]
-verify_jwt = false
+verify_jwt = true

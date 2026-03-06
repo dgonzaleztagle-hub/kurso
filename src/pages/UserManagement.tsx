@@ -20,7 +20,7 @@ interface Student {
   name: string;
 }
 
-type AppRole = 'master' | 'admin' | 'alumnos';
+type AppRole = 'master' | 'owner' | 'admin' | 'alumnos';
 
 interface UserRole {
   id: string;
@@ -231,14 +231,16 @@ export default function UserManagement() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      const session = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sesión inválida');
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
         method: 'POST',
         headers: {
-          // MODO PRUEBA: Sin token de autenticación
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
         },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId, tenantId: currentTenant?.id }),
       });
 
       const result = await response.json();
@@ -331,16 +333,19 @@ export default function UserManagement() {
     setResettingPassword(true);
 
     try {
-      const session = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sesión inválida');
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`, {
         method: 'POST',
         headers: {
-          // MODO PRUEBA: Sin token de autenticación
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
         },
         body: JSON.stringify({
           userId: resetPasswordDialog.userId,
-          newPassword
+          newPassword,
+          tenantId: currentTenant?.id
         }),
       });
 
@@ -424,10 +429,10 @@ export default function UserManagement() {
             <div>
               <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                Crear Owner (Gestor)
+                Crear Staff (Directiva)
               </h2>
               <p className="text-muted-foreground mb-4">
-                Crea un nuevo usuario con permisos totales de gestión (Owner).
+                Crea un nuevo usuario de directiva con permisos de operación del curso.
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5 md:gap-2">

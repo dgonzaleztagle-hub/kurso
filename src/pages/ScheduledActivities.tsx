@@ -95,9 +95,11 @@ export default function ScheduledActivities() {
   });
 
   useEffect(() => {
-    fetchActivities();
-    fetchStudents();
-  }, []);
+    if (currentTenant?.id) {
+      fetchActivities();
+      fetchStudents();
+    }
+  }, [currentTenant?.id]);
 
   useEffect(() => {
     if (activities.length > 0 && students.length > 0) {
@@ -110,6 +112,7 @@ export default function ScheduledActivities() {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
+        .eq("tenant_id", currentTenant?.id)
         .order("activity_date", { ascending: true });
 
       if (error) throw error;
@@ -148,6 +151,7 @@ export default function ScheduledActivities() {
       const { data, error } = await supabase
         .from("students")
         .select("id, first_name, last_name")
+        .eq("tenant_id", currentTenant?.id)
         .order("last_name");
 
       if (error) throw error;
@@ -222,6 +226,10 @@ export default function ScheduledActivities() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
     try {
       let activityId = editingActivity?.id;
       const payload = {
@@ -237,7 +245,11 @@ export default function ScheduledActivities() {
       };
 
       if (editingActivity) {
-        let { error } = await supabase.from("activities").update(payload as any).eq("id", activityId as any); // Cast to any
+        let { error } = await supabase
+          .from("activities")
+          .update(payload as any)
+          .eq("id", activityId as any)
+          .eq("tenant_id", currentTenant.id); // Cast to any
 
         // Legacy compatibility: activities without tenant_id column.
         if (error?.message?.includes("Could not find the 'tenant_id' column")) {

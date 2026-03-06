@@ -66,6 +66,37 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Permisos: solo owner/superadmin pueden crear staff en el tenant
+    const [{ data: appUser }, { data: ownerTenant }, { data: memberRole }] = await Promise.all([
+      supabaseAdmin
+        .from('app_users')
+        .select('is_superadmin')
+        .eq('id', callerUser.id)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('tenants')
+        .select('id')
+        .eq('id', tenantId)
+        .eq('owner_id', callerUser.id)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('tenant_members')
+        .select('role')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', callerUser.id)
+        .eq('role', 'owner')
+        .eq('status', 'active')
+        .maybeSingle()
+    ])
+
+    const canManageStaff = Boolean(appUser?.is_superadmin || ownerTenant || memberRole)
+    if (!canManageStaff) {
+      return new Response(
+        JSON.stringify({ error: 'No autorizado para crear staff en este tenant' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // 1. Crear el usuario en Auth
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -109,13 +140,13 @@ Deno.serve(async (req) => {
       // No fallamos fatalmente aquí, pero es bueno loguearlo
     }
 
-    // 3. Asignar membresía al Tenant (Rol Owner)
+    // 3. Asignar membresía al Tenant (Rol staff/admin)
     const { error: memberError } = await supabaseAdmin
       .from('tenant_members')
       .insert({
         tenant_id: tenantId,
         user_id: newUser.user.id,
-        role: 'owner',
+        role: 'admin',
         status: 'active'
       })
 
@@ -132,24 +163,12 @@ Deno.serve(async (req) => {
       )
     }
 
-    // 3.5 Actualizar owner_id en la tabla tenants (Para que aparezca en UI Admin)
-    // Esto es crítico para los listados de "Responsable"
-    const { error: tenantUpdateError } = await supabaseAdmin
-      .from('tenants')
-      .update({ owner_id: newUser.user.id })
-      .eq('id', tenantId)
-
-    if (tenantUpdateError) {
-      console.error("Error updating tenant owner_id:", tenantUpdateError)
-      // No fallamos fatalmente porque la membresía ya está creada, pero es un warning importante
-    }
-
     // 4. (Opcional) Legacy support: user_roles
     // Intentamos escribir en user_roles por si acaso, pero ignoramos error si la tabla no existe o falla
     try {
       await supabaseAdmin.from('user_roles').insert({
         user_id: newUser.user.id,
-        role: 'owner',
+        role: 'admin',
         user_name: userName,
         position: position,
         phone: phone || null

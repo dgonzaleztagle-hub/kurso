@@ -106,22 +106,22 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/formularios" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <FormList />
         </ProtectedRoute>
       } />
       <Route path="/formularios/nuevo" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <FormBuilder />
         </ProtectedRoute>
       } />
       <Route path="/formularios/:id/editar" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <FormBuilder />
         </ProtectedRoute>
       } />
       <Route path="/formularios/:id/respuestas" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <FormResponses />
         </ProtectedRoute>
       } />
@@ -131,23 +131,23 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/user-management" element={
-        <ProtectedRoute allowedRoles={['master']}>
+        <ProtectedRoute allowedRoles={['master', 'owner']}>
           <Layout><UserManagement /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/credit-management" element={
-        <ProtectedRoute allowedRoles={['master']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <Layout><CreditManagement /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/credit-movements" element={
-        <ProtectedRoute allowedRoles={['master']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
           <Layout><CreditMovements /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/student-profile" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="student_profile">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="student_profile">
           <Layout><StudentProfile /></Layout>
         </ProtectedRoute>
       } />
@@ -170,62 +170,62 @@ function AppRoutes() {
       } />
 
       <Route path="/students" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="students">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="students">
           <Layout><Students /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/income" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="income">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="income">
           <Layout><Income /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/expenses" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="expenses">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="expenses">
           <Layout><Expenses /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/debt-reports" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="debt_reports">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="debt_reports">
           <Layout><DebtReports /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/payment-reports" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="payment_reports">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="payment_reports">
           <Layout><PaymentReports /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/balance" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="balance">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="balance">
           <Layout><Balance /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/import" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="import">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="import">
           <Layout><ImportData /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/movements" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="movements">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="movements">
           <Layout><Movements /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/activities" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="activities">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="activities">
           <Layout><Activities /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/activity-exclusions" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="activity_exclusions">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="activity_exclusions">
           <Layout><ActivityExclusions /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/activity-payments" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="activity_payments">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="activity_payments">
           <Layout><ActivityPayments /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/monthly-fees" element={
-        <ProtectedRoute allowedRoles={['master']} requiredModule="monthly_fees">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="monthly_fees">
           <Layout><MonthlyFees /></Layout>
         </ProtectedRoute>
       } />
@@ -235,17 +235,17 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/payment-notifications" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="payment_notifications">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="payment_notifications">
           <Layout><PaymentNotifications /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/reimbursements" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="reimbursements">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="reimbursements">
           <Layout><Reimbursements /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/scheduled-activities" element={
-        <ProtectedRoute allowedRoles={['master', 'admin']} requiredModule="scheduled_activities">
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="scheduled_activities">
           <Layout><ScheduledActivities /></Layout>
         </ProtectedRoute>
       } />

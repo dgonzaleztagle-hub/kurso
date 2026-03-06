@@ -45,7 +45,7 @@ interface PaymentNotification {
 
 export default function PaymentNotifications() {
   const { user, userRole } = useAuth();
-  const { roleInCurrentTenant } = useTenant();
+  const { roleInCurrentTenant, currentTenant } = useTenant();
   const effectiveRole = roleInCurrentTenant || userRole;
   const canProcessPayments = ['master', 'owner', 'admin'].includes(effectiveRole || '');
   const { toast } = useToast();
@@ -63,8 +63,10 @@ export default function PaymentNotifications() {
   };
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    if (currentTenant?.id) {
+      loadNotifications();
+    }
+  }, [currentTenant?.id]);
 
   const loadNotifications = async () => {
     try {
@@ -79,6 +81,7 @@ export default function PaymentNotifications() {
             last_name
           )
         `)
+        .eq('tenant_id', currentTenant?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -119,6 +122,9 @@ export default function PaymentNotifications() {
     setProcessing(true);
 
     try {
+      if (!currentTenant?.id) {
+        throw new Error('No se pudo detectar el curso activo');
+      }
       // Actualizar estado de la notificación
       const { error: updateError } = await supabase
         .from('payment_notifications')
@@ -153,6 +159,7 @@ export default function PaymentNotifications() {
           // Registrar solo el monto pagado para actividades
           const { error: insertError } = await supabase.from('payments').insert({
             folio: currentFolio++,
+            tenant_id: currentTenant.id,
             payment_date: notification.payment_date,
             student_id: notification.student_id,
             student_name: studentFullName,
@@ -165,6 +172,7 @@ export default function PaymentNotifications() {
           // Registrar cuotas mensuales
           const { error: insertError } = await supabase.from('payments').insert({
             folio: currentFolio++,
+            tenant_id: currentTenant.id,
             payment_date: notification.payment_date,
             student_id: notification.student_id,
             student_name: studentFullName,
