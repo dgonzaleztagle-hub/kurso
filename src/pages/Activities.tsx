@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Trash2, Edit } from "lucide-react";
 import { formatDateForDisplay } from "@/lib/dateUtils";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Activity {
   id: number;
@@ -19,6 +20,7 @@ interface Activity {
 }
 
 export default function Activities() {
+  const { currentTenant } = useTenant();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -60,14 +62,28 @@ export default function Activities() {
     }
 
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from("activities")
         .insert({
+          tenant_id: currentTenant?.id,
           name: newActivity.name,
           amount: parseFloat(newActivity.amount),
           activity_date: newActivity.activity_date || null,
           can_redirect_to_fees: newActivity.can_redirect_to_fees,
         });
+
+      // Legacy compatibility: some schemas have no tenant_id column in activities.
+      if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+        const retry = await supabase
+          .from("activities")
+          .insert({
+            name: newActivity.name,
+            amount: parseFloat(newActivity.amount),
+            activity_date: newActivity.activity_date || null,
+            can_redirect_to_fees: newActivity.can_redirect_to_fees,
+          } as any);
+        error = retry.error;
+      }
 
       if (error) throw error;
 
@@ -77,7 +93,7 @@ export default function Activities() {
       loadActivities();
     } catch (error) {
       console.error("Error adding activity:", error);
-      toast.error("Error al agregar actividad");
+      toast.error((error as any)?.message || "Error al agregar actividad");
     }
   };
 
