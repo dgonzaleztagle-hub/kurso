@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Calendar, Plus, CheckCircle, Clock, DollarSign, Gift, AlertCircle, Pencil, Trash2, RotateCcw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -62,6 +63,7 @@ interface DonationItem {
 
 export default function ScheduledActivities() {
   const { userRole } = useAuth();
+  const { currentTenant } = useTenant();
   const isMobile = useIsMobile();
   const [activities, setActivities] = useState<ScheduledActivity[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -223,6 +225,7 @@ export default function ScheduledActivities() {
     try {
       let activityId = editingActivity?.id;
       const payload = {
+        tenant_id: currentTenant?.id,
         name: formData.name,
         amount: formData.is_with_fee && formData.fee_amount ? parseFloat(formData.fee_amount) : 0,
         activity_date: formData.activity_date,
@@ -234,11 +237,28 @@ export default function ScheduledActivities() {
       };
 
       if (editingActivity) {
-        const { error } = await supabase.from("activities").update(payload).eq("id", activityId as any); // Cast to any
+        let { error } = await supabase.from("activities").update(payload as any).eq("id", activityId as any); // Cast to any
+
+        // Legacy compatibility: activities without tenant_id column.
+        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+          const { tenant_id, ...legacyPayload } = payload as any;
+          const retry = await supabase.from("activities").update(legacyPayload).eq("id", activityId as any);
+          error = retry.error;
+        }
+
         if (error) throw error;
         toast.success("Actividad actualizada");
       } else {
-        const { data, error } = await supabase.from("activities").insert(payload).select().single();
+        let { data, error } = await supabase.from("activities").insert(payload as any).select().single();
+
+        // Legacy compatibility: activities without tenant_id column.
+        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+          const { tenant_id, ...legacyPayload } = payload as any;
+          const retry = await supabase.from("activities").insert(legacyPayload).select().single();
+          data = retry.data as any;
+          error = retry.error;
+        }
+
         if (error) throw error;
         activityId = data.id;
         toast.success("Actividad creada");
