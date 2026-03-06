@@ -143,6 +143,10 @@ export default function UserManagement() {
       toast.error("Complete todos los campos");
       return;
     }
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
 
     if (adminPassword.length < 6) {
       toast.error("La contraseña debe tener al menos 6 caracteres");
@@ -159,30 +163,38 @@ export default function UserManagement() {
         return;
       }
 
+      const resolvedUserName = (adminUserName || adminName).trim();
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
         },
         body: JSON.stringify({
           email: adminEmail,
           password: adminPassword,
           name: adminName,
-          userName: adminUserName,
+          userName: resolvedUserName,
           position: adminPosition,
           phone: adminPhone || null,
-          tenantId: currentTenant?.id
+          tenantId: currentTenant.id
         })
       });
 
-      const result = await response.json();
+      let result: any = {};
+      const rawBody = await response.text();
+      try {
+        result = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        result = { error: rawBody || "Respuesta inválida del servidor" };
+      }
 
       if (!response.ok) {
         throw new Error(result.error || 'Error al crear usuario admin');
       }
 
-      toast.success(`Admin ${adminUserName} creado exitosamente`);
+      toast.success(`Admin ${resolvedUserName} creado exitosamente`);
       setShowCreateAdmin(false);
       setAdminEmail("");
       setAdminPassword("");
