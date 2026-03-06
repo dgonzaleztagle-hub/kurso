@@ -71,6 +71,13 @@ export function WelcomeGuide() {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
+        if (appUser) {
+            setFullName(appUser.full_name || "");
+            setWhatsapp(appUser.whatsapp_number || "");
+        }
+    }, [appUser]);
+
+    useEffect(() => {
         const isWelcome = searchParams.get("welcome") === "true";
         const hasSeenGuide = localStorage.getItem("has_seen_welcome_guide");
 
@@ -107,7 +114,15 @@ export function WelcomeGuide() {
         setSaving(false);
 
         if (error) {
-            toast.error("Error al guardar perfil. Intenta de nuevo.");
+            const errorCode = (error as any)?.code;
+            const errorMessage = String((error as any)?.message || "");
+            if (errorCode === "23505" || errorMessage.toLowerCase().includes("duplicate")) {
+                toast.error("Ese WhatsApp ya está registrado en otra cuenta.");
+            } else if (errorMessage) {
+                toast.error(`No se pudo guardar el perfil: ${errorMessage}`);
+            } else {
+                toast.error("Error al guardar perfil. Intenta de nuevo.");
+            }
         } else {
             toast.success("¡Perfil completado! Bienvenido.");
             handleClose();
