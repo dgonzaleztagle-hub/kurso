@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION public.create_db_user(
 ) RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_user_id UUID;
@@ -15,56 +15,63 @@ BEGIN
     FROM auth.users
     WHERE email = p_email;
 
-    IF v_user_id IS NOT NULL THEN
-        RETURN v_user_id;
+    IF v_user_id IS NULL THEN
+        v_user_id := extensions.gen_random_uuid();
+        v_enc_pass := extensions.crypt(p_password, extensions.gen_salt('bf'));
+
+        INSERT INTO auth.users (
+            instance_id,
+            id,
+            aud,
+            role,
+            email,
+            encrypted_password,
+            email_confirmed_at,
+            raw_app_meta_data,
+            raw_user_meta_data,
+            created_at,
+            updated_at
+        ) VALUES (
+            '00000000-0000-0000-0000-000000000000',
+            v_user_id,
+            'authenticated',
+            'authenticated',
+            p_email,
+            v_enc_pass,
+            NOW(),
+            '{"provider": "email", "providers": ["email"]}',
+            p_metadata,
+            NOW(),
+            NOW()
+        );
     END IF;
 
-    v_user_id := gen_random_uuid();
-    v_enc_pass := crypt(p_password, gen_salt('bf'));
-
-    INSERT INTO auth.users (
-        instance_id,
-        id,
-        aud,
-        role,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        created_at,
-        updated_at
-    ) VALUES (
-        '00000000-0000-0000-0000-000000000000',
-        v_user_id,
-        'authenticated',
-        'authenticated',
-        p_email,
-        v_enc_pass,
-        NOW(),
-        '{"provider": "email", "providers": ["email"]}',
-        p_metadata,
-        NOW(),
-        NOW()
-    );
-
-    INSERT INTO auth.identities (
-        id,
-        user_id,
-        identity_data,
-        provider,
-        last_sign_in_at,
-        created_at,
-        updated_at
-    ) VALUES (
-        gen_random_uuid(),
-        v_user_id,
-        jsonb_build_object('sub', v_user_id, 'email', p_email),
-        'email',
-        NOW(),
-        NOW(),
-        NOW()
-    );
+    IF NOT EXISTS (
+        SELECT 1
+        FROM auth.identities
+        WHERE user_id = v_user_id
+          AND provider = 'email'
+    ) THEN
+        INSERT INTO auth.identities (
+            id,
+            provider_id,
+            user_id,
+            identity_data,
+            provider,
+            last_sign_in_at,
+            created_at,
+            updated_at
+        ) VALUES (
+            extensions.gen_random_uuid(),
+            v_user_id::text,
+            v_user_id,
+            jsonb_build_object('sub', v_user_id::text, 'email', p_email),
+            'email',
+            NOW(),
+            NOW(),
+            NOW()
+        );
+    END IF;
 
     RETURN v_user_id;
 END;
