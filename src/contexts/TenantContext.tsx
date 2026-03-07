@@ -97,7 +97,19 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             const allTenants = [...tenantsFromMembership, ...(ownedTenants || [])];
 
             // Eliminar duplicados por ID
-            const uniqueTenants = Array.from(new Map(allTenants.map((item: any) => [item.id, item])).values()) as Tenant[];
+            let uniqueTenants = Array.from(new Map(allTenants.map((item: any) => [item.id, item])).values()) as Tenant[];
+
+            if (preferredTenantId && !uniqueTenants.some((tenant) => tenant.id === preferredTenantId)) {
+                const { data: preferredTenant, error: preferredTenantError } = await supabase
+                    .from('tenants')
+                    .select('*')
+                    .eq('id', preferredTenantId)
+                    .maybeSingle();
+
+                if (!preferredTenantError && preferredTenant) {
+                    uniqueTenants = [preferredTenant as Tenant, ...uniqueTenants];
+                }
+            }
 
             setAvailableTenants(uniqueTenants);
 
@@ -109,6 +121,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
                 setCurrentTenant(target);
                 localStorage.setItem('kurso_last_tenant', target.id);
+                sessionStorage.removeItem('kurso_pending_tenant_id');
                 await determineRole(target, user!.id);
             } else {
                 if (preferredTenantId && attempt < 4) {

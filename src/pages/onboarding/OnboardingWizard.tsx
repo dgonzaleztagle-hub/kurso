@@ -42,6 +42,9 @@ export default function OnboardingWizard() {
 
             if (error) throw error;
             const createdTenantId = data && typeof data === "object" && "id" in data ? String(data.id) : undefined;
+            if (createdTenantId) {
+                sessionStorage.setItem("kurso_pending_tenant_id", createdTenantId);
+            }
 
             setSuccess(true);
 
@@ -62,6 +65,7 @@ export default function OnboardingWizard() {
 
         } catch (error: any) {
             console.error(error);
+            sessionStorage.removeItem("kurso_pending_tenant_id");
             toast({
                 title: "Error de configuración",
                 description: error.message || "No pudimos crear el espacio. Intenta nuevamente.",

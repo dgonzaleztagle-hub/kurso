@@ -58,6 +58,9 @@ export default function Onboarding() {
 
             if (error) throw error;
             const createdTenantId = data && typeof data === "object" && "id" in data ? String(data.id) : undefined;
+            if (createdTenantId) {
+                sessionStorage.setItem("kurso_pending_tenant_id", createdTenantId);
+            }
 
             toast.success("¡Curso creado exitosamente!");
 
@@ -69,6 +72,7 @@ export default function Onboarding() {
 
         } catch (error: any) {
             console.error("Error creating course:", error);
+            sessionStorage.removeItem("kurso_pending_tenant_id");
             toast.error(error.message || "Error al crear el curso. Intenta nuevamente.");
         } finally {
             setLoading(false);
