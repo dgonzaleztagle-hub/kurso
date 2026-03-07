@@ -119,9 +119,12 @@ const parseNumeric = (value: string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 export default function ScheduledActivities() {
   const { userRole } = useAuth();
-  const { currentTenant } = useTenant();
+  const { currentTenant, roleInCurrentTenant } = useTenant();
   const [activities, setActivities] = useState<ScheduledActivity[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,7 +237,9 @@ export default function ScheduledActivities() {
       const rates: Record<string, CompletionRate> = {};
       const [activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id"),
+        activities.some((activity) => isUuid(activity.id))
+          ? supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id")
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       const activityExclusions = activityExclusionsResult.data || [];
@@ -518,7 +523,9 @@ export default function ScheduledActivities() {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).not("student_id", "is", null),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id"),
+        isUuid(activity.id)
+          ? supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id")
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (donationsResult.error) throw donationsResult.error;
@@ -740,7 +747,9 @@ export default function ScheduledActivities() {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).order("name", { ascending: true }),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id"),
+        isUuid(activity.id)
+          ? supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id")
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (donationsResult.error) throw donationsResult.error;
@@ -878,6 +887,8 @@ export default function ScheduledActivities() {
       })),
     [donations, eligibleDonationStudents],
   );
+
+  const canReopenActivities = roleInCurrentTenant === "owner" || roleInCurrentTenant === "admin" || roleInCurrentTenant === "master" || userRole === "master";
 
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Cargando actividades...</div>;
@@ -1036,7 +1047,7 @@ export default function ScheduledActivities() {
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => toggleCompleted(activity)} disabled={activity.completed && userRole !== "master"} title={activity.completed && userRole !== "master" ? "Solo el master puede reabrir actividades cerradas" : ""}>
+                  <Button variant="outline" size="sm" onClick={() => toggleCompleted(activity)} disabled={activity.completed && !canReopenActivities} title={activity.completed && !canReopenActivities ? "Solo administradores del curso pueden reabrir actividades cerradas" : ""}>
                     {activity.completed ? <RotateCcw className="mr-2 h-4 w-4" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                     {activity.completed ? "Reabrir" : "Cerrar"}
                   </Button>
