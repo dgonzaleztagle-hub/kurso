@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Tenant, TenantMember } from '@/types/db';
+import { Tenant } from '@/types/db';
 import { useAuth } from './AuthContext';
 
 interface TenantContextType {
@@ -78,11 +78,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             previous_tenant_id,
             next_tenant_id
           )
-        `)
+                `)
                 .eq('user_id', user?.id)
                 .eq('status', 'active');
-
-            if (memberError) throw memberError;
+            if (memberError) {
+                console.warn('Tenant memberships unavailable, falling back to owner tenants:', memberError);
+            }
 
             // 2. Obtener tenants donde soy dueño (si no tengo membresía explícita aún)
             const { data: ownedTenants, error: ownerError } = await supabase
@@ -93,7 +94,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             if (ownerError) throw ownerError;
 
             // Unificar listas
-            const tenantsFromMembership = memberships?.map((m: any) => m.tenant) || [];
+            const tenantsFromMembership = memberError ? [] : memberships?.map((m: any) => m.tenant) || [];
             const allTenants = [...tenantsFromMembership, ...(ownedTenants || [])];
 
             // Eliminar duplicados por ID
@@ -154,12 +155,16 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Si no, buscar en members
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('tenant_members')
             .select('role')
             .eq('tenant_id', tenant.id)
             .eq('user_id', userId)
             .single();
+
+        if (error) {
+            console.warn('Could not resolve tenant role from tenant_members, using safe fallback:', error);
+        }
 
         if (data) {
             setRoleInCurrentTenant(data.role);
