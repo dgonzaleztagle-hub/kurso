@@ -81,7 +81,9 @@ export default function Auth() {
       return;
     }
 
-    if (password.length < 6) {
+    const isRutLogin = viewMode === 'login' && !email.includes("@") && validateRut(email);
+
+    if (password.length < 6 && !isRutLogin) {
       toast.error("La contraseña debe tener al menos 6 caracteres");
       return;
     }
@@ -91,6 +93,7 @@ export default function Auth() {
     try {
       let finalEmail = email;
       let rutEmailCandidates: string[] = [];
+      let rutPasswordCandidates: string[] = [];
 
       // Check if input looks like a RUT (has numbers and maybe K) and NOT an email (@)
       if (!email.includes("@")) {
@@ -100,6 +103,11 @@ export default function Auth() {
           rutEmailCandidates = Array.from(new Set([
             `${rutBody}@kurso.cl`,
             generateRutEmail(email),
+          ].filter(Boolean)));
+          rutPasswordCandidates = Array.from(new Set([
+            password,
+            rutBody.length >= 6 ? rutBody.substring(0, 6) : password,
+            rutBody.length >= 4 ? rutBody.substring(0, 4) : password,
           ].filter(Boolean)));
           finalEmail = rutEmailCandidates[0];
           console.log("RUT detected. Candidate emails:", rutEmailCandidates);
@@ -131,12 +139,15 @@ export default function Auth() {
 
         if (rutEmailCandidates.length > 0) {
           for (const candidateEmail of rutEmailCandidates) {
-            const result = await signIn(candidateEmail, password);
-            if (!result.error) {
-              error = null;
-              break;
+            for (const candidatePassword of rutPasswordCandidates) {
+              const result = await signIn(candidateEmail, candidatePassword);
+              if (!result.error) {
+                error = null;
+                break;
+              }
+              error = result.error;
             }
-            error = result.error;
+            if (!error) break;
           }
         } else {
           const result = await signIn(finalEmail, password);
