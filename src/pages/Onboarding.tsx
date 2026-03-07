@@ -57,11 +57,12 @@ export default function Onboarding() {
                 .rpc('create_own_tenant', { new_tenant_name: courseName });
 
             if (error) throw error;
+            const createdTenantId = data && typeof data === "object" && "id" in data ? String(data.id) : undefined;
 
             toast.success("¡Curso creado exitosamente!");
 
             // Critical: Refresh tenants context so the new tenant appears and we are switched to it
-            await refreshTenants();
+            await refreshTenants(createdTenantId);
 
             // Navigate to dashboard - The IndexSwitcher/TenantContext will handle the rest
             navigate("/?welcome=true");

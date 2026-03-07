@@ -41,6 +41,7 @@ export default function OnboardingWizard() {
             });
 
             if (error) throw error;
+            const createdTenantId = data && typeof data === "object" && "id" in data ? String(data.id) : undefined;
 
             setSuccess(true);
 
@@ -52,7 +53,7 @@ export default function OnboardingWizard() {
             });
 
             // 3. Recargar contexto de tenants SIN recargar página completa
-            await refreshTenants();
+            await refreshTenants(createdTenantId);
 
             // 4. Pequeña pausa para que el usuario veja el éxito
             setTimeout(() => {

@@ -9,7 +9,7 @@ interface TenantContextType {
     loading: boolean;
     switchTenant: (tenantId: string) => void;
     roleInCurrentTenant: string | null;
-    refreshTenants: () => Promise<void>;
+    refreshTenants: (preferredTenantId?: string) => Promise<void>;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -34,7 +34,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [user, authLoading, appUser?.is_superadmin]);
 
-    const fetchTenants = async () => {
+    const fetchTenants = async (preferredTenantId?: string, attempt = 0) => {
         try {
             setLoading(true);
 
@@ -51,8 +51,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
                 if (allTenants && allTenants.length > 0 && !currentTenant) {
                     const lastTenantId = localStorage.getItem('kurso_last_tenant');
-                    const target = allTenants.find((t: any) => t.id === lastTenantId) || allTenants[0];
+                    const target =
+                        allTenants.find((t: any) => t.id === preferredTenantId) ||
+                        allTenants.find((t: any) => t.id === lastTenantId) ||
+                        allTenants[0];
                     setCurrentTenant(target as Tenant);
+                    localStorage.setItem('kurso_last_tenant', target.id);
                     setRoleInCurrentTenant('owner'); // SuperAdmin es GOD
                 }
                 setLoading(false);
@@ -99,28 +103,22 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
             // 3. Seleccionar o Actualizar tenant
             if (uniqueTenants.length > 0) {
-                let target: Tenant | undefined;
+                const lastTenantId = localStorage.getItem('kurso_last_tenant');
+                const activeTenantId = preferredTenantId || currentTenant?.id || lastTenantId;
+                const target = uniqueTenants.find(t => t.id === activeTenantId) || uniqueTenants[0];
 
-                if (currentTenant) {
-                    // Update existing currentTenant with fresh data
-                    target = uniqueTenants.find(t => t.id === currentTenant.id);
-                    if (target) {
-                        setCurrentTenant(target);
-                        // If role might depend on data, re-run determineRole? Usually role is static per user/tenant, but safe to keep.
-                        await determineRole(target.id, user!.id);
-                    }
-                }
-
-                // Initial load or if current was removed
-                if (!currentTenant || !target) {
-                    const lastTenantId = localStorage.getItem('kurso_last_tenant');
-                    target = uniqueTenants.find(t => t.id === lastTenantId) || uniqueTenants[0];
-                    setCurrentTenant(target);
-                    await determineRole(target.id, user!.id);
-                }
+                setCurrentTenant(target);
+                localStorage.setItem('kurso_last_tenant', target.id);
+                await determineRole(target, user!.id);
             } else {
-                // No tenants available
+                if (preferredTenantId && attempt < 4) {
+                    await new Promise((resolve) => setTimeout(resolve, 400));
+                    await fetchTenants(preferredTenantId, attempt + 1);
+                    return;
+                }
+
                 setCurrentTenant(null);
+                setRoleInCurrentTenant(null);
             }
         } catch (error) {
             console.error('Error fetching tenants:', error);
@@ -129,7 +127,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
-    const determineRole = async (tenantId: string, userId: string) => {
+    const determineRole = async (tenant: Tenant, userId: string) => {
         // SuperAdmin siempre es owner
         if (appUser?.is_superadmin) {
             setRoleInCurrentTenant('owner');
@@ -137,8 +135,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Si soy el owner en la tabla tenants
-        const tenant = availableTenants.find(t => t.id === tenantId);
-        if (tenant?.owner_id === userId) {
+        if (tenant.owner_id === userId) {
             setRoleInCurrentTenant('owner');
             return;
         }
@@ -147,7 +144,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         const { data } = await supabase
             .from('tenant_members')
             .select('role')
-            .eq('tenant_id', tenantId)
+            .eq('tenant_id', tenant.id)
             .eq('user_id', userId)
             .single();
 
@@ -163,7 +160,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (target && user) {
             setCurrentTenant(target);
             localStorage.setItem('kurso_last_tenant', tenantId);
-            await determineRole(tenantId, user.id);
+            await determineRole(target, user.id);
         }
     };
 
@@ -173,7 +170,8 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             const lastTenantId = localStorage.getItem('kurso_last_tenant');
             const target = availableTenants.find(t => t.id === lastTenantId) || availableTenants[0];
             setCurrentTenant(target);
-            if (user) determineRole(target.id, user.id);
+            localStorage.setItem('kurso_last_tenant', target.id);
+            if (user) determineRole(target, user.id);
         }
     }, [availableTenants, loading, currentTenant, user]);
 
