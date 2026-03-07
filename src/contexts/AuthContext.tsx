@@ -23,6 +23,7 @@ interface AuthContextType {
   userRole: LegacyRole | null; // Mapear role del tenant actual aqui
   adminPermissions: AppModule[]; // Mapear permisos aqui
   studentId: number | null;
+  displayName: string | null;
   hasPermission: (module: AppModule) => boolean;
   firstLogin: boolean;
   refreshUserData: () => Promise<void>;
@@ -39,6 +40,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Estados Legacy (Compatibilidad)
   const [userRole, setUserRole] = useState<LegacyRole | null>(null);
   const [firstLogin, setFirstLogin] = useState(false);
+  const [studentId, setStudentId] = useState<number | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -55,6 +58,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       else {
         setAppUser(null);
         setFirstLogin(false);
+        setStudentId(null);
+        setDisplayName(null);
         setLoading(false);
       }
     });
@@ -75,6 +80,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error fetching app user:', appError);
       }
       setAppUser(appData as AppUser);
+
+      const { data: studentLink, error: studentLinkError } = await supabase
+        .from('user_students')
+        .select('student_id, display_name')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (studentLinkError && studentLinkError.code !== 'PGRST116') {
+        console.error('Error fetching student link:', studentLinkError);
+      }
+
+      setStudentId(studentLink?.student_id ?? null);
+      setDisplayName(studentLink?.display_name ?? null);
 
       // 2. Fetch User Roles (Global/First Login check)
       const { data: roleRows, error: roleError } = await supabase
@@ -144,6 +162,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAppUser(null);
     setUserRole(null);
     setFirstLogin(false);
+    setStudentId(null);
+    setDisplayName(null);
   };
 
   // Legacy Permission Check
@@ -186,7 +206,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Legacy
       userRole,
       firstLogin,      // Exposed
-      studentId: null,
+      studentId,
+      displayName,
       adminPermissions: [],
       hasPermission
     }}>
