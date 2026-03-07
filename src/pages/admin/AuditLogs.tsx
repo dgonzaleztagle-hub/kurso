@@ -109,15 +109,18 @@ export default function AuditLogs() {
         'organizations': 'Institución'
     };
 
-    const formatEntity = (entity: string) => friendlyEntities[entity] || entity.replace('public.', '');
+    const formatEntity = (entity: string) => {
+        if (!entity) return "Sistema";
+        return friendlyEntities[entity] || entity.replace('public.', '');
+    };
 
     const toggleExpand = (id: string) => {
         setExpandedLog(expandedLog === id ? null : id);
     };
 
     const filteredLogs = logs.filter(log =>
-        log.entity_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.entity_name && log.entity_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (log.action && log.action.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (log.user_id && log.user_id.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 

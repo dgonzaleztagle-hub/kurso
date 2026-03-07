@@ -57,8 +57,8 @@ export default function Balance() {
     try {
       setLoading(true);
       const [paymentsResult, expensesResult] = await Promise.all([
-        supabase.from("payments").select("*").eq("tenant_id", currentTenant.id),
-        supabase.from("expenses").select("*").eq("tenant_id", currentTenant.id)
+        supabase.from("payments" as any).select("*").eq("tenant_id", currentTenant.id),
+        supabase.from("expenses" as any).select("*").eq("tenant_id", currentTenant.id)
       ]);
 
       if (paymentsResult.error) throw paymentsResult.error;
@@ -132,12 +132,12 @@ export default function Balance() {
     payments.forEach(payment => {
       let category = "Otros Ingresos";
       const conceptUpper = payment.concept.toUpperCase();
-      
+
       if (conceptUpper.includes("CUOTA")) {
         category = "Cuotas Mensuales";
-      } else if (conceptUpper.includes("ACTIVIDAD") || conceptUpper.includes("DIA DEL") || 
-                 conceptUpper.includes("APORTE") || conceptUpper.includes("RIFA") ||
-                 conceptUpper.includes("POLERA")) {
+      } else if (conceptUpper.includes("ACTIVIDAD") || conceptUpper.includes("DIA DEL") ||
+        conceptUpper.includes("APORTE") || conceptUpper.includes("RIFA") ||
+        conceptUpper.includes("POLERA")) {
         category = "Actividades";
       }
 
@@ -148,7 +148,7 @@ export default function Balance() {
     expenses.forEach(expense => {
       let category = "Otros Egresos";
       const conceptUpper = expense.concept.toUpperCase();
-      
+
       if (conceptUpper.includes("MATERIALES") || conceptUpper.includes("ÚTILES")) {
         category = "Materiales y Útiles";
       } else if (conceptUpper.includes("ALIMENTO") || conceptUpper.includes("COMIDA")) {
@@ -180,8 +180,8 @@ export default function Balance() {
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const balance = totalIncome - totalExpenses;
 
-  const { incomeItems, expenseItems } = viewType === "detailed" 
-    ? calculateDetailed() 
+  const { incomeItems, expenseItems } = viewType === "detailed"
+    ? calculateDetailed()
     : calculateSummary();
 
   const handleCategoryClick = (category: string, type: "income" | "expense") => {
@@ -196,17 +196,17 @@ export default function Balance() {
     if (!selectedCategory || !selectedType) return [];
 
     const conceptsMap = new Map<string, { count: number; amount: number }>();
-    
+
     if (selectedType === "income") {
       payments.forEach(payment => {
         let category = "Otros Ingresos";
         const conceptUpper = payment.concept.toUpperCase();
-        
+
         if (conceptUpper.includes("CUOTA")) {
           category = "Cuotas Mensuales";
-        } else if (conceptUpper.includes("ACTIVIDAD") || conceptUpper.includes("DIA DEL") || 
-                   conceptUpper.includes("APORTE") || conceptUpper.includes("RIFA") ||
-                   conceptUpper.includes("POLERA")) {
+        } else if (conceptUpper.includes("ACTIVIDAD") || conceptUpper.includes("DIA DEL") ||
+          conceptUpper.includes("APORTE") || conceptUpper.includes("RIFA") ||
+          conceptUpper.includes("POLERA")) {
           category = "Actividades";
         }
 
@@ -222,7 +222,7 @@ export default function Balance() {
       expenses.forEach(expense => {
         let category = "Otros Egresos";
         const conceptUpper = expense.concept.toUpperCase();
-        
+
         if (conceptUpper.includes("MATERIALES") || conceptUpper.includes("ÚTILES")) {
           category = "Materiales y Útiles";
         } else if (conceptUpper.includes("ALIMENTO") || conceptUpper.includes("COMIDA")) {
@@ -252,7 +252,7 @@ export default function Balance() {
     try {
       setLoading(true);
       const doc = new jsPDF();
-      
+
       // Load images
       const [logoImg, firmaImg] = await Promise.all([
         new Promise<HTMLImageElement>((resolve) => {
@@ -270,7 +270,7 @@ export default function Balance() {
       // Header background
       doc.setFillColor(240, 245, 250);
       doc.rect(0, 0, 210, 36, 'F');
-      
+
       // Logo
       doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
 
@@ -279,7 +279,7 @@ export default function Balance() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(30, 58, 138);
       doc.text("INFORME DE BALANCE FINANCIERO", 105, 18, { align: "center" });
-      
+
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(71, 85, 105);
@@ -459,7 +459,7 @@ export default function Balance() {
       // Signature
       const pageHeight = doc.internal.pageSize.getHeight();
       const pageWidth = doc.internal.pageSize.getWidth();
-      
+
       if (yPos > pageHeight - 50) {
         doc.addPage();
         yPos = 20;
@@ -487,7 +487,7 @@ export default function Balance() {
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={logoImage} alt="Logo Colegio" className="w-16 h-16" />
+
           <div>
             <h1 className="text-4xl font-bold">Balance Financiero</h1>
             <p className="text-muted-foreground">
@@ -586,7 +586,7 @@ export default function Balance() {
                 </TableRow>
               ) : (
                 incomeItems.map((item, index) => (
-                  <TableRow 
+                  <TableRow
                     key={index}
                     className={viewType === "summary" ? "cursor-pointer hover:bg-green-50" : ""}
                     onClick={() => viewType === "summary" && handleCategoryClick(item.concept, "income")}
@@ -638,7 +638,7 @@ export default function Balance() {
                 </TableRow>
               ) : (
                 expenseItems.map((item, index) => (
-                  <TableRow 
+                  <TableRow
                     key={index}
                     className={viewType === "summary" ? "cursor-pointer hover:bg-red-50" : ""}
                     onClick={() => viewType === "summary" && handleCategoryClick(item.concept, "expense")}

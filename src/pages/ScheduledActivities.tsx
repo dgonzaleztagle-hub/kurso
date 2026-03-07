@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Calendar, Plus, CheckCircle, Clock, DollarSign, Gift, AlertCircle, Pencil, Trash2, RotateCcw } from "lucide-react";
+import { Calendar, Plus, CheckCircle, Clock, DollarSign, Gift, AlertCircle, Pencil, Trash2, RotateCcw, Share2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
@@ -333,6 +333,30 @@ export default function ScheduledActivities() {
     setDonationsDialogOpen(true);
   };
 
+  const handleShareDonations = async (activity: ScheduledActivity) => {
+    const donationUrl = `${window.location.origin}/donaciones/${activity.id}`;
+    const shareText = `Selecciona tu donacion para la actividad "${activity.name}".`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: activity.name,
+          text: shareText,
+          url: donationUrl,
+        });
+        toast.success("Enlace de donaciones compartido");
+        return;
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    await navigator.clipboard.writeText(donationUrl);
+    toast.success("Enlace de donaciones copiado");
+  };
+
   const pendingActivities = activities.filter(a => !a.completed);
   const completedActivities = activities.filter(a => a.completed);
 
@@ -422,9 +446,14 @@ export default function ScheduledActivities() {
             <CardContent>
               {activity.is_with_fee && <div className="text-sm">Cuota: ${activity.amount}</div>}
               {activity.is_with_donations && (
-                <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => openDonationsDialog(activity)}>
-                  <Gift className="h-4 w-4 mr-2" /> Gestionar Donaciones
-                </Button>
+                <div className="mt-2 flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openDonationsDialog(activity)}>
+                    <Gift className="h-4 w-4 mr-2" /> Gestionar Donaciones
+                  </Button>
+                  <Button variant="secondary" size="sm" className="flex-1" onClick={() => handleShareDonations(activity)}>
+                    <Share2 className="h-4 w-4 mr-2" /> Compartir Link
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>

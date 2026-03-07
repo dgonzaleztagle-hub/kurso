@@ -49,7 +49,7 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
 
       // Obtener el usuario actual
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) throw new Error("Usuario no encontrado");
 
       // Marcar que ya no es el primer login
@@ -64,7 +64,7 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
       }
 
       toast.success("Contraseña actualizada exitosamente");
-      
+
       // Esperar un poco y recargar los datos del usuario
       await new Promise(resolve => setTimeout(resolve, 300));
       await onPasswordChanged();
@@ -81,7 +81,7 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
           <div className="flex justify-center">
-            <img src={logoImage} alt="Logo Colegio" className="w-24 h-24" />
+
           </div>
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-2">

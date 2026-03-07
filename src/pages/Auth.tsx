@@ -166,7 +166,7 @@ export default function Auth() {
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-4">
             <div className="flex justify-center">
-              <img src={logoImage} alt="Logo Colegio" className="w-24 h-24" />
+
             </div>
             <div className="text-center space-y-2">
               <div className="flex items-center justify-center gap-2">
@@ -223,7 +223,7 @@ export default function Auth() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
           <div className="flex justify-center">
-            <img src={logoImage} alt="Logo Colegio" className="w-24 h-24" />
+
           </div>
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-2">

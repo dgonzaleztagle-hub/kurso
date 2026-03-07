@@ -69,8 +69,8 @@ export default function DebtReports() {
     if (!currentTenant?.id) return;
     try {
       const [studentsResult, activitiesResult] = await Promise.all([
-        supabase.from("students").select("id, first_name, last_name, enrollment_date").eq("tenant_id", currentTenant?.id).order("last_name"),
-        supabase.from("activities").select("*").eq("tenant_id", currentTenant?.id)
+        supabase.from("students" as any).select("id, first_name, last_name, enrollment_date").eq("tenant_id", currentTenant?.id).order("last_name"),
+        supabase.from("activities" as any).select("*").eq("tenant_id", currentTenant?.id)
       ]);
 
       if (studentsResult.error) throw studentsResult.error;
@@ -1015,7 +1015,6 @@ export default function DebtReports() {
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center gap-4">
-        <img src={logoImage} alt="Logo Colegio" className="w-16 h-16" />
         <div>
           <h1 className="text-4xl font-bold">Reportes de Deudas</h1>
           <p className="text-muted-foreground">

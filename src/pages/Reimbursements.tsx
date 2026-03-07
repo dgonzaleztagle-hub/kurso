@@ -301,6 +301,58 @@ export default function Reimbursements() {
     return uploadedProofs;
   };
 
+  const buildExpensePayload = async (reimbursement: ReimbursementWithUser) => {
+    const { data: folioData, error: folioError } = await supabase.rpc('get_next_expense_folio');
+    if (folioError) throw folioError;
+
+    const supplier =
+      reimbursement.type === 'supplier_payment'
+        ? reimbursement.supplier_name || reimbursement.account_info?.holder_name || 'Proveedor'
+        : reimbursement.account_info?.holder_name || 'Rendicion';
+
+    const conceptPrefix = reimbursement.type === 'supplier_payment' ? 'Pago a Proveedor' : 'Rendicion';
+    const expenseDate = new Date().toISOString().split('T')[0];
+
+    return {
+      folio: folioData || 1,
+      tenant_id: currentTenant!.id,
+      supplier,
+      expense_date: expenseDate,
+      amount: reimbursement.amount,
+      concept: reimbursement.folio
+        ? `${conceptPrefix} #${reimbursement.folio}: ${reimbursement.subject}`
+        : `${conceptPrefix}: ${reimbursement.subject}`,
+    };
+  };
+
+  const createExpenseForReimbursement = async (reimbursement: ReimbursementWithUser) => {
+    const insertPayload = await buildExpensePayload(reimbursement);
+    let { error } = await supabase.from('expenses').insert(insertPayload as any);
+
+    // Compatibilidad con esquemas legacy donde expenses usa description en vez de concept
+    if (error?.message?.includes("Could not find the 'concept' column")) {
+      const { concept, ...basePayload } = insertPayload;
+      const retry = await supabase.from('expenses').insert({
+        ...basePayload,
+        description: concept,
+      } as any);
+      error = retry.error;
+    }
+
+    if (error) throw error;
+    return insertPayload.folio;
+  };
+
+  const deleteLinkedExpense = async (expenseFolio: number) => {
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('tenant_id', currentTenant!.id)
+      .eq('folio', expenseFolio);
+
+    if (error) throw error;
+  };
+
   const handleApprove = async () => {
     if (!selectedReimbursement) return;
     if (!currentTenant?.id) {
@@ -311,9 +363,14 @@ export default function Reimbursements() {
     setUploadingProof(true);
     try {
       let paymentProofs = [];
+      let expenseFolio = selectedReimbursement.expense_folio ?? null;
 
       if (proofFiles.length > 0) {
         paymentProofs = await uploadProofs(selectedReimbursement.id);
+      }
+
+      if (!expenseFolio) {
+        expenseFolio = await createExpenseForReimbursement(selectedReimbursement);
       }
 
       const { error } = await supabase
@@ -323,11 +380,17 @@ export default function Reimbursements() {
           processed_by: user?.id,
           processed_at: new Date().toISOString(),
           payment_proof: paymentProofs.length > 0 ? paymentProofs : null,
+          expense_folio: expenseFolio,
         })
         .eq('tenant_id', currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
-      if (error) throw error;
+      if (error) {
+        if (!selectedReimbursement.expense_folio && expenseFolio) {
+          await deleteLinkedExpense(expenseFolio);
+        }
+        throw error;
+      }
 
       // Enviar notificación SMS al creador
       const { data: creatorData } = await supabase
@@ -428,6 +491,10 @@ export default function Reimbursements() {
     }
 
     try {
+      if (selectedReimbursement.expense_folio) {
+        await deleteLinkedExpense(selectedReimbursement.expense_folio);
+      }
+
       const { error } = await supabase
         .from('reimbursements')
         .update({
@@ -436,6 +503,7 @@ export default function Reimbursements() {
           processed_at: null,
           rejection_reason: null,
           payment_proof: null,
+          expense_folio: null,
         })
         .eq('tenant_id', currentTenant?.id)
         .eq('id', selectedReimbursement.id);

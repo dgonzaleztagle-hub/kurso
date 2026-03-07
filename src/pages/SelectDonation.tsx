@@ -61,14 +61,29 @@ export default function SelectDonation() {
       setLoading(true);
 
       // Obtener información de la actividad programada
-      const { data: activityData, error: activityError } = await supabase
-        .from("scheduled_activities")
-        .select("id, name, scheduled_date")
+      let { data: activityData, error: activityError } = await supabase
+        .from("activities")
+        .select("id, name, activity_date")
         .eq("id", activityId)
         .single();
 
+      if (activityError?.message?.includes("relation") || activityError?.message?.includes("activity_date")) {
+        const legacyResult = await supabase
+          .from("scheduled_activities")
+          .select("id, name, scheduled_date")
+          .eq("id", activityId)
+          .single();
+
+        activityData = legacyResult.data as any;
+        activityError = legacyResult.error;
+      }
+
       if (activityError) throw activityError;
-      setActivity(activityData);
+      setActivity({
+        id: activityData.id,
+        name: activityData.name,
+        scheduled_date: activityData.scheduled_date || activityData.activity_date,
+      });
 
       // Cargar TODOS los items de donación de esta actividad
       const { data: allDonations, error: donationsError } = await supabase

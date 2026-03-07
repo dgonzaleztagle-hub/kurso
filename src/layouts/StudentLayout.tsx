@@ -21,13 +21,12 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
             if (studentId) {
                 const { data, error } = await supabase
                     .from('students')
-                    .select('name')
+                    .select('first_name,last_name')
                     .eq('id', studentId)
                     .single();
 
                 if (!error && data) {
-                    const firstName = data.name.split(' ')[0];
-                    setStudentName(firstName);
+                    setStudentName(data.first_name || data.last_name || null);
                 }
             }
         };

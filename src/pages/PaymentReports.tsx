@@ -353,7 +353,6 @@ export default function PaymentReports() {
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center gap-4">
-        <img src={logoImage} alt="Logo Colegio" className="w-16 h-16" />
         <div>
           <h1 className="text-4xl font-bold">Informe de Pagos Realizados</h1>
           <p className="text-muted-foreground">

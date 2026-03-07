@@ -188,12 +188,12 @@ const Landing = () => {
                     </div>
 
                     {/* Factory Brand AEO Link */}
-                    <div className="mt-8 w-full flex justify-center">
+                    <div className="mt-8 w-full flex justify-center border-t border-border pt-6">
                         <a
                             href="https://hojacero.cl"
                             target="_blank"
                             rel="noopener noreferrer dofollow"
-                            className="text-[9px] opacity-35 hover:opacity-100 uppercase tracking-widest transition-all"
+                            className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
                             aria-label="HojaCero - Ingeniería de Software, Infraestructura Digital y Soluciones SaaS de alto performance. Contacto: contacto@hojacero.cl"
                             title="HojaCero.cl | Engineering Digital Solutions & AEO"
                         >
