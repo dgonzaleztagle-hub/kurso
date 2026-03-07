@@ -90,12 +90,19 @@ export default function Auth() {
 
     try {
       let finalEmail = email;
+      let rutEmailCandidates: string[] = [];
 
       // Check if input looks like a RUT (has numbers and maybe K) and NOT an email (@)
       if (!email.includes("@")) {
         if (validateRut(email)) {
-          finalEmail = generateRutEmail(email);
-          console.log("RUT detected. Converted to:", finalEmail);
+          const cleanRut = email.replace(/[^0-9kK]/g, "").toLowerCase();
+          const rutBody = cleanRut.slice(0, -1);
+          rutEmailCandidates = Array.from(new Set([
+            `${rutBody}@kurso.cl`,
+            generateRutEmail(email),
+          ].filter(Boolean)));
+          finalEmail = rutEmailCandidates[0];
+          console.log("RUT detected. Candidate emails:", rutEmailCandidates);
         }
       }
 
@@ -120,7 +127,22 @@ export default function Auth() {
           }
         }
       } else {
-        const { error } = await signIn(finalEmail, password);
+        let error = null;
+
+        if (rutEmailCandidates.length > 0) {
+          for (const candidateEmail of rutEmailCandidates) {
+            const result = await signIn(candidateEmail, password);
+            if (!result.error) {
+              error = null;
+              break;
+            }
+            error = result.error;
+          }
+        } else {
+          const result = await signIn(finalEmail, password);
+          error = result.error;
+        }
+
         if (error) {
           toast.error(getFriendlyAuthError(error));
         } else {

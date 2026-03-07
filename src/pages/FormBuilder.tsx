@@ -259,8 +259,9 @@ export default function FormBuilder() {
 
   const shareForm = async () => {
     const formUrl = `${window.location.origin}/formulario/${id}`;
-    const shareText = `Pre Kinder B le solicita completar el siguiente formulario: "${form.title}"${form.description ? ` - ${form.description}` : ''}`;
-    const clipboardText = `Pre Kinder B le solicita completar el siguiente formulario: "${form.title}"\n${formUrl}`;
+    const requesterName = currentTenant?.name || 'Este curso';
+    const shareText = `${requesterName} le solicita completar el siguiente formulario: "${form.title}"${form.description ? ` - ${form.description}` : ''}`;
+    const clipboardText = `${requesterName} le solicita completar el siguiente formulario: "${form.title}"\n${formUrl}`;
     
     if (navigator.share) {
       try {

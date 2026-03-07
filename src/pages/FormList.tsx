@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Layout } from '@/components/Layout';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface FormWithResponses {
   id: string;
@@ -24,6 +25,7 @@ interface FormWithResponses {
 
 export default function FormList() {
   const navigate = useNavigate();
+  const { currentTenant } = useTenant();
   const [loading, setLoading] = useState(true);
   const [forms, setForms] = useState<FormWithResponses[]>([]);
 
@@ -162,8 +164,9 @@ export default function FormList() {
 
   const shareForm = async (form: FormWithResponses) => {
     const formUrl = `${window.location.origin}/formulario/${form.id}`;
-    const shareText = `Pre Kinder B le solicita completar el siguiente formulario: "${form.title}"${form.description ? ` - ${form.description}` : ''}`;
-    const clipboardText = `Pre Kinder B le solicita completar el siguiente formulario: "${form.title}"\n${formUrl}`;
+    const requesterName = currentTenant?.name || 'Este curso';
+    const shareText = `${requesterName} le solicita completar el siguiente formulario: "${form.title}"${form.description ? ` - ${form.description}` : ''}`;
+    const clipboardText = `${requesterName} le solicita completar el siguiente formulario: "${form.title}"\n${formUrl}`;
     
     if (navigator.share) {
       try {
