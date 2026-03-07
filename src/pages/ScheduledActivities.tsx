@@ -1,28 +1,49 @@
-import { useState, useEffect, useRef } from "react";
-import { Calendar, Plus, CheckCircle, Clock, DollarSign, Gift, AlertCircle, Pencil, Trash2, RotateCcw, Share2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Calendar,
+  CheckCircle,
+  ClipboardList,
+  FileText,
+  Gift,
+  ListPlus,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Share2,
+  Trash2,
+} from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
+import jsPDF from "jspdf";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Progress } from "@/components/ui/progress";
-import { useIsMobile } from "@/hooks/use-mobile";
-import jsPDF from "jspdf";
 import logoImage from "@/assets/logo-colegio.png";
 import firmaImage from "@/assets/firma-directiva.png";
 
 const COMMON_UNITS = [
-  "gramos", "kg", "litros", "ml", "unidades", "paquetes", "cajas", "bolsas", "metros", "otros"
+  "gramos",
+  "kg",
+  "litros",
+  "ml",
+  "unidades",
+  "paquetes",
+  "cajas",
+  "bolsas",
+  "metros",
+  "otros",
 ] as const;
 
 interface ScheduledActivity {
@@ -39,13 +60,13 @@ interface ScheduledActivity {
 }
 
 interface Student {
-  id: string;
+  id: number;
   name: string;
 }
 
 interface Donation {
   id: string;
-  student_id: string | null;
+  student_id: number | null;
   amount: string;
   donated_at: string | null;
   name: string;
@@ -61,30 +82,65 @@ interface DonationItem {
   unit: string;
 }
 
+interface CompletionRate {
+  completed: number;
+  total: number;
+  received: number;
+}
+
+const emptyDonationItem = (): DonationItem => ({ name: "", amount: "", unit: "" });
+
+const parseMetadata = (description: string | null) => {
+  if (!description) return {};
+  try {
+    const parsed = JSON.parse(description);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const buildDescription = (baseDescription: string | null, overrides: Record<string, unknown>) => {
+  const base = parseMetadata(baseDescription);
+  return JSON.stringify({ ...base, ...overrides });
+};
+
+const formatDateLabel = (value: string | null | undefined) => {
+  if (!value) return "Sin fecha";
+  try {
+    return format(parseISO(value), "dd 'de' MMMM 'de' yyyy", { locale: es });
+  } catch {
+    return value;
+  }
+};
+
+const parseNumeric = (value: string | null | undefined) => {
+  const parsed = parseFloat(value || "0");
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function ScheduledActivities() {
   const { userRole } = useAuth();
   const { currentTenant } = useTenant();
-  const isMobile = useIsMobile();
   const [activities, setActivities] = useState<ScheduledActivity[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<ScheduledActivity | null>(null);
-
-  // Donations State
   const [donationsDialogOpen, setDonationsDialogOpen] = useState(false);
+  const [editDonationsDialogOpen, setEditDonationsDialogOpen] = useState(false);
+  const [editStudentDonationDialogOpen, setEditStudentDonationDialogOpen] = useState(false);
+  const [assignDonationDialogOpen, setAssignDonationDialogOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<ScheduledActivity | null>(null);
-  const [donations, setDonations] = useState<any[]>([]);
-  const [activityCompletionRates, setActivityCompletionRates] = useState<Record<string, { completed: number; total: number }>>({});
-
-  // Drawer & Editing Donations
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingDonation, setEditingDonation] = useState<any | null>(null);
-
-  // Form State
-  const [donationItems, setDonationItems] = useState<DonationItem[]>([{ name: '', amount: '', unit: '' }]);
-  const [formDonationScrollRef] = useState<any>(null);
-
+  const [editingDonationsActivity, setEditingDonationsActivity] = useState<ScheduledActivity | null>(null);
+  const [editingStudentDonation, setEditingStudentDonation] = useState<Donation | null>(null);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [eligibleDonationStudents, setEligibleDonationStudents] = useState<Student[]>([]);
+  const [activityCompletionRates, setActivityCompletionRates] = useState<Record<string, CompletionRate>>({});
+  const [donationItems, setDonationItems] = useState<DonationItem[]>([emptyDonationItem()]);
+  const [availableDonationItems, setAvailableDonationItems] = useState<DonationItem[]>([]);
+  const [assignToStudentId, setAssignToStudentId] = useState<number | null>(null);
+  const [assignDonationForm, setAssignDonationForm] = useState<DonationItem>(emptyDonationItem());
   const [formData, setFormData] = useState({
     name: "",
     activity_date: "",
@@ -95,52 +151,53 @@ export default function ScheduledActivities() {
   });
 
   useEffect(() => {
-    if (currentTenant?.id) {
-      fetchActivities();
-      fetchStudents();
-    }
+    if (!currentTenant?.id) return;
+    void fetchActivities();
+    void fetchStudents();
   }, [currentTenant?.id]);
 
   useEffect(() => {
-    if (activities.length > 0 && students.length > 0) {
-      loadCompletionRates();
+    if (!activities.length || !students.length) {
+      setActivityCompletionRates({});
+      return;
     }
+    void loadCompletionRates();
   }, [activities, students]);
 
   const fetchActivities = async () => {
     try {
-      const { data, error } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("tenant_id", currentTenant?.id)
-        .order("activity_date", { ascending: true });
+      let query = supabase.from("activities").select("*").order("activity_date", { ascending: true });
+      const primary = await query.eq("tenant_id", currentTenant?.id as any);
+      let data = primary.data as any[] | null;
+      let error = primary.error;
+
+      if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+        const legacy = await supabase.from("activities").select("*").order("activity_date", { ascending: true });
+        data = legacy.data as any[] | null;
+        error = legacy.error;
+      }
 
       if (error) throw error;
 
-      const mappedActivities: ScheduledActivity[] = (data || []).map((a: any) => {
-        let metadata: any = {};
-        try {
-          metadata = a.description ? JSON.parse(a.description) : {};
-        } catch (e) {
-        }
-
-        return {
-          id: a.id,
-          name: a.name,
-          activity_date: a.activity_date,
-          amount: a.amount,
-          description: a.description,
-          requires_management: metadata.requires_management || false,
-          is_with_fee: a.amount > 0,
-          fee_amount: a.amount,
-          is_with_donations: metadata.is_with_donations || false,
-          completed: metadata.completed || false
-        };
-      });
-
-      setActivities(mappedActivities);
+      setActivities(
+        (data || []).map((activity: any) => {
+          const metadata = parseMetadata(activity.description);
+          return {
+            id: String(activity.id),
+            name: activity.name,
+            activity_date: activity.activity_date,
+            amount: Number(activity.amount || 0),
+            description: activity.description,
+            requires_management: Boolean(metadata.requires_management),
+            is_with_fee: Number(activity.amount || 0) > 0,
+            fee_amount: Number(activity.amount || 0),
+            is_with_donations: Boolean(metadata.is_with_donations),
+            completed: Boolean(metadata.completed),
+          };
+        }),
+      );
     } catch (error: any) {
-      toast.error("Error al cargar actividades");
+      toast.error("Error al cargar actividades: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -148,157 +205,96 @@ export default function ScheduledActivities() {
 
   const fetchStudents = async () => {
     try {
-      const { data, error } = await supabase
-        .from("students")
-        .select("id, first_name, last_name")
-        .eq("tenant_id", currentTenant?.id)
-        .order("last_name");
+      let query = supabase.from("students").select("id, first_name, last_name").order("last_name");
+      const primary = await query.eq("tenant_id", currentTenant?.id as any);
+      let data = primary.data as any[] | null;
+      let error = primary.error;
+
+      if (error?.message?.includes("Could not find the 'tenant_id' column")) {
+        const legacy = await supabase.from("students").select("id, first_name, last_name").order("last_name");
+        data = legacy.data as any[] | null;
+        error = legacy.error;
+      }
 
       if (error) throw error;
-      setStudents((data || []).map(s => ({
-        id: String(s.id),
-        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
-      })));
+
+      setStudents(
+        (data || []).map((student) => ({
+          id: Number(student.id),
+          name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
+        })),
+      );
     } catch (error: any) {
-      toast.error("Error al cargar estudiantes");
+      toast.error("Error al cargar estudiantes: " + error.message);
     }
   };
 
   const loadCompletionRates = async () => {
     try {
-      const rates: Record<string, { completed: number; total: number }> = {};
+      const rates: Record<string, CompletionRate> = {};
+      const [activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
+        supabase.from("activity_exclusions").select("student_id, activity_id"),
+        supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id"),
+      ]);
 
-      const { data: exclusionsData } = await supabase
-        .from("activity_exclusions")
-        .select("student_id, activity_id");
-      const exclusions = exclusionsData || [];
+      const activityExclusions = activityExclusionsResult.data || [];
+      const scheduledExclusions = scheduledExclusionsResult.data || [];
 
       for (const activity of activities) {
-        // Force string comparison to handle mismatch if DB types are number but UUID strings provided
-        const excludedStudents = new Set(
-          exclusions
-            .filter(e => String(e.activity_id) === String(activity.id))
-            .map(e => String(e.student_id))
-        );
+        const excludedStudents = new Set<number>([
+          ...activityExclusions
+            .filter((row) => String(row.activity_id) === String(activity.id))
+            .map((row) => Number(row.student_id)),
+          ...scheduledExclusions
+            .filter((row) => String((row as any).scheduled_activity_id) === String(activity.id))
+            .map((row) => Number(row.student_id)),
+        ]);
 
-        const eligibleStudents = students.filter(s => !excludedStudents.has(s.id));
-        const totalStudents = eligibleStudents.length;
-        let completedCount = 0;
-        let totalCount = totalStudents;
+        const eligibleStudentsCount = students.filter((student) => !excludedStudents.has(student.id)).length;
+        let completed = 0;
+        let total = eligibleStudentsCount;
+        let received = 0;
 
         if (activity.is_with_donations) {
-          const { data: allDonations } = await supabase
+          const { data: donationRows, error } = await supabase
             .from("activity_donations")
-            .select("name, amount, cantidad_original, donated_at, student_id")
-            .eq("scheduled_activity_id", activity.id as any); // Cast to any to avoid activity_id number mismatch if strictly typed
+            .select("name, unit, amount, cantidad_original, donated_at, student_id")
+            .eq("scheduled_activity_id", activity.id as any);
 
-          if (allDonations) {
-            const uniqueItems = new Map<string, number>();
-            allDonations.forEach(donation => {
-              if (!uniqueItems.has(donation.name)) {
-                uniqueItems.set(donation.name, parseFloat(donation.cantidad_original || donation.amount || "0"));
-              }
-            });
-            const totalRequired = Array.from(uniqueItems.values()).reduce((a, b) => a + b, 0);
-            const totalDonated = allDonations.filter(d => d.student_id).reduce((sum, d) => sum + parseFloat(d.amount || "0"), 0);
-            totalCount = totalRequired;
-            completedCount = totalDonated;
-          }
+          if (error) throw error;
+
+          const baseItems = (donationRows || []).filter((row) => row.student_id == null);
+          const assignedItems = (donationRows || []).filter((row) => row.student_id != null);
+
+          total = baseItems.reduce((sum, row) => sum + parseNumeric(row.cantidad_original || row.amount), 0);
+          completed = assignedItems.reduce((sum, row) => sum + parseNumeric(row.amount), 0);
+          received = assignedItems
+            .filter((row) => row.donated_at)
+            .reduce((sum, row) => sum + parseNumeric(row.amount), 0);
         } else if (activity.is_with_fee) {
-          const { data: payments } = await supabase
+          const { data: payments, error } = await supabase
             .from("payments")
             .select("student_id")
-            .eq("activity_id", activity.id as any); // Cast to any to avoid activity_id number mismatch if strictly typed
+            .eq("activity_id", activity.id as any);
 
-          if (payments) {
-            const paidIds = new Set(payments.map(p => String(p.student_id))); // Force string cast
-            completedCount = paidIds.size;
-          }
+          if (error) throw error;
+
+          const paidStudentIds = new Set((payments || []).map((payment) => Number(payment.student_id)));
+          completed = paidStudentIds.size;
+          received = completed;
         }
 
-        rates[activity.id] = { completed: completedCount, total: totalCount };
+        rates[activity.id] = { completed, total, received };
       }
+
       setActivityCompletionRates(rates);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentTenant?.id) {
-      toast.error("No se pudo detectar el curso activo");
-      return;
-    }
-    try {
-      let activityId = editingActivity?.id;
-      const payload = {
-        tenant_id: currentTenant?.id,
-        name: formData.name,
-        amount: formData.is_with_fee && formData.fee_amount ? parseFloat(formData.fee_amount) : 0,
-        activity_date: formData.activity_date,
-        description: JSON.stringify({
-          requires_management: formData.requires_management,
-          is_with_donations: formData.is_with_donations,
-          fee_amount: formData.fee_amount
-        })
-      };
-
-      if (editingActivity) {
-        let { error } = await supabase
-          .from("activities")
-          .update(payload as any)
-          .eq("id", activityId as any)
-          .eq("tenant_id", currentTenant.id); // Cast to any
-
-        // Legacy compatibility: activities without tenant_id column.
-        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-          const { tenant_id, ...legacyPayload } = payload as any;
-          const retry = await supabase.from("activities").update(legacyPayload).eq("id", activityId as any);
-          error = retry.error;
-        }
-
-        if (error) throw error;
-        toast.success("Actividad actualizada");
-      } else {
-        let { data, error } = await supabase.from("activities").insert(payload as any).select().single();
-
-        // Legacy compatibility: activities without tenant_id column.
-        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-          const { tenant_id, ...legacyPayload } = payload as any;
-          const retry = await supabase.from("activities").insert(legacyPayload).select().single();
-          data = retry.data as any;
-          error = retry.error;
-        }
-
-        if (error) throw error;
-        activityId = data.id;
-        toast.success("Actividad creada");
-      }
-
-      if (formData.is_with_donations && donationItems.length > 0 && activityId) {
-        const validItems = donationItems.filter(i => i.name && i.amount);
-        if (validItems.length > 0) {
-          await supabase.from("activity_donations").insert(validItems.map(i => ({
-            scheduled_activity_id: activityId as any, // Cast to any
-            name: i.name,
-            amount: i.amount,
-            cantidad_original: i.amount,
-            unit: i.unit,
-            student_id: null
-          })));
-        }
-      }
-
-      setDialogOpen(false);
-      resetForm();
-      fetchActivities();
-    } catch (error: any) {
-      toast.error("Error: " + error.message);
+    } catch (error) {
+      console.error("Error al cargar tasas de cumplimiento:", error);
     }
   };
 
   const resetForm = () => {
+    setEditingActivity(null);
     setFormData({
       name: "",
       activity_date: "",
@@ -307,11 +303,88 @@ export default function ScheduledActivities() {
       fee_amount: "",
       is_with_donations: false,
     });
-    setDonationItems([{ name: '', amount: '', unit: '' }]);
-    setEditingActivity(null);
+    setDonationItems([emptyDonationItem()]);
   };
 
-  const handleEdit = (activity: ScheduledActivity) => {
+  const replaceBaseDonationItems = async (activityId: string) => {
+    await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activityId).is("student_id", null);
+
+    const validItems = donationItems
+      .filter((item) => item.name.trim() && item.amount.trim())
+      .map((item) => ({
+        scheduled_activity_id: activityId as any,
+        name: item.name.trim(),
+        amount: item.amount.trim(),
+        cantidad_original: item.amount.trim(),
+        unit: item.unit.trim(),
+        student_id: null,
+        donated_at: null,
+      }));
+
+    if (!validItems.length) return;
+
+    const { error } = await supabase.from("activity_donations").insert(validItems as any);
+    if (error) throw error;
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
+
+    try {
+      const nextDescription = buildDescription(editingActivity?.description || null, {
+        requires_management: formData.requires_management,
+        is_with_donations: formData.is_with_donations,
+        fee_amount: formData.fee_amount,
+        completed: editingActivity?.completed || false,
+      });
+
+      const payload: Record<string, unknown> = {
+        tenant_id: currentTenant.id,
+        name: formData.name.trim(),
+        amount: formData.is_with_fee ? Number(formData.fee_amount || 0) : 0,
+        activity_date: formData.activity_date,
+        description: nextDescription,
+      };
+
+      let activityId = editingActivity?.id || "";
+
+      if (editingActivity) {
+        let update = await supabase.from("activities").update(payload as any).eq("id", editingActivity.id as any).eq("tenant_id", currentTenant.id);
+        if (update.error?.message?.includes("Could not find the 'tenant_id' column")) {
+          const { tenant_id, ...legacyPayload } = payload;
+          update = await supabase.from("activities").update(legacyPayload as any).eq("id", editingActivity.id as any);
+        }
+        if (update.error) throw update.error;
+      } else {
+        let insert = await supabase.from("activities").insert(payload as any).select().single();
+        if (insert.error?.message?.includes("Could not find the 'tenant_id' column")) {
+          const { tenant_id, ...legacyPayload } = payload;
+          insert = await supabase.from("activities").insert(legacyPayload as any).select().single();
+        }
+        if (insert.error) throw insert.error;
+        activityId = String((insert.data as any).id);
+      }
+
+      if (formData.is_with_donations && activityId) {
+        await replaceBaseDonationItems(activityId);
+      }
+
+      setDialogOpen(false);
+      resetForm();
+      await fetchActivities();
+      await loadCompletionRates();
+      toast.success(editingActivity ? "Actividad actualizada" : "Actividad creada");
+    } catch (error: any) {
+      toast.error("Error al guardar actividad: " + error.message);
+    }
+  };
+
+  const handleEdit = async (activity: ScheduledActivity) => {
     setEditingActivity(activity);
     setFormData({
       name: activity.name,
@@ -319,18 +392,275 @@ export default function ScheduledActivities() {
       requires_management: activity.requires_management,
       is_with_fee: activity.is_with_fee,
       fee_amount: activity.fee_amount?.toString() || "",
-      is_with_donations: activity.is_with_donations
+      is_with_donations: activity.is_with_donations,
     });
+
+    if (activity.is_with_donations) {
+      const { data } = await supabase
+        .from("activity_donations")
+        .select("name, amount, cantidad_original, unit")
+        .eq("scheduled_activity_id", activity.id as any)
+        .is("student_id", null);
+
+      setDonationItems(
+        data && data.length
+          ? data.map((item) => ({
+              name: item.name || "",
+              amount: item.cantidad_original || item.amount || "",
+              unit: item.unit || "",
+            }))
+          : [emptyDonationItem()],
+      );
+    } else {
+      setDonationItems([emptyDonationItem()]);
+    }
+
     setDialogOpen(true);
   };
 
   const toggleCompleted = async (activity: ScheduledActivity) => {
-    toast.info("Estado de actividad actualizado (simulado)");
+    try {
+      const nextDescription = buildDescription(activity.description, {
+        requires_management: activity.requires_management,
+        is_with_donations: activity.is_with_donations,
+        fee_amount: activity.fee_amount,
+        completed: !activity.completed,
+      });
+
+      let update = await supabase
+        .from("activities")
+        .update({ description: nextDescription } as any)
+        .eq("id", activity.id as any)
+        .eq("tenant_id", currentTenant?.id as any);
+
+      if (update.error?.message?.includes("Could not find the 'tenant_id' column")) {
+        update = await supabase.from("activities").update({ description: nextDescription } as any).eq("id", activity.id as any);
+      }
+
+      if (update.error) throw update.error;
+
+      toast.success(activity.completed ? "Actividad reabierta" : "Actividad finalizada");
+      await fetchActivities();
+    } catch (error: any) {
+      toast.error("Error al actualizar actividad: " + error.message);
+    }
   };
 
-  const openDonationsDialog = (activity: ScheduledActivity) => {
+  const handleDeleteActivity = async (activity: ScheduledActivity) => {
+    try {
+      await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activity.id as any);
+
+      let deletion = await supabase
+        .from("activities")
+        .delete()
+        .eq("id", activity.id as any)
+        .eq("tenant_id", currentTenant?.id as any);
+
+      if (deletion.error?.message?.includes("Could not find the 'tenant_id' column")) {
+        deletion = await supabase.from("activities").delete().eq("id", activity.id as any);
+      }
+
+      if (deletion.error) throw deletion.error;
+
+      toast.success("Actividad eliminada");
+      await fetchActivities();
+    } catch (error: any) {
+      toast.error("Error al eliminar actividad: " + error.message);
+    }
+  };
+
+  const openEditDonationsDialog = async (activity: ScheduledActivity) => {
+    setEditingDonationsActivity(activity);
+
+    try {
+      const { data, error } = await supabase
+        .from("activity_donations")
+        .select("name, amount, cantidad_original, unit")
+        .eq("scheduled_activity_id", activity.id as any)
+        .is("student_id", null);
+
+      if (error) throw error;
+
+      setDonationItems(
+        data && data.length
+          ? data.map((item) => ({
+              name: item.name || "",
+              amount: item.cantidad_original || item.amount || "",
+              unit: item.unit || "",
+            }))
+          : [emptyDonationItem()],
+      );
+      setEditDonationsDialogOpen(true);
+    } catch (error: any) {
+      toast.error("Error al cargar donaciones: " + error.message);
+    }
+  };
+
+  const saveDonationsOnly = async () => {
+    if (!editingDonationsActivity) return;
+
+    try {
+      await replaceBaseDonationItems(editingDonationsActivity.id);
+      setEditDonationsDialogOpen(false);
+      setEditingDonationsActivity(null);
+      await fetchActivities();
+      await loadCompletionRates();
+      toast.success("Items de donaciones actualizados");
+    } catch (error: any) {
+      toast.error("Error al guardar donaciones: " + error.message);
+    }
+  };
+
+  const openDonationsDialog = async (activity: ScheduledActivity) => {
     setSelectedActivity(activity);
-    setDonationsDialogOpen(true);
+
+    try {
+      const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
+        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).not("student_id", "is", null),
+        supabase.from("activity_exclusions").select("student_id, activity_id"),
+        supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id"),
+      ]);
+
+      if (donationsResult.error) throw donationsResult.error;
+
+      const excludedStudents = new Set<number>([
+        ...(activityExclusionsResult.data || [])
+          .filter((row) => String(row.activity_id) === String(activity.id))
+          .map((row) => Number(row.student_id)),
+        ...(scheduledExclusionsResult.data || [])
+          .filter((row) => String((row as any).scheduled_activity_id) === String(activity.id))
+          .map((row) => Number(row.student_id)),
+      ]);
+
+      setDonations((donationsResult.data || []) as Donation[]);
+      setEligibleDonationStudents(students.filter((student) => !excludedStudents.has(student.id)));
+      setDonationsDialogOpen(true);
+    } catch (error: any) {
+      toast.error("Error al cargar donaciones: " + error.message);
+    }
+  };
+
+  const openEditStudentDonationDialog = (donation: Donation) => {
+    setEditingStudentDonation(donation);
+    setEditStudentDonationDialogOpen(true);
+  };
+
+  const handleUpdateStudentDonation = async () => {
+    if (!editingStudentDonation) return;
+
+    try {
+      const payload = {
+        name: editingStudentDonation.name.trim(),
+        amount: editingStudentDonation.amount.trim(),
+        unit: editingStudentDonation.unit.trim(),
+      };
+
+      const { error } = await supabase.from("activity_donations").update(payload).eq("id", editingStudentDonation.id);
+      if (error) throw error;
+
+      setDonations((current) => current.map((donation) => (donation.id === editingStudentDonation.id ? { ...donation, ...payload } : donation)));
+      setEditStudentDonationDialogOpen(false);
+      setEditingStudentDonation(null);
+      await loadCompletionRates();
+      toast.success("Donación actualizada");
+    } catch (error: any) {
+      toast.error("Error al actualizar donación: " + error.message);
+    }
+  };
+
+  const handleDeleteStudentDonation = async (donationId: string) => {
+    try {
+      const { error } = await supabase.from("activity_donations").delete().eq("id", donationId);
+      if (error) throw error;
+
+      setDonations((current) => current.filter((donation) => donation.id !== donationId));
+      await loadCompletionRates();
+      toast.success("Donación eliminada");
+    } catch (error: any) {
+      toast.error("Error al eliminar donación: " + error.message);
+    }
+  };
+
+  const toggleDonationReceived = async (donation: Donation) => {
+    try {
+      const donatedAt = donation.donated_at ? null : new Date().toISOString();
+      const { error } = await supabase.from("activity_donations").update({ donated_at: donatedAt }).eq("id", donation.id);
+      if (error) throw error;
+
+      setDonations((current) => current.map((item) => (item.id === donation.id ? { ...item, donated_at: donatedAt } : item)));
+      await loadCompletionRates();
+      toast.success(donatedAt ? "Donación marcada como recibida" : "Donación marcada como pendiente");
+    } catch (error: any) {
+      toast.error("Error al actualizar estado: " + error.message);
+    }
+  };
+
+  const openAssignDonationDialog = async (studentId: number) => {
+    if (!selectedActivity) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("activity_donations")
+        .select("name, cantidad_original, unit")
+        .eq("scheduled_activity_id", selectedActivity.id as any)
+        .is("student_id", null);
+
+      if (error) throw error;
+
+      setAvailableDonationItems(
+        (data || []).map((item) => ({
+          name: item.name || "",
+          amount: item.cantidad_original || "",
+          unit: item.unit || "",
+        })),
+      );
+      setAssignToStudentId(studentId);
+      setAssignDonationForm(emptyDonationItem());
+      setAssignDonationDialogOpen(true);
+    } catch (error: any) {
+      toast.error("Error al cargar items de donación: " + error.message);
+    }
+  };
+
+  const selectDonationItem = (value: string) => {
+    const item = availableDonationItems.find((candidate) => candidate.name === value);
+    if (!item) return;
+    setAssignDonationForm({
+      name: item.name,
+      amount: "",
+      unit: item.unit,
+    });
+  };
+
+  const handleAssignDonation = async () => {
+    if (!selectedActivity || !assignToStudentId) return;
+    if (!assignDonationForm.name.trim() || !assignDonationForm.amount.trim()) {
+      toast.error("Complete nombre y cantidad");
+      return;
+    }
+
+    try {
+      const payload = {
+        scheduled_activity_id: selectedActivity.id as any,
+        student_id: assignToStudentId,
+        name: assignDonationForm.name.trim(),
+        amount: assignDonationForm.amount.trim(),
+        unit: assignDonationForm.unit.trim(),
+        donated_at: null,
+      };
+
+      const { data, error } = await supabase.from("activity_donations").insert(payload as any).select().single();
+      if (error) throw error;
+
+      setDonations((current) => [...current, data as Donation]);
+      setAssignDonationDialogOpen(false);
+      setAssignToStudentId(null);
+      setAssignDonationForm(emptyDonationItem());
+      await loadCompletionRates();
+      toast.success("Donación asignada");
+    } catch (error: any) {
+      toast.error("Error al asignar donación: " + error.message);
+    }
   };
 
   const handleShareDonations = async (activity: ScheduledActivity) => {
@@ -347,9 +677,7 @@ export default function ScheduledActivities() {
         toast.success("Enlace de donaciones compartido");
         return;
       } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          return;
-        }
+        if ((error as Error).name === "AbortError") return;
       }
     }
 
@@ -357,67 +685,309 @@ export default function ScheduledActivities() {
     toast.success("Enlace de donaciones copiado");
   };
 
-  const pendingActivities = activities.filter(a => !a.completed);
-  const completedActivities = activities.filter(a => a.completed);
+  const exportPendingDonationsPDF = () => {
+    if (!selectedActivity) return;
+
+    const pendingRows = eligibleDonationStudents
+      .map((student) => {
+        const studentDonations = donations.filter((donation) => donation.student_id === student.id);
+        if (studentDonations.length === 0) {
+          return { student, detail: "Sin registrar" };
+        }
+
+        const pending = studentDonations.filter((donation) => !donation.donated_at);
+        if (pending.length === 0) return null;
+
+        return {
+          student,
+          detail: pending.map((donation) => `${donation.name} (${donation.amount} ${donation.unit || ""})`.trim()).join(", "),
+        };
+      })
+      .filter(Boolean) as { student: Student; detail: string }[];
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Donaciones Pendientes", 105, 18, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(selectedActivity.name, 105, 26, { align: "center" });
+    doc.text(`Fecha: ${formatDateLabel(selectedActivity.activity_date)}`, 20, 38);
+    doc.text(`Curso: ${currentTenant?.name || "Mi Kurso"}`, 20, 46);
+    doc.text(`Pendientes: ${pendingRows.length}`, 20, 54);
+
+    let y = 66;
+    doc.setFontSize(9);
+
+    if (!pendingRows.length) {
+      doc.text("No hay donaciones pendientes.", 20, y);
+    } else {
+      pendingRows.forEach((row, index) => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(`${index + 1}. ${row.student.name}`, 20, y);
+        doc.text(row.detail, 90, y);
+        y += 8;
+      });
+    }
+
+    doc.save(`donaciones-pendientes-${selectedActivity.name.replace(/\s+/g, "-")}.pdf`);
+    toast.success("Pendientes exportados a PDF");
+  };
+
+  const handleDownloadDonationsReport = async (activity: ScheduledActivity) => {
+    try {
+      const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
+        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).order("name", { ascending: true }),
+        supabase.from("activity_exclusions").select("student_id, activity_id"),
+        supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id"),
+      ]);
+
+      if (donationsResult.error) throw donationsResult.error;
+
+      const donationsData = (donationsResult.data || []) as Donation[];
+      const excludedStudents = new Set<number>([
+        ...(activityExclusionsResult.data || [])
+          .filter((row) => String(row.activity_id) === String(activity.id))
+          .map((row) => Number(row.student_id)),
+        ...(scheduledExclusionsResult.data || [])
+          .filter((row) => String((row as any).scheduled_activity_id) === String(activity.id))
+          .map((row) => Number(row.student_id)),
+      ]);
+
+      const doc = new jsPDF();
+      doc.addImage(logoImage, "PNG", 15, 10, 26, 18);
+      doc.setFontSize(16);
+      doc.text("Estado de Donaciones", 105, 18, { align: "center" });
+      doc.setFontSize(10);
+      doc.text(currentTenant?.name || "Mi Kurso", 105, 25, { align: "center" });
+      doc.text(formatDateLabel(activity.activity_date), 105, 31, { align: "center" });
+      doc.line(15, 36, 195, 36);
+
+      let y = 46;
+      doc.setFontSize(11);
+      doc.text(`Actividad: ${activity.name}`, 15, y);
+      y += 8;
+
+      const grouped = new Map<string, { name: string; unit: string; total: number; committed: number; received: number }>();
+      donationsData.forEach((donation) => {
+        const key = `${donation.name}|${donation.unit || ""}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            name: donation.name,
+            unit: donation.unit || "",
+            total: 0,
+            committed: 0,
+            received: 0,
+          });
+        }
+        const item = grouped.get(key)!;
+        if (donation.student_id == null) {
+          item.total += parseNumeric(donation.cantidad_original || donation.amount);
+        } else {
+          item.committed += parseNumeric(donation.amount);
+          if (donation.donated_at) item.received += parseNumeric(donation.amount);
+        }
+      });
+
+      const rows = Array.from(grouped.values());
+      if (!rows.length) {
+        doc.setFontSize(10);
+        doc.text("No hay datos de donaciones para esta actividad.", 15, y);
+      } else {
+        rows.forEach((row, index) => {
+          if (y > 260) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.setFontSize(10);
+          doc.text(`${index + 1}. ${row.name}`, 15, y);
+          y += 6;
+          doc.setFontSize(9);
+          doc.text(`Solicitado: ${row.total} ${row.unit}`, 20, y);
+          y += 5;
+          doc.text(`Comprometido: ${row.committed} ${row.unit}`, 20, y);
+          y += 5;
+          doc.text(`Recibido: ${row.received} ${row.unit}`, 20, y);
+          y += 8;
+        });
+      }
+
+      const studentsWhoDonated = new Set(
+        donationsData.filter((donation) => donation.student_id != null).map((donation) => Number(donation.student_id)),
+      );
+      const studentsWithoutDonation = students.filter(
+        (student) => !studentsWhoDonated.has(student.id) && !excludedStudents.has(student.id),
+      );
+
+      if (y > 235) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.text("Alumnos sin donación registrada", 15, y);
+      y += 8;
+      doc.setFontSize(9);
+      if (!studentsWithoutDonation.length) {
+        doc.text("Todos los alumnos tienen al menos una donación registrada.", 20, y);
+        y += 6;
+      } else {
+        studentsWithoutDonation.forEach((student) => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(`- ${student.name}`, 20, y);
+          y += 5;
+        });
+      }
+
+      if (y > 240) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.addImage(firmaImage, "PNG", 15, y + 8, 40, 20);
+      doc.save(`Estado_Cumplimiento_${activity.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success("Reporte de donaciones generado");
+    } catch (error: any) {
+      toast.error("Error al generar reporte: " + error.message);
+    }
+  };
+
+  const getActivityStatus = (activity: ScheduledActivity) => {
+    if (activity.completed) return { label: "Completada", className: "text-green-600 border-green-200" };
+
+    const activityDate = new Date(activity.activity_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    activityDate.setHours(0, 0, 0, 0);
+    const daysUntil = Math.ceil((activityDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysUntil < 0) return { label: "Vencida", className: "text-red-600 border-red-200" };
+    if (daysUntil <= 7) return { label: `Próxima (${daysUntil}d)`, className: "text-orange-600 border-orange-200" };
+    return { label: "Pendiente", className: "text-blue-600 border-blue-200" };
+  };
+
+  const groupedStudentDonations = useMemo(
+    () =>
+      eligibleDonationStudents.map((student) => ({
+        student,
+        donations: donations.filter((donation) => donation.student_id === student.id),
+      })),
+    [donations, eligibleDonationStudents],
+  );
+
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Cargando actividades...</div>;
+  }
 
   return (
     <div className="space-y-6 p-4 md:p-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-3xl font-bold">
             <Calendar className="h-8 w-8" />
             Calendarización de Actividades
           </h1>
-          <p className="text-muted-foreground mt-2">Gestiona y programa actividades escolares</p>
+          <p className="mt-2 text-muted-foreground">Gestiona y programa actividades escolares</p>
         </div>
+
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" /> Nueva Actividad</Button>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Actividad
+            </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingActivity ? 'Editar Actividad' : 'Agendar Nueva Actividad'}</DialogTitle>
-              <DialogDescription>Complete los detalles</DialogDescription>
+              <DialogTitle>{editingActivity ? "Editar Actividad" : "Agendar Nueva Actividad"}</DialogTitle>
+              <DialogDescription>Complete los detalles de la actividad.</DialogDescription>
             </DialogHeader>
+
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Nombre</Label>
-                <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+              <div className="space-y-2">
+                <Label htmlFor="activity-name">Nombre</Label>
+                <Input id="activity-name" value={formData.name} onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))} required />
               </div>
-              <div>
-                <Label>Fecha</Label>
-                <Input type="date" value={formData.activity_date} onChange={e => setFormData({ ...formData, activity_date: e.target.value })} required />
+
+              <div className="space-y-2">
+                <Label htmlFor="activity-date">Fecha</Label>
+                <Input id="activity-date" type="date" value={formData.activity_date} onChange={(event) => setFormData((current) => ({ ...current, activity_date: event.target.value }))} required />
               </div>
-              <div className="flex justify-between items-center">
-                <Label>Pago de Cuota</Label>
-                <Switch checked={formData.is_with_fee} onCheckedChange={c => setFormData({ ...formData, is_with_fee: c })} />
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="requires-management">Requiere gestión</Label>
+                <Switch id="requires-management" checked={formData.requires_management} onCheckedChange={(checked) => setFormData((current) => ({ ...current, requires_management: checked }))} />
               </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="with-fee">Es con cuota</Label>
+                <Switch id="with-fee" checked={formData.is_with_fee} onCheckedChange={(checked) => setFormData((current) => ({ ...current, is_with_fee: checked }))} />
+              </div>
+
               {formData.is_with_fee && (
-                <div>
-                  <Label>Monto</Label>
-                  <Input type="number" value={formData.fee_amount} onChange={e => setFormData({ ...formData, fee_amount: e.target.value })} />
+                <div className="space-y-2">
+                  <Label htmlFor="fee-amount">Monto cuota</Label>
+                  <Input id="fee-amount" type="number" value={formData.fee_amount} onChange={(event) => setFormData((current) => ({ ...current, fee_amount: event.target.value }))} />
                 </div>
               )}
-              <div className="flex justify-between items-center">
-                <Label>Solicitar Donaciones</Label>
-                <Switch checked={formData.is_with_donations} onCheckedChange={c => setFormData({ ...formData, is_with_donations: c })} />
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="with-donations">Solicitar donaciones</Label>
+                <Switch id="with-donations" checked={formData.is_with_donations} onCheckedChange={(checked) => setFormData((current) => ({ ...current, is_with_donations: checked }))} />
               </div>
+
               {formData.is_with_donations && (
-                <div className="border p-2 rounded">
-                  <Label>Items</Label>
-                  {donationItems.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 mt-2">
-                      <Input placeholder="Nombre" value={item.name} onChange={e => {
-                        const n = [...donationItems]; n[idx].name = e.target.value; setDonationItems(n);
-                      }} />
-                      <Input type="number" placeholder="Cant" className="w-20" value={item.amount} onChange={e => {
-                        const n = [...donationItems]; n[idx].amount = e.target.value; setDonationItems(n);
-                      }} />
+                <div className="space-y-3 rounded-md border p-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Items de donación</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setDonationItems((current) => [...current, emptyDonationItem()])}>
+                      <Plus className="mr-1 h-4 w-4" />
+                      Agregar
+                    </Button>
+                  </div>
+
+                  {donationItems.map((item, index) => (
+                    <div key={`form-item-${index}`} className="grid gap-2 rounded-md border p-3">
+                      <div className="space-y-2">
+                        <Label>Nombre del item</Label>
+                        <Input value={item.name} onChange={(event) => setDonationItems((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, name: event.target.value } : candidate))} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-2">
+                          <Label>Cantidad</Label>
+                          <Input value={item.amount} onChange={(event) => setDonationItems((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, amount: event.target.value } : candidate))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Unidad</Label>
+                          <Select value={item.unit} onValueChange={(value) => setDonationItems((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, unit: value } : candidate))}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Unidad" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COMMON_UNITS.map((unit) => (
+                                <SelectItem key={unit} value={unit}>
+                                  {unit}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {donationItems.length > 1 && (
+                        <Button type="button" variant="ghost" size="sm" className="justify-start text-destructive" onClick={() => setDonationItems((current) => current.filter((_, candidateIndex) => candidateIndex !== index))}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Quitar item
+                        </Button>
+                      )}
                     </div>
                   ))}
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setDonationItems([...donationItems, { name: '', amount: '', unit: '' }])}>+ Agregar</Button>
                 </div>
               )}
+
               <DialogFooter>
                 <Button type="submit">Guardar</Button>
               </DialogFooter>
@@ -426,39 +996,358 @@ export default function ScheduledActivities() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {activities.map(activity => (
-          <Card key={activity.id}>
-            <CardHeader>
-              <CardTitle className="text-lg flex justify-between">
-                {activity.name}
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => handleEdit(activity)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => toggleCompleted(activity)}>
-                    {activity.completed ? <RotateCcw className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                  </Button>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {activities.map((activity) => {
+          const status = getActivityStatus(activity);
+          const rate = activityCompletionRates[activity.id];
+          const completionPercentage = rate?.total ? Math.min(100, Math.round((rate.completed / rate.total) * 100)) : 0;
+
+          return (
+            <Card key={activity.id}>
+              <CardHeader className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-xl">{activity.name}</CardTitle>
+                    <CardDescription className="mt-2">{formatDateLabel(activity.activity_date)}</CardDescription>
+                  </div>
+                  <Badge variant="outline" className={status.className}>
+                    {status.label}
+                  </Badge>
                 </div>
-              </CardTitle>
-              <CardDescription>{activity.activity_date}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {activity.is_with_fee && <div className="text-sm">Cuota: ${activity.amount}</div>}
-              {activity.is_with_donations && (
-                <div className="mt-2 flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openDonationsDialog(activity)}>
-                    <Gift className="h-4 w-4 mr-2" /> Gestionar Donaciones
-                  </Button>
-                  <Button variant="secondary" size="sm" className="flex-1" onClick={() => handleShareDonations(activity)}>
-                    <Share2 className="h-4 w-4 mr-2" /> Compartir Link
-                  </Button>
+
+                <div className="flex flex-wrap gap-2">
+                  {activity.is_with_fee && <Badge variant="secondary">Cuota ${Number(activity.amount).toLocaleString("es-CL")}</Badge>}
+                  {activity.is_with_donations && <Badge className="bg-green-600 hover:bg-green-600">Donaciones</Badge>}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                {(activity.is_with_donations || activity.is_with_fee) && rate && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Nivel de cumplimiento</span>
+                      <span className="font-medium">
+                        {rate.completed}/{rate.total} ({completionPercentage}%)
+                      </span>
+                    </div>
+                    <Progress value={completionPercentage} className="h-2" />
+                    {activity.is_with_donations && <p className="text-xs text-muted-foreground">Recibido: {rate.received} de {rate.total}</p>}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => toggleCompleted(activity)} disabled={activity.completed && userRole !== "master"} title={activity.completed && userRole !== "master" ? "Solo el master puede reabrir actividades cerradas" : ""}>
+                    {activity.completed ? <RotateCcw className="mr-2 h-4 w-4" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                    {activity.completed ? "Reabrir" : "Cerrar"}
+                  </Button>
+
+                  {activity.is_with_donations && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => openEditDonationsDialog(activity)}>
+                        <ListPlus className="mr-2 h-4 w-4" />
+                        Items
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => openDonationsDialog(activity)}>
+                        <Gift className="mr-2 h-4 w-4" />
+                        Donaciones
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadDonationsReport(activity)}>
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        Informe
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => handleShareDonations(activity)}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Compartir
+                      </Button>
+                    </>
+                  )}
+
+                  <Button variant="ghost" size="sm" onClick={() => void handleEdit(activity)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Editar
+                  </Button>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Eliminar actividad</AlertDialogTitle>
+                        <AlertDialogDescription>Se eliminará la actividad y sus registros de donaciones asociados.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDeleteActivity(activity)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      <Dialog open={editDonationsDialogOpen} onOpenChange={setEditDonationsDialogOpen}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Donaciones Pre-cargadas</DialogTitle>
+            <DialogDescription>{editingDonationsActivity?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {donationItems.map((item, index) => (
+              <div key={`edit-item-${index}`} className="grid gap-3 rounded-md border p-3">
+                <div className="space-y-2">
+                  <Label>Item</Label>
+                  <Input value={item.name} onChange={(event) => setDonationItems((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, name: event.target.value } : candidate))} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Cantidad</Label>
+                    <Input value={item.amount} onChange={(event) => setDonationItems((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, amount: event.target.value } : candidate))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unidad</Label>
+                    <Select value={item.unit} onValueChange={(value) => setDonationItems((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, unit: value } : candidate))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMMON_UNITS.map((unit) => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {donationItems.length > 1 && (
+                  <Button type="button" variant="ghost" size="sm" className="justify-start text-destructive" onClick={() => setDonationItems((current) => current.filter((_, candidateIndex) => candidateIndex !== index))}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Eliminar item
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="outline" onClick={() => setDonationItems((current) => [...current, emptyDonationItem()])}>
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar item
+            </Button>
+            <Button type="button" onClick={saveDonationsOnly}>
+              Guardar cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={donationsDialogOpen} onOpenChange={setDonationsDialogOpen}>
+        <DialogContent className="max-h-[90vh] max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Donaciones - {selectedActivity?.name}</DialogTitle>
+            <DialogDescription>Toca un alumno para registrar su donación.</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={exportPendingDonationsPDF}>
+              <FileText className="mr-2 h-4 w-4" />
+              Exportar Pendientes
+            </Button>
+          </div>
+
+          <ScrollArea className="h-[60vh] pr-4">
+            <div className="space-y-3">
+              {groupedStudentDonations.map(({ student, donations: studentDonations }) => (
+                <Card key={student.id}>
+                  <CardContent className="space-y-3 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{student.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {studentDonations.length === 0 ? "Sin registrar" : `${studentDonations.length} donación(es) registradas`}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => openAssignDonationDialog(student.id)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Asignar
+                      </Button>
+                    </div>
+
+                    {studentDonations.length > 0 && (
+                      <div className="space-y-2">
+                        {studentDonations.map((donation) => (
+                          <div key={donation.id} className="rounded-md border p-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-medium">{donation.name}</span>
+                                  <Badge variant="outline">
+                                    {donation.amount} {donation.unit}
+                                  </Badge>
+                                  <Badge variant="outline" className={donation.donated_at ? "text-green-600" : "text-amber-600"}>
+                                    {donation.donated_at ? "Recibida" : "Asignada"}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {donation.donated_at ? `Recibida el ${formatDateLabel(donation.donated_at)}` : "Pendiente de entrega"}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" size="sm" onClick={() => toggleDonationReceived(donation)}>
+                                  {donation.donated_at ? <RotateCcw className="mr-2 h-4 w-4" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                  {donation.donated_at ? "Marcar pendiente" : "Marcar recibida"}
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => openEditStudentDonationDialog(donation)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Editar
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Eliminar
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Eliminar compromiso</AlertDialogTitle>
+                                      <AlertDialogDescription>Se eliminará el compromiso de donación de {student.name}.</AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDeleteStudentDonation(donation.id)}>
+                                        Eliminar
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editStudentDonationDialogOpen} onOpenChange={setEditStudentDonationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Donación</DialogTitle>
+            <DialogDescription>Actualice el compromiso del alumno.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Item</Label>
+              <Input value={editingStudentDonation?.name || ""} onChange={(event) => setEditingStudentDonation((current) => current ? { ...current, name: event.target.value } : current)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Cantidad</Label>
+                <Input value={editingStudentDonation?.amount || ""} onChange={(event) => setEditingStudentDonation((current) => current ? { ...current, amount: event.target.value } : current)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Unidad</Label>
+                <Select value={editingStudentDonation?.unit || ""} onValueChange={(value) => setEditingStudentDonation((current) => current ? { ...current, unit: value } : current)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Unidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMON_UNITS.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditStudentDonationDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleUpdateStudentDonation}>
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignDonationDialogOpen} onOpenChange={setAssignDonationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Asignar Donación</DialogTitle>
+            <DialogDescription>{students.find((student) => student.id === assignToStudentId)?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {availableDonationItems.length > 0 && (
+              <div className="space-y-2">
+                <Label>Seleccionar item pre-cargado</Label>
+                <Select onValueChange={selectDonationItem}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione un item..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableDonationItems.map((item, index) => (
+                      <SelectItem key={`${item.name}-${index}`} value={item.name}>
+                        {item.name} ({item.amount} {item.unit})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Nombre del item</Label>
+              <Input value={assignDonationForm.name} onChange={(event) => setAssignDonationForm((current) => ({ ...current, name: event.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Cantidad</Label>
+                <Input value={assignDonationForm.amount} onChange={(event) => setAssignDonationForm((current) => ({ ...current, amount: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Unidad</Label>
+                <Select value={assignDonationForm.unit} onValueChange={(value) => setAssignDonationForm((current) => ({ ...current, unit: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Unidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMON_UNITS.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAssignDonationDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleAssignDonation}>
+              Asignar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
