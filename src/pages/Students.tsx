@@ -206,7 +206,7 @@ export default function Students() {
       loadStudents(); // Refresh to see changes if any status update visual exists
     } catch (error: any) {
       console.error("Error generating accounts:", error);
-      toast.error("Error al generar cuentas. Asegurese de haber ejecutado el Script SQL de Solución.");
+      toast.error("Error al generar cuentas.");
     } finally {
       setGeneratingAccounts(false);
     }
