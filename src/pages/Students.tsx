@@ -142,10 +142,17 @@ export default function Students() {
       if (createAccount && studentData) {
         try {
           toast.info("Generando cuenta de acceso...");
+          const { data: authData } = await supabase.auth.getSession();
+          const accessToken = authData.session?.access_token;
+          if (!accessToken) throw new Error("Sesión no válida. Vuelva a iniciar sesión.");
+
           const { data: accountResult, error: fnError } = await supabase.functions.invoke('create-student-accounts', {
             body: {
               tenantId: currentTenant.id,
               studentId: studentData.id,
+            },
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
             },
           });
           if (fnError) throw fnError;
@@ -176,10 +183,17 @@ export default function Students() {
     if (!currentTenant) return;
     setGeneratingAccounts(true);
     try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) throw new Error("Sesión no válida. Vuelva a iniciar sesión.");
+
       // Batch and single-account creation are unified in edge function logic
       const { data, error } = await supabase.functions.invoke('create-student-accounts', {
         body: {
           tenantId: currentTenant.id,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
