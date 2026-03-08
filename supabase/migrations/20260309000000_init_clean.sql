@@ -557,6 +557,109 @@ using (
 -- SOURCE: 20260305_fix_has_role_owner_alias.sql
 -- ============================================================================
 
+-- Compat: asegurar valores legacy del enum app_role usados por funciones/policies
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'app_role') THEN
+    ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'master';
+    ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'alumnos';
+  END IF;
+END $$;
+
+-- Compat: tablas legacy requeridas por AuthContext y funciones edge
+CREATE TABLE IF NOT EXISTS public.user_roles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE REFERENCES public.app_users(id) ON DELETE CASCADE,
+  role public.app_role NOT NULL,
+  user_name text,
+  position text,
+  phone text,
+  first_login boolean DEFAULT true,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_students (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  display_name text,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (user_id, student_id)
+);
+
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_students ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own role" ON public.user_roles;
+CREATE POLICY "Users can view their own role"
+ON public.user_roles FOR SELECT
+USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Admins and owners can manage roles" ON public.user_roles;
+CREATE POLICY "Admins and owners can manage roles"
+ON public.user_roles FOR ALL
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.tenant_members tm
+    WHERE tm.user_id = auth.uid()
+      AND COALESCE(tm.status, 'active') = 'active'
+      AND tm.role IN ('owner'::public.app_role, 'master'::public.app_role, 'admin'::public.app_role)
+  )
+  OR EXISTS (
+    SELECT 1 FROM public.app_users au WHERE au.id = auth.uid() AND au.is_superadmin = true
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.tenant_members tm
+    WHERE tm.user_id = auth.uid()
+      AND COALESCE(tm.status, 'active') = 'active'
+      AND tm.role IN ('owner'::public.app_role, 'master'::public.app_role, 'admin'::public.app_role)
+  )
+  OR EXISTS (
+    SELECT 1 FROM public.app_users au WHERE au.id = auth.uid() AND au.is_superadmin = true
+  )
+);
+
+DROP POLICY IF EXISTS "Users can view their own student links" ON public.user_students;
+CREATE POLICY "Users can view their own student links"
+ON public.user_students FOR SELECT
+USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Admins and owners can manage student links" ON public.user_students;
+CREATE POLICY "Admins and owners can manage student links"
+ON public.user_students FOR ALL
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.tenant_members tm
+    JOIN public.students s ON s.tenant_id = tm.tenant_id
+    WHERE tm.user_id = auth.uid()
+      AND COALESCE(tm.status, 'active') = 'active'
+      AND tm.role IN ('owner'::public.app_role, 'master'::public.app_role, 'admin'::public.app_role)
+      AND s.id = user_students.student_id
+  )
+  OR EXISTS (
+    SELECT 1 FROM public.app_users au WHERE au.id = auth.uid() AND au.is_superadmin = true
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.tenant_members tm
+    JOIN public.students s ON s.tenant_id = tm.tenant_id
+    WHERE tm.user_id = auth.uid()
+      AND COALESCE(tm.status, 'active') = 'active'
+      AND tm.role IN ('owner'::public.app_role, 'master'::public.app_role, 'admin'::public.app_role)
+      AND s.id = user_students.student_id
+  )
+  OR EXISTS (
+    SELECT 1 FROM public.app_users au WHERE au.id = auth.uid() AND au.is_superadmin = true
+  )
+);
+
 /*
   Fix has_role for owner compatibility
   ------------------------------------
