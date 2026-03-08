@@ -102,14 +102,11 @@ export default function Auth() {
           const rutBody = cleanRut.slice(0, -1); // Solo números del cuerpo
           const dv = cleanRut.slice(-1); // Dígito verificador
 
-          // 3 formatos posibles según la versión de generate_missing_accounts:
-          // v1/migration: cuerpo@kurso.cl (ej: 12691078@kurso.cl)
-          // v6: cuerpo-dv@kurso.cl (ej: 12691078-9@kurso.cl) 
-          // generateRutEmail: cuerpodv@kurso.cl (ej: 126910789@kurso.cl)
+          // Formato único para fantasy domain: rut@estudiantes.kurso
           rutEmailCandidates = Array.from(new Set([
-            `${rutBody}@kurso.cl`,           // Formato migration (sin DV)
-            `${rutBody}-${dv}@kurso.cl`,     // Formato v6 (con guión)
-            generateRutEmail(email),          // Formato completo (sin guión)
+            `${rutBody}@estudiantes.kurso`,           // Formato principal (sin DV)
+            `${rutBody}-${dv}@estudiantes.kurso`,     // Formato con DV (fallback)
+            `${rutBody}${dv}@estudiantes.kurso`,      // Formato sin guión (fallback)
           ].filter(Boolean)));
 
           rutPasswordCandidates = Array.from(new Set([
