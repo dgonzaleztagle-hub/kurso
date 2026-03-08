@@ -29,7 +29,7 @@ interface Payment {
   student_name: string | null;
   concept: string;
   amount: number;
-  activity_id?: string;
+  activity_id?: number | null;
 }
 
 interface Activity {

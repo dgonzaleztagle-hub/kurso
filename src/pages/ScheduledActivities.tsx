@@ -169,8 +169,8 @@ export default function ScheduledActivities() {
 
   const fetchActivities = async () => {
     try {
-      let query = supabase.from("activities").select("*").order("activity_date", { ascending: true });
-      const primary = await query.eq("tenant_id", currentTenant?.id as any);
+      let query: any = supabase.from("activities").select("*").order("activity_date", { ascending: true });
+      const primary = await query.eq("tenant_id", currentTenant?.id);
       let data = primary.data as any[] | null;
       let error = primary.error;
 
@@ -260,7 +260,7 @@ export default function ScheduledActivities() {
         let total = eligibleStudentsCount;
         let received = 0;
 
-        if (activity.is_with_donations) {
+        if (activity.is_with_donations && isUuid(activity.id)) {
           const { data: donationRows, error } = await supabase
             .from("activity_donations")
             .select("name, unit, amount, cantidad_original, donated_at, student_id")
@@ -359,7 +359,7 @@ export default function ScheduledActivities() {
       let activityId = editingActivity?.id || "";
 
       if (editingActivity) {
-        let update = await supabase.from("activities").update(payload as any).eq("id", editingActivity.id as any).eq("tenant_id", currentTenant.id);
+        let update = await (supabase.from("activities") as any).update(payload).eq("id", editingActivity.id).eq("tenant_id", currentTenant.id);
         if (update.error?.message?.includes("Could not find the 'tenant_id' column")) {
           const { tenant_id, ...legacyPayload } = payload;
           update = await supabase.from("activities").update(legacyPayload as any).eq("id", editingActivity.id as any);
@@ -410,10 +410,10 @@ export default function ScheduledActivities() {
       setDonationItems(
         data && data.length
           ? data.map((item) => ({
-              name: item.name || "",
-              amount: item.cantidad_original || item.amount || "",
-              unit: item.unit || "",
-            }))
+            name: item.name || "",
+            amount: item.cantidad_original || item.amount || "",
+            unit: item.unit || "",
+          }))
           : [emptyDonationItem()],
       );
     } else {
@@ -477,6 +477,13 @@ export default function ScheduledActivities() {
   const openEditDonationsDialog = async (activity: ScheduledActivity) => {
     setEditingDonationsActivity(activity);
 
+    // Si el ID no es UUID, activity_donations no puede filtrar por él
+    if (!isUuid(activity.id)) {
+      setDonationItems([emptyDonationItem()]);
+      setEditDonationsDialogOpen(true);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from("activity_donations")
@@ -489,10 +496,10 @@ export default function ScheduledActivities() {
       setDonationItems(
         data && data.length
           ? data.map((item) => ({
-              name: item.name || "",
-              amount: item.cantidad_original || item.amount || "",
-              unit: item.unit || "",
-            }))
+            name: item.name || "",
+            amount: item.cantidad_original || item.amount || "",
+            unit: item.unit || "",
+          }))
           : [emptyDonationItem()],
       );
       setEditDonationsDialogOpen(true);
@@ -518,6 +525,14 @@ export default function ScheduledActivities() {
 
   const openDonationsDialog = async (activity: ScheduledActivity) => {
     setSelectedActivity(activity);
+
+    // Si el ID no es UUID, activity_donations no puede filtrar por él
+    if (!isUuid(activity.id)) {
+      setDonations([]);
+      setEligibleDonationStudents(students);
+      setDonationsDialogOpen(true);
+      return;
+    }
 
     try {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
@@ -743,6 +758,12 @@ export default function ScheduledActivities() {
   };
 
   const handleDownloadDonationsReport = async (activity: ScheduledActivity) => {
+    // Si el ID no es UUID, activity_donations no puede filtrar por él
+    if (!isUuid(activity.id)) {
+      toast.error("No se pueden generar reportes de donaciones para actividades con ID numérico");
+      return;
+    }
+
     try {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).order("name", { ascending: true }),

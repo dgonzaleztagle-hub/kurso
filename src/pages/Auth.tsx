@@ -99,18 +99,26 @@ export default function Auth() {
       if (!email.includes("@")) {
         if (validateRut(email)) {
           const cleanRut = email.replace(/[^0-9kK]/g, "").toLowerCase();
-          const rutBody = cleanRut.slice(0, -1);
+          const rutBody = cleanRut.slice(0, -1); // Solo números del cuerpo
+          const dv = cleanRut.slice(-1); // Dígito verificador
+
+          // 3 formatos posibles según la versión de generate_missing_accounts:
+          // v1/migration: cuerpo@kurso.cl (ej: 12691078@kurso.cl)
+          // v6: cuerpo-dv@kurso.cl (ej: 12691078-9@kurso.cl) 
+          // generateRutEmail: cuerpodv@kurso.cl (ej: 126910789@kurso.cl)
           rutEmailCandidates = Array.from(new Set([
-            `${rutBody}@kurso.cl`,
-            generateRutEmail(email),
+            `${rutBody}@kurso.cl`,           // Formato migration (sin DV)
+            `${rutBody}-${dv}@kurso.cl`,     // Formato v6 (con guión)
+            generateRutEmail(email),          // Formato completo (sin guión)
           ].filter(Boolean)));
+
           rutPasswordCandidates = Array.from(new Set([
             password,
             rutBody.length >= 6 ? rutBody.substring(0, 6) : password,
             rutBody.length >= 4 ? rutBody.substring(0, 4) : password,
           ].filter(Boolean)));
           finalEmail = rutEmailCandidates[0];
-          console.log("RUT detected. Candidate emails:", rutEmailCandidates);
+          console.log("RUT detected. Candidate emails:", rutEmailCandidates, "Candidate passwords:", rutPasswordCandidates.map(p => p.substring(0, 2) + '***'));
         }
       }
 

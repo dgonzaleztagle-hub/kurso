@@ -112,15 +112,16 @@ export default function Reimbursements() {
 
   const fetchReimbursements = async () => {
     try {
-      const { data: reimbursementsData, error } = await supabase
-        .from('reimbursements')
+      // tenant_id exists in DB but not in generated types
+      const { data: reimbursementsData, error } = await (supabase
+        .from('reimbursements') as any)
         .select('*')
         .eq('tenant_id', currentTenant?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const userIds = [...new Set(reimbursementsData?.map(r => r.user_id) || [])];
+      const userIds: string[] = [...new Set<string>(reimbursementsData?.map((r: any) => r.user_id as string) || [])];
 
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
@@ -240,10 +241,11 @@ export default function Reimbursements() {
       if (files.length > 0) {
         const uploadedFiles = await uploadFiles(data.id);
 
+        // @ts-ignore - tenant_id exists in DB but not in generated types
         const { error: updateError } = await supabase
           .from('reimbursements')
           .update({ attachments: uploadedFiles })
-          .eq('tenant_id', resolvedTenantId)
+          .eq('tenant_id' as any, resolvedTenantId)
           .eq('id', data.id);
 
         if (updateError) throw updateError;
@@ -389,8 +391,9 @@ export default function Reimbursements() {
   };
 
   const deleteLinkedExpense = async (expenseFolio: number) => {
-    const { error } = await supabase
-      .from('expenses')
+    // tenant_id exists in DB but not in generated types
+    const { error } = await (supabase
+      .from('expenses') as any)
       .delete()
       .eq('tenant_id', currentTenant!.id)
       .eq('folio', expenseFolio);
@@ -427,7 +430,7 @@ export default function Reimbursements() {
           payment_proof: paymentProofs.length > 0 ? paymentProofs : null,
           expense_folio: expenseFolio,
         })
-        .eq('tenant_id', currentTenant?.id)
+        .eq('tenant_id' as any, currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) {
@@ -490,7 +493,7 @@ export default function Reimbursements() {
           processed_at: new Date().toISOString(),
           rejection_reason: rejectionReason,
         })
-        .eq('tenant_id', currentTenant?.id)
+        .eq('tenant_id' as any, currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -550,7 +553,7 @@ export default function Reimbursements() {
           payment_proof: null,
           expense_folio: null,
         })
-        .eq('tenant_id', currentTenant?.id)
+        .eq('tenant_id' as any, currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -574,10 +577,11 @@ export default function Reimbursements() {
     try {
       // Si tiene egreso asociado, eliminarlo primero
       if (selectedReimbursement.expense_folio) {
+        // @ts-ignore - tenant_id exists in DB but not in generated types
         const { error: expenseError } = await supabase
           .from('expenses')
           .delete()
-          .eq('tenant_id', currentTenant?.id)
+          .eq('tenant_id' as any, currentTenant?.id)
           .eq('folio', selectedReimbursement.expense_folio);
 
         if (expenseError) {
@@ -590,7 +594,7 @@ export default function Reimbursements() {
       const { error } = await supabase
         .from('reimbursements')
         .delete()
-        .eq('tenant_id', currentTenant?.id)
+        .eq('tenant_id' as any, currentTenant?.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;

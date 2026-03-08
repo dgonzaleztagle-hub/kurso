@@ -126,6 +126,7 @@ export default function Students() {
         try {
           toast.info("Generando cuenta de acceso...");
           // Use the DB RPC instead of the Edge Function
+          // @ts-ignore - RPC function exists in DB but not in generated types
           const { error: rpcError } = await supabase.rpc('generate_missing_accounts', {
             p_tenant_id: currentTenant.id
           });
