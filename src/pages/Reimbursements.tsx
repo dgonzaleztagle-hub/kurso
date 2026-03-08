@@ -326,62 +326,7 @@ export default function Reimbursements() {
 
   const createExpenseForReimbursement = async (reimbursement: ReimbursementWithUser) => {
     const insertPayload = await buildExpensePayload(reimbursement);
-    let { error } = await supabase.from('expenses').insert(insertPayload as any);
-
-    // Compatibilidad con esquemas legacy donde expenses usa description en vez de concept
-    if (error?.message?.includes("Could not find the 'concept' column")) {
-      const { concept, ...basePayload } = insertPayload;
-      const retry = await supabase.from('expenses').insert({
-        ...basePayload,
-        description: concept,
-      } as any);
-      error = retry.error;
-    }
-
-    // Esquemas legacy pueden no tener supplier.
-    if (error?.message?.includes("Could not find the 'supplier' column")) {
-      const { supplier, concept, ...basePayload } = insertPayload;
-      const retryNoSupplier = await supabase.from('expenses').insert({
-        ...basePayload,
-        description: `${concept}${supplier ? ` | Destinatario: ${supplier}` : ""}`,
-      } as any);
-      error = retryNoSupplier.error;
-    }
-
-    // Compatibilidad con esquemas legacy donde expenses no tiene tenant_id.
-    if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-      const retryPayloads: any[] = [
-        {
-          folio: insertPayload.folio,
-          supplier: insertPayload.supplier,
-          expense_date: insertPayload.expense_date,
-          amount: insertPayload.amount,
-          concept: insertPayload.concept,
-        },
-        {
-          folio: insertPayload.folio,
-          supplier: insertPayload.supplier,
-          expense_date: insertPayload.expense_date,
-          amount: insertPayload.amount,
-          description: insertPayload.concept,
-        },
-        {
-          folio: insertPayload.folio,
-          expense_date: insertPayload.expense_date,
-          amount: insertPayload.amount,
-          description: `${insertPayload.concept}${insertPayload.supplier ? ` | Destinatario: ${insertPayload.supplier}` : ""}`,
-        },
-      ];
-
-      for (const payload of retryPayloads) {
-        const retry = await supabase.from('expenses').insert(payload);
-        if (!retry.error) {
-          error = null;
-          break;
-        }
-        error = retry.error;
-      }
-    }
+    const { error } = await supabase.from('expenses').insert(insertPayload as any);
 
     if (error) throw error;
     return insertPayload.folio;
