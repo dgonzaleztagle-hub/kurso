@@ -127,7 +127,7 @@ export default function OrganizationDetail() {
         try {
             const { error } = await supabase
                 .from('tenants')
-                .update({ subscription_status: 'canceled' } as any)
+                .update({ subscription_status: 'canceled' })
                 .eq('id', selectedTenant.id);
 
             if (error) throw error;

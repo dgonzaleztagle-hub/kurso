@@ -111,7 +111,7 @@ export default function UserManagement() {
       }
 
       // SECURE CALL: Pass Tenant ID
-      const { data, error } = await supabase.rpc('get_users_by_tenant' as any, {
+      const { data, error } = await supabase.rpc('get_users_by_tenant', {
         target_tenant_id: currentTenant.id
       });
 
