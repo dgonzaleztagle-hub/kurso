@@ -933,7 +933,7 @@ FOR SELECT
 TO public
 USING (
   user_id = auth.uid()
-  OR auth_is_superadmin()
+  OR public.check_is_superadmin()
   OR EXISTS (
     SELECT 1
     FROM public.tenants t
@@ -955,7 +955,7 @@ ON public.tenant_members
 FOR INSERT
 TO public
 WITH CHECK (
-  auth_is_superadmin()
+  public.check_is_superadmin()
   OR EXISTS (
     SELECT 1
     FROM public.tenants t
@@ -977,7 +977,7 @@ ON public.tenant_members
 FOR UPDATE
 TO public
 USING (
-  auth_is_superadmin()
+  public.check_is_superadmin()
   OR EXISTS (
     SELECT 1
     FROM public.tenants t
@@ -994,7 +994,7 @@ USING (
   )
 )
 WITH CHECK (
-  auth_is_superadmin()
+  public.check_is_superadmin()
   OR EXISTS (
     SELECT 1
     FROM public.tenants t
@@ -1016,7 +1016,7 @@ ON public.tenant_members
 FOR DELETE
 TO public
 USING (
-  auth_is_superadmin()
+  public.check_is_superadmin()
   OR EXISTS (
     SELECT 1
     FROM public.tenants t
