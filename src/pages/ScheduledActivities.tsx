@@ -169,16 +169,11 @@ export default function ScheduledActivities() {
 
   const fetchActivities = async () => {
     try {
-      let query: any = supabase.from("activities").select("*").order("activity_date", { ascending: true });
-      const primary = await query.eq("tenant_id", currentTenant?.id);
-      let data = primary.data as any[] | null;
-      let error = primary.error;
-
-      if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-        const legacy = await supabase.from("activities").select("*").order("activity_date", { ascending: true });
-        data = legacy.data as any[] | null;
-        error = legacy.error;
-      }
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("tenant_id", currentTenant?.id as string)
+        .order("activity_date", { ascending: true });
 
       if (error) throw error;
 
@@ -208,16 +203,11 @@ export default function ScheduledActivities() {
 
   const fetchStudents = async () => {
     try {
-      let query = supabase.from("students").select("id, first_name, last_name").order("last_name");
-      const primary = await query.eq("tenant_id", currentTenant?.id as any);
-      let data = primary.data as any[] | null;
-      let error = primary.error;
-
-      if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-        const legacy = await supabase.from("students").select("id, first_name, last_name").order("last_name");
-        data = legacy.data as any[] | null;
-        error = legacy.error;
-      }
+      const { data, error } = await supabase
+        .from("students")
+        .select("id, first_name, last_name")
+        .eq("tenant_id", currentTenant?.id as string)
+        .order("last_name");
 
       if (error) throw error;
 
@@ -238,7 +228,7 @@ export default function ScheduledActivities() {
       const [activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_exclusions").select("student_id, activity_id"),
         activities.some((activity) => isUuid(activity.id))
-          ? supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id")
+          ? supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id")
           : Promise.resolve({ data: [], error: null }),
       ]);
 
@@ -280,7 +270,7 @@ export default function ScheduledActivities() {
           const { data: payments, error } = await supabase
             .from("payments")
             .select("student_id")
-            .eq("activity_id", activity.id as any);
+            .eq("activity_id", Number(activity.id));
 
           if (error) throw error;
 
@@ -359,20 +349,20 @@ export default function ScheduledActivities() {
       let activityId = editingActivity?.id || "";
 
       if (editingActivity) {
-        let update = await (supabase.from("activities") as any).update(payload).eq("id", editingActivity.id).eq("tenant_id", currentTenant.id);
-        if (update.error?.message?.includes("Could not find the 'tenant_id' column")) {
-          const { tenant_id, ...legacyPayload } = payload;
-          update = await supabase.from("activities").update(legacyPayload as any).eq("id", editingActivity.id as any);
-        }
-        if (update.error) throw update.error;
+        const { error: updateError } = await supabase
+          .from("activities")
+          .update(payload)
+          .eq("id", Number(editingActivity.id))
+          .eq("tenant_id", currentTenant.id);
+        if (updateError) throw updateError;
       } else {
-        let insert = await supabase.from("activities").insert(payload as any).select().single();
-        if (insert.error?.message?.includes("Could not find the 'tenant_id' column")) {
-          const { tenant_id, ...legacyPayload } = payload;
-          insert = await supabase.from("activities").insert(legacyPayload as any).select().single();
-        }
-        if (insert.error) throw insert.error;
-        activityId = String((insert.data as any).id);
+        const { data: insertData, error: insertError } = await supabase
+          .from("activities")
+          .insert(payload)
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        activityId = String(insertData.id);
       }
 
       if (formData.is_with_donations && activityId) {
@@ -432,17 +422,13 @@ export default function ScheduledActivities() {
         completed: !activity.completed,
       });
 
-      let update = await supabase
+      const { error: updateError } = await supabase
         .from("activities")
-        .update({ description: nextDescription } as any)
-        .eq("id", activity.id as any)
-        .eq("tenant_id", currentTenant?.id as any);
+        .update({ description: nextDescription })
+        .eq("id", Number(activity.id))
+        .eq("tenant_id", currentTenant?.id as string);
 
-      if (update.error?.message?.includes("Could not find the 'tenant_id' column")) {
-        update = await supabase.from("activities").update({ description: nextDescription } as any).eq("id", activity.id as any);
-      }
-
-      if (update.error) throw update.error;
+      if (updateError) throw updateError;
 
       toast.success(activity.completed ? "Actividad reabierta" : "Actividad finalizada");
       await fetchActivities();
@@ -453,19 +439,15 @@ export default function ScheduledActivities() {
 
   const handleDeleteActivity = async (activity: ScheduledActivity) => {
     try {
-      await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activity.id as any);
+      await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activity.id);
 
-      let deletion = await supabase
+      const { error: deleteError } = await supabase
         .from("activities")
         .delete()
-        .eq("id", activity.id as any)
-        .eq("tenant_id", currentTenant?.id as any);
+        .eq("id", Number(activity.id))
+        .eq("tenant_id", currentTenant?.id as string);
 
-      if (deletion.error?.message?.includes("Could not find the 'tenant_id' column")) {
-        deletion = await supabase.from("activities").delete().eq("id", activity.id as any);
-      }
-
-      if (deletion.error) throw deletion.error;
+      if (deleteError) throw deleteError;
 
       toast.success("Actividad eliminada");
       await fetchActivities();
@@ -539,7 +521,7 @@ export default function ScheduledActivities() {
         supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).not("student_id", "is", null),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
         isUuid(activity.id)
-          ? supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id")
+          ? supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id")
           : Promise.resolve({ data: [], error: null }),
       ]);
 
@@ -624,7 +606,7 @@ export default function ScheduledActivities() {
       const { data, error } = await supabase
         .from("activity_donations")
         .select("name, cantidad_original, unit")
-        .eq("scheduled_activity_id", selectedActivity.id as any)
+        .eq("scheduled_activity_id", selectedActivity.id)
         .is("student_id", null);
 
       if (error) throw error;
@@ -766,10 +748,10 @@ export default function ScheduledActivities() {
 
     try {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
-        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).order("name", { ascending: true }),
+        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id).order("name", { ascending: true }),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
         isUuid(activity.id)
-          ? supabase.from("scheduled_activity_exclusions").select("student_id, scheduled_activity_id")
+          ? supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id")
           : Promise.resolve({ data: [], error: null }),
       ]);
 

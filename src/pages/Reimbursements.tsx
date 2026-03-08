@@ -112,16 +112,15 @@ export default function Reimbursements() {
 
   const fetchReimbursements = async () => {
     try {
-      // tenant_id exists in DB but not in generated types
-      const { data: reimbursementsData, error } = await (supabase
-        .from('reimbursements') as any)
+      const { data: reimbursementsData, error } = await supabase
+        .from('reimbursements')
         .select('*')
-        .eq('tenant_id', currentTenant?.id)
+        .eq('tenant_id', currentTenant?.id as string)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const userIds: string[] = [...new Set<string>(reimbursementsData?.map((r: any) => r.user_id as string) || [])];
+      const userIds: string[] = [...new Set<string>(reimbursementsData?.map((r) => r.user_id) || [])];
 
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
@@ -136,16 +135,15 @@ export default function Reimbursements() {
 
       const reimbursementsWithUsers = (reimbursementsData || []).map(reimbursement => {
         const userRole = rolesData?.find(r => r.user_id === reimbursement.user_id);
-        console.log(`Reimbursement ${reimbursement.folio}: user_id=${reimbursement.user_id}, found role:`, userRole);
-        // Para admin/master mostrar user_name
         const displayName = userRole?.user_name || 'Usuario desconocido';
         return {
           ...reimbursement,
+          status: reimbursement.status as Reimbursement['status'],
+          type: reimbursement.type as Reimbursement['type'],
           user_display_name: displayName,
         };
       });
 
-      console.log('Reimbursements with users:', reimbursementsWithUsers);
       setReimbursements(reimbursementsWithUsers);
     } catch (error: any) {
       console.error('Error:', error);
@@ -241,11 +239,10 @@ export default function Reimbursements() {
       if (files.length > 0) {
         const uploadedFiles = await uploadFiles(data.id);
 
-        // @ts-ignore - tenant_id exists in DB but not in generated types
         const { error: updateError } = await supabase
           .from('reimbursements')
           .update({ attachments: uploadedFiles })
-          .eq('tenant_id' as any, resolvedTenantId)
+          .eq('tenant_id', resolvedTenantId)
           .eq('id', data.id);
 
         if (updateError) throw updateError;
@@ -391,9 +388,8 @@ export default function Reimbursements() {
   };
 
   const deleteLinkedExpense = async (expenseFolio: number) => {
-    // tenant_id exists in DB but not in generated types
-    const { error } = await (supabase
-      .from('expenses') as any)
+    const { error } = await supabase
+      .from('expenses')
       .delete()
       .eq('tenant_id', currentTenant!.id)
       .eq('folio', expenseFolio);
@@ -430,7 +426,7 @@ export default function Reimbursements() {
           payment_proof: paymentProofs.length > 0 ? paymentProofs : null,
           expense_folio: expenseFolio,
         })
-        .eq('tenant_id' as any, currentTenant?.id)
+        .eq('tenant_id', currentTenant?.id as string)
         .eq('id', selectedReimbursement.id);
 
       if (error) {
@@ -493,7 +489,7 @@ export default function Reimbursements() {
           processed_at: new Date().toISOString(),
           rejection_reason: rejectionReason,
         })
-        .eq('tenant_id' as any, currentTenant?.id)
+        .eq('tenant_id', currentTenant?.id as string)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -553,7 +549,7 @@ export default function Reimbursements() {
           payment_proof: null,
           expense_folio: null,
         })
-        .eq('tenant_id' as any, currentTenant?.id)
+        .eq('tenant_id', currentTenant?.id as string)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -577,11 +573,10 @@ export default function Reimbursements() {
     try {
       // Si tiene egreso asociado, eliminarlo primero
       if (selectedReimbursement.expense_folio) {
-        // @ts-ignore - tenant_id exists in DB but not in generated types
         const { error: expenseError } = await supabase
           .from('expenses')
           .delete()
-          .eq('tenant_id' as any, currentTenant?.id)
+          .eq('tenant_id', currentTenant?.id as string)
           .eq('folio', selectedReimbursement.expense_folio);
 
         if (expenseError) {
@@ -594,7 +589,7 @@ export default function Reimbursements() {
       const { error } = await supabase
         .from('reimbursements')
         .delete()
-        .eq('tenant_id' as any, currentTenant?.id)
+        .eq('tenant_id', currentTenant?.id as string)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;

@@ -43,7 +43,7 @@ export default function AuditLogs() {
         setLoading(true);
         try {
             const { data, error } = await supabase
-                .from("audit_logs" as any)
+                .from("audit_logs")
                 .select("*")
                 .order("created_at", { ascending: false })
                 .limit(100);

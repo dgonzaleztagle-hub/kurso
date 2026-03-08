@@ -58,7 +58,7 @@ export default function Activities() {
 
   const handleAddActivity = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newActivity.name || !newActivity.amount) {
       toast.error("Por favor complete todos los campos obligatorios");
       return;
@@ -69,7 +69,7 @@ export default function Activities() {
     }
 
     try {
-      let { error } = await supabase
+      const { error } = await supabase
         .from("activities")
         .insert({
           tenant_id: currentTenant?.id,
@@ -78,19 +78,6 @@ export default function Activities() {
           activity_date: newActivity.activity_date || null,
           can_redirect_to_fees: newActivity.can_redirect_to_fees,
         });
-
-      // Legacy compatibility: some schemas have no tenant_id column in activities.
-      if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-        const retry = await supabase
-          .from("activities")
-          .insert({
-            name: newActivity.name,
-            amount: parseFloat(newActivity.amount),
-            activity_date: newActivity.activity_date || null,
-            can_redirect_to_fees: newActivity.can_redirect_to_fees,
-          } as any);
-        error = retry.error;
-      }
 
       if (error) throw error;
 
@@ -106,7 +93,7 @@ export default function Activities() {
 
   const handleEditActivity = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!editingActivity) return;
     if (!currentTenant?.id) {
       toast.error("No se pudo detectar el curso activo");
@@ -208,7 +195,7 @@ export default function Activities() {
                       id="name"
                       value={editingActivity ? editingActivity.name : newActivity.name}
                       onChange={(e) =>
-                        editingActivity 
+                        editingActivity
                           ? setEditingActivity({ ...editingActivity, name: e.target.value })
                           : setNewActivity({ ...newActivity, name: e.target.value })
                       }
@@ -224,7 +211,7 @@ export default function Activities() {
                       step="0.01"
                       value={editingActivity ? editingActivity.amount : newActivity.amount}
                       onChange={(e) =>
-                        editingActivity 
+                        editingActivity
                           ? setEditingActivity({ ...editingActivity, amount: parseFloat(e.target.value) })
                           : setNewActivity({ ...newActivity, amount: e.target.value })
                       }
@@ -239,7 +226,7 @@ export default function Activities() {
                       type="date"
                       value={editingActivity ? (editingActivity.activity_date || "") : newActivity.activity_date}
                       onChange={(e) =>
-                        editingActivity 
+                        editingActivity
                           ? setEditingActivity({ ...editingActivity, activity_date: e.target.value })
                           : setNewActivity({ ...newActivity, activity_date: e.target.value })
                       }
@@ -251,7 +238,7 @@ export default function Activities() {
                       id="can_redirect"
                       checked={editingActivity ? editingActivity.can_redirect_to_fees : newActivity.can_redirect_to_fees}
                       onChange={(e) =>
-                        editingActivity 
+                        editingActivity
                           ? setEditingActivity({ ...editingActivity, can_redirect_to_fees: e.target.checked })
                           : setNewActivity({ ...newActivity, can_redirect_to_fees: e.target.checked })
                       }

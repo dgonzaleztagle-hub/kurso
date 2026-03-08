@@ -242,14 +242,7 @@ export default function Movements() {
           insertData.month_period = monthPeriod;
         }
 
-        let { error } = await supabase.from("payments").insert(insertData);
-
-        // Compatibility with legacy schemas where payments table has no tenant_id.
-        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-          const { tenant_id, ...legacyInsertData } = insertData;
-          const retry = await supabase.from("payments").insert(legacyInsertData as any);
-          error = retry.error;
-        }
+        const { error } = await supabase.from("payments").insert(insertData);
 
         if (error) throw error;
         toast.success(`Ingreso registrado con folio ${folio}`);
@@ -269,69 +262,7 @@ export default function Movements() {
           concept: expenseConcept,
         };
 
-        let { error } = await supabase.from("expenses").insert(insertPayload);
-
-        // Backward compatibility for legacy schemas where expenses uses `description` instead of `concept`.
-        if (error?.message?.includes("Could not find the 'concept' column")) {
-          const legacyPayload: any = {
-            folio,
-            tenant_id: currentTenant?.id,
-            supplier: finalSupplier,
-            expense_date: date,
-            amount: parseFloat(amount),
-            description: expenseConcept,
-          };
-          const retry = await supabase.from("expenses").insert(legacyPayload);
-          error = retry.error;
-        }
-
-        // Older legacy schemas can miss `supplier` too.
-        if (error?.message?.includes("Could not find the 'supplier' column")) {
-          const noSupplierPayload: any = {
-            folio,
-            tenant_id: currentTenant?.id,
-            expense_date: date,
-            amount: parseFloat(amount),
-            description: `${expenseConcept}${finalSupplier ? ` | Destinatario: ${finalSupplier}` : ""}`,
-          };
-          const retryNoSupplier = await supabase.from("expenses").insert(noSupplierPayload);
-          error = retryNoSupplier.error;
-        }
-
-        // Compatibility with legacy schemas where expenses table has no tenant_id.
-        if (error?.message?.includes("Could not find the 'tenant_id' column")) {
-          const retryPayloads: any[] = [
-            {
-              folio,
-              supplier: finalSupplier,
-              expense_date: date,
-              amount: parseFloat(amount),
-              concept: expenseConcept,
-            },
-            {
-              folio,
-              supplier: finalSupplier,
-              expense_date: date,
-              amount: parseFloat(amount),
-              description: expenseConcept,
-            },
-            {
-              folio,
-              expense_date: date,
-              amount: parseFloat(amount),
-              description: `${expenseConcept}${finalSupplier ? ` | Destinatario: ${finalSupplier}` : ""}`,
-            },
-          ];
-
-          for (const payload of retryPayloads) {
-            const retry = await supabase.from("expenses").insert(payload);
-            if (!retry.error) {
-              error = null;
-              break;
-            }
-            error = retry.error;
-          }
-        }
+        const { error } = await supabase.from("expenses").insert(insertPayload);
 
         if (error) throw error;
         toast.success(`Egreso registrado con folio ${folio}`);

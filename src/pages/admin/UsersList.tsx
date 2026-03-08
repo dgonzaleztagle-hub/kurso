@@ -58,7 +58,7 @@ export default function UsersList() {
     const fetchUsers = async () => {
         setLoading(true);
         // Usar RPC para traer solo Clients (Dueños de Cursos Independientes)
-        const { data, error } = await supabase.rpc('get_platform_clients' as any);
+        const { data, error } = await supabase.rpc('get_platform_clients');
 
         if (!error && data) {
             setUsers(data as any[]);
@@ -389,8 +389,8 @@ export default function UsersList() {
                                     <div className="flex justify-between items-center">
                                         <span className="text-muted-foreground">Estado Actual:</span>
                                         <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedUser.subscription_status === 'active' ? 'bg-green-100 text-green-700' :
-                                                selectedUser.subscription_status === 'trial' ? 'bg-orange-100 text-orange-700' :
-                                                    'bg-gray-100 text-gray-700'
+                                            selectedUser.subscription_status === 'trial' ? 'bg-orange-100 text-orange-700' :
+                                                'bg-gray-100 text-gray-700'
                                             }`}>
                                             {selectedUser.subscription_status || 'Sin estado'}
                                         </span>

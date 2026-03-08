@@ -125,8 +125,6 @@ export default function Students() {
       if (createAccount && studentData) {
         try {
           toast.info("Generando cuenta de acceso...");
-          // Use the DB RPC instead of the Edge Function
-          // @ts-ignore - RPC function exists in DB but not in generated types
           const { error: rpcError } = await supabase.rpc('generate_missing_accounts', {
             p_tenant_id: currentTenant.id
           });
@@ -155,16 +153,14 @@ export default function Students() {
     if (!currentTenant) return;
     setGeneratingAccounts(true);
     try {
-      // Usamos la nueva función de Base de Datos (RPC) que no requiere Terminal
-      // @ts-ignore
+      // Usamos la nueva función de Base de Datos (RPC)
       const { data, error } = await supabase.rpc('generate_missing_accounts', {
         p_tenant_id: currentTenant.id
       });
 
       if (error) throw error;
 
-      // @ts-ignore
-      const count = data?.created || 0;
+      const count = (data as any)?.created || 0;
       toast.success(`Cuentas generadas existosamente: ${count}`);
       loadStudents(); // Refresh to see changes if any status update visual exists
     } catch (error: any) {
