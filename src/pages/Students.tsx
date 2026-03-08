@@ -121,16 +121,17 @@ export default function Students() {
 
       toast.success("Estudiante registrado");
 
-      // 2. Create Account (Optional but recommended)
+      // 2. Create Account for this student only (same canonical logic as batch)
       if (createAccount && studentData) {
         try {
           toast.info("Generando cuenta de acceso...");
-          const { error: rpcError } = await supabase.rpc('generate_missing_accounts', {
-            p_tenant_id: currentTenant.id
+          const { data: accountResult, error: rpcError } = await supabase.rpc('ensure_student_account', {
+            p_student_id: studentData.id
           });
 
           if (rpcError) throw rpcError;
-          toast.success("Cuenta de acceso creada exitosamente");
+          const wasCreated = (accountResult as any)?.created === true;
+          toast.success(wasCreated ? "Cuenta de acceso creada exitosamente" : "Cuenta ya existía y fue verificada");
         } catch (accError) {
           console.error("Error creating account:", accError);
           toast.error("Estudiante creado, pero falló la generación de cuenta.");
@@ -160,8 +161,10 @@ export default function Students() {
 
       if (error) throw error;
 
-      const count = (data as any)?.created || 0;
-      toast.success(`Cuentas generadas existosamente: ${count}`);
+      const created = (data as any)?.created || 0;
+      const linked = (data as any)?.linked || 0;
+      const errors = (data as any)?.errors || 0;
+      toast.success(`Proceso finalizado. Creadas: ${created}, vinculadas: ${linked}, errores: ${errors}.`);
       loadStudents(); // Refresh to see changes if any status update visual exists
     } catch (error: any) {
       console.error("Error generating accounts:", error);

@@ -60,10 +60,9 @@ export function cleanRutForDB(rut: string): string {
 }
 
 export function generateRutEmail(rut: string): string {
-    // Returns XXXXXXXXK@estudiantes.kurso (Body + DV)
-    // Matches logic in generate_accounts.ts
+    // Canonical student auth email: XXXXXXXX@estudiantes.kurso (RUT body only)
     const clean = rut.replace(/[^0-9kK]/g, "").toLowerCase(); // Lowercase for email
     if (clean.length < 2) return "";
-
-    return `${clean}@estudiantes.kurso`;
+    const body = clean.slice(0, -1);
+    return `${body}@estudiantes.kurso`;
 }

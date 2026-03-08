@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { School, Eye, EyeOff, KeyRound, ArrowLeft, Mail } from "lucide-react";
 import logoImage from "@/assets/logo-santa-cruz.png";
-import { validateRut } from "@/lib/rutUtils";
+import { validateRut, generateRutEmail } from "@/lib/rutUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 type ViewMode = "login" | "reset-password" | "signup";
@@ -81,7 +81,13 @@ export default function Auth() {
       return;
     }
 
-    const isRutLogin = viewMode === 'login' && !email.includes("@") && validateRut(email);
+    const isRutInput = viewMode === 'login' && !email.includes("@");
+    const isRutLogin = isRutInput && validateRut(email);
+
+    if (isRutInput && !isRutLogin) {
+      toast.error("Ingrese RUT completo con dígito verificador (ej: 12.345.678-9).");
+      return;
+    }
 
     if (password.length < 6 && !isRutLogin) {
       toast.error("La contraseña debe tener al menos 6 caracteres");
@@ -92,34 +98,9 @@ export default function Auth() {
 
     try {
       let finalEmail = email;
-      let rutEmailCandidates: string[] = [];
-      let rutPasswordCandidates: string[] = [];
 
-      // Check if input looks like a RUT (has numbers and maybe K) and NOT an email (@)
-      if (!email.includes("@")) {
-        if (validateRut(email)) {
-          const cleanRut = email.replace(/[^0-9kK]/g, "").toLowerCase();
-          const rutBody = cleanRut.slice(0, -1); // Solo números del cuerpo
-          const dv = cleanRut.slice(-1); // Dígito verificador
-
-          // Compatibilidad: intentar dominio nuevo y legacy para no bloquear acceso
-          rutEmailCandidates = Array.from(new Set([
-            `${rutBody}@estudiantes.kurso`,
-            `${rutBody}-${dv}@estudiantes.kurso`,
-            `${rutBody}${dv}@estudiantes.kurso`,
-            `${rutBody}@kurso.cl`,
-            `${rutBody}-${dv}@kurso.cl`,
-            `${rutBody}${dv}@kurso.cl`,
-          ].filter(Boolean)));
-
-          rutPasswordCandidates = Array.from(new Set([
-            password,
-            rutBody.length >= 6 ? rutBody.substring(0, 6) : password,
-            rutBody.length >= 4 ? rutBody.substring(0, 4) : password,
-          ].filter(Boolean)));
-          finalEmail = rutEmailCandidates[0];
-          console.log("RUT detected. Candidate emails:", rutEmailCandidates, "Candidate passwords:", rutPasswordCandidates.map(p => p.substring(0, 2) + '***'));
-        }
+      if (isRutLogin) {
+        finalEmail = generateRutEmail(email);
       }
 
       if (viewMode === 'signup') {
@@ -143,24 +124,8 @@ export default function Auth() {
           }
         }
       } else {
-        let error = null;
-
-        if (rutEmailCandidates.length > 0) {
-          for (const candidateEmail of rutEmailCandidates) {
-            for (const candidatePassword of rutPasswordCandidates) {
-              const result = await signIn(candidateEmail, candidatePassword);
-              if (!result.error) {
-                error = null;
-                break;
-              }
-              error = result.error;
-            }
-            if (!error) break;
-          }
-        } else {
-          const result = await signIn(finalEmail, password);
-          error = result.error;
-        }
+        const result = await signIn(finalEmail, password);
+        const error = result.error;
 
         if (error) {
           toast.error(getFriendlyAuthError(error));

@@ -1269,6 +1269,10 @@ export type Database = {
         Args: { new_institution_name?: string; new_tenant_name: string }
         Returns: Json
       }
+      ensure_student_account: {
+        Args: { p_student_id: number }
+        Returns: Json
+      }
       generate_missing_accounts: {
         Args: { p_tenant_id: string }
         Returns: Json
