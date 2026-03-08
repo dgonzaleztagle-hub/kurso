@@ -1,7 +1,7 @@
 project_id = "euhmpuhkwbxorfzrxemp"
 
 [functions.create-student-accounts]
-verify_jwt = true
+verify_jwt = false
 
 [functions.get-users-with-roles]
 verify_jwt = true
