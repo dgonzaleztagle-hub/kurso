@@ -106,13 +106,30 @@ export default function Students() {
 
     setCreating(true);
     try {
+      const rutNormalized = cleanRutForDB(newStudent.rut).toUpperCase();
+
+      // Prevent duplicate RUT globally (login identity must be unique)
+      const { data: existingRutRow, error: existingRutError } = await supabase
+        .from("students")
+        .select("id, rut")
+        .eq("rut", rutNormalized)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingRutError) throw existingRutError;
+      if (existingRutRow) {
+        toast.error("Ya existe un alumno con ese RUT. No se permiten duplicados.");
+        setCreating(false);
+        return;
+      }
+
       // 1. Create Student
       const { data: studentData, error: studentError } = await supabase.from("students").insert([
         {
           tenant_id: currentTenant.id,
           first_name: newStudent.first_name.trim(),
           last_name: newStudent.last_name.trim(),
-          rut: cleanRutForDB(newStudent.rut),
+          rut: rutNormalized,
           enrollment_date: new Date().toISOString().split('T')[0], // Default today/year start
         },
       ] as any).select().single();
@@ -125,13 +142,18 @@ export default function Students() {
       if (createAccount && studentData) {
         try {
           toast.info("Generando cuenta de acceso...");
-          const { data: accountResult, error: rpcError } = await supabase.rpc('ensure_student_account', {
-            p_student_id: studentData.id
+          const { data: accountResult, error: fnError } = await supabase.functions.invoke('create-student-accounts', {
+            body: {
+              tenantId: currentTenant.id,
+              studentId: studentData.id,
+            },
           });
-
-          if (rpcError) throw rpcError;
-          const wasCreated = (accountResult as any)?.created === true;
-          toast.success(wasCreated ? "Cuenta de acceso creada exitosamente" : "Cuenta ya existía y fue verificada");
+          if (fnError) throw fnError;
+          const failed = Number((accountResult as any)?.failed || 0);
+          if (failed > 0) {
+            throw new Error("No se pudo crear la cuenta del alumno");
+          }
+          toast.success("Cuenta de acceso creada exitosamente");
         } catch (accError) {
           console.error("Error creating account:", accError);
           toast.error("Estudiante creado, pero falló la generación de cuenta.");
@@ -154,9 +176,11 @@ export default function Students() {
     if (!currentTenant) return;
     setGeneratingAccounts(true);
     try {
-      // Usamos la nueva función de Base de Datos (RPC)
-      const { data, error } = await supabase.rpc('generate_missing_accounts', {
-        p_tenant_id: currentTenant.id
+      // Batch and single-account creation are unified in edge function logic
+      const { data, error } = await supabase.functions.invoke('create-student-accounts', {
+        body: {
+          tenantId: currentTenant.id,
+        },
       });
 
       if (error) throw error;

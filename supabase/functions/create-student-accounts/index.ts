@@ -39,6 +39,7 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const tenantId = body?.tenantId;
+    const studentId = body?.studentId;
     if (!tenantId) {
       return new Response(
         JSON.stringify({ error: "tenantId es requerido" }),
@@ -76,11 +77,17 @@ serve(async (req) => {
       );
     }
 
-    const { data: students, error: studentsError } = await supabaseAdmin
+    let studentsQuery = supabaseAdmin
       .from("students")
       .select("id, first_name, last_name, rut, tenant_id")
       .eq("tenant_id", tenantId)
       .order("last_name");
+
+    if (studentId) {
+      studentsQuery = studentsQuery.eq("id", studentId);
+    }
+
+    const { data: students, error: studentsError } = await studentsQuery;
 
     if (studentsError) throw studentsError;
 
@@ -97,7 +104,7 @@ serve(async (req) => {
       const cleanRut = String(student.rut).replace(/[^0-9kK]/g, "").toUpperCase();
       const rutBody = cleanRut.slice(0, -1);
       const email = `${rutBody}@estudiantes.kurso`;
-      const pwd = rutBody.length >= 4 ? rutBody.substring(0, 4) : "123456";
+      const pwd = rutBody.length >= 6 ? rutBody.substring(0, 6) : (rutBody.length >= 4 ? rutBody.substring(0, 4) : "123456");
 
       const { data: existingLink } = await supabaseAdmin
         .from("user_students")
@@ -119,7 +126,7 @@ serve(async (req) => {
       });
 
       if (createError) {
-        if (createError.message?.toLowerCase().includes("already")) {
+        if ((createError.message || "").toLowerCase().includes("already")) {
           const { data: existingProfile } = await supabaseAdmin
             .from("app_users")
             .select("id")
@@ -153,11 +160,11 @@ serve(async (req) => {
 
       const { error: linkError } = await supabaseAdmin
         .from("user_students")
-        .insert({
+        .upsert({
           user_id: userId,
           student_id: student.id,
           display_name: fullName,
-        });
+        }, { onConflict: "user_id,student_id" });
 
       if (linkError) {
         errors.push({ student: fullName, email, error: linkError.message });
@@ -171,7 +178,9 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         total: students?.length ?? 0,
-        processed: results.length,
+        processed: results.length + errors.length,
+        created: results.filter((r) => r.status === "created_or_linked").length,
+        linked: results.filter((r) => r.status === "skipped").length,
         failed: errors.length,
         results,
         errors,
