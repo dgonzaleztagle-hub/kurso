@@ -96,7 +96,7 @@ serve(async (req) => {
 
       const cleanRut = String(student.rut).replace(/[^0-9kK]/g, "").toUpperCase();
       const rutBody = cleanRut.slice(0, -1);
-      const email = `${rutBody}@kurso.cl`;
+      const email = `${rutBody}@estudiantes.kurso`;
       const pwd = rutBody.length >= 4 ? rutBody.substring(0, 4) : "123456";
 
       const { data: existingLink } = await supabaseAdmin

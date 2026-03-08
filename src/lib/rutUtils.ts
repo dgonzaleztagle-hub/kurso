@@ -60,10 +60,10 @@ export function cleanRutForDB(rut: string): string {
 }
 
 export function generateRutEmail(rut: string): string {
-    // Returns XXXXXXXXK@kurso.cl (Body + DV)
+    // Returns XXXXXXXXK@estudiantes.kurso (Body + DV)
     // Matches logic in generate_accounts.ts
     const clean = rut.replace(/[^0-9kK]/g, "").toLowerCase(); // Lowercase for email
     if (clean.length < 2) return "";
 
-    return `${clean}@kurso.cl`;
+    return `${clean}@estudiantes.kurso`;
 }

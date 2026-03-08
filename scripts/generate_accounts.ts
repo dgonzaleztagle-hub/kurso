@@ -64,7 +64,7 @@ async function main() {
 
         // Generate Credentials
         const rutClean = student.rut.replace(/\./g, '').replace(/-/g, '').toLowerCase();
-        const email = `${rutClean}@kurso.cl`;
+        const email = `${rutClean}@estudiantes.kurso`;
         const password = rutClean.substring(0, 6); // Password: First 6 digits of RUT
 
         // console.log(`Creating account for ${student.first_name} ${student.last_name} (${email})...`);
@@ -113,7 +113,7 @@ async function main() {
         const { error: memberError } = await supabase.from('tenant_members').insert({
             tenant_id: student.tenant_id,
             user_id: userId,
-            role: 'student',
+            role: 'alumnos',
             status: 'active'
         });
 

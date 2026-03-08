@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { School, Eye, EyeOff, KeyRound, ArrowLeft, Mail } from "lucide-react";
 import logoImage from "@/assets/logo-santa-cruz.png";
-import { validateRut, generateRutEmail } from "@/lib/rutUtils";
+import { validateRut } from "@/lib/rutUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 type ViewMode = "login" | "reset-password" | "signup";
@@ -102,11 +102,14 @@ export default function Auth() {
           const rutBody = cleanRut.slice(0, -1); // Solo números del cuerpo
           const dv = cleanRut.slice(-1); // Dígito verificador
 
-          // Formato único para fantasy domain: rut@estudiantes.kurso
+          // Compatibilidad: intentar dominio nuevo y legacy para no bloquear acceso
           rutEmailCandidates = Array.from(new Set([
-            `${rutBody}@estudiantes.kurso`,           // Formato principal (sin DV)
-            `${rutBody}-${dv}@estudiantes.kurso`,     // Formato con DV (fallback)
-            `${rutBody}${dv}@estudiantes.kurso`,      // Formato sin guión (fallback)
+            `${rutBody}@estudiantes.kurso`,
+            `${rutBody}-${dv}@estudiantes.kurso`,
+            `${rutBody}${dv}@estudiantes.kurso`,
+            `${rutBody}@kurso.cl`,
+            `${rutBody}-${dv}@kurso.cl`,
+            `${rutBody}${dv}@kurso.cl`,
           ].filter(Boolean)));
 
           rutPasswordCandidates = Array.from(new Set([

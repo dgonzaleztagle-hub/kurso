@@ -106,7 +106,7 @@ BEGIN
                 VALUES (
                     NEW.tenant_id,
                     v_user_id,
-                    'member',
+                    'alumnos',
                     'active'
                 )
                 ON CONFLICT (tenant_id, user_id) DO NOTHING;

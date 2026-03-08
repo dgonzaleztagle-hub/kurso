@@ -238,7 +238,7 @@ export default function Students() {
                     }}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">Se usará para generar el usuario (RUT@kurso.cl) y clave inicial.</p>
+                  <p className="text-xs text-muted-foreground">Se usará para generar el usuario de acceso del alumno basado en RUT y su clave inicial.</p>
                 </div>
 
                 <div className="flex items-center space-x-2 py-2">

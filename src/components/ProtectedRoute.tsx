@@ -36,7 +36,10 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: Prote
   const { roleInCurrentTenant, loading: tenantLoading } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
-  const effectiveRole = roleInCurrentTenant || userRole;
+  const effectiveRole =
+    roleInCurrentTenant === 'member' && (userRole === 'alumnos' || userRole === 'student')
+      ? userRole
+      : (roleInCurrentTenant || userRole);
 
   useEffect(() => {
     if (!loading && !tenantLoading) {
