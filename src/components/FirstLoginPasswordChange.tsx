@@ -19,6 +19,14 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      window.location.href = "/auth";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -80,8 +88,10 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
-          <div className="flex justify-center">
-
+          <div className="flex justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={handleSignOut} disabled={loading}>
+              Cerrar sesion
+            </Button>
           </div>
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-2">
