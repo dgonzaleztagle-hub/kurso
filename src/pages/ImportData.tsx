@@ -38,7 +38,11 @@ export default function ImportData() {
       if (newExpenses.length > 0) {
         setProgress(`Insertando ${newExpenses.length} egresos nuevos...`);
         for (let i = 0; i < newExpenses.length; i += 100) {
-          const batch = newExpenses.slice(i, i + 100);
+          const batch = newExpenses.slice(i, i + 100).map((e: any) => ({
+            ...e,
+            tenant_id: currentTenant.id,
+            description: e.description || e.concept, // Compatibilidad con datos antiguos
+          }));
           const { error } = await supabase.from("expenses").insert(batch);
           if (error) throw error;
           setProgress(`Insertados ${Math.min(i + 100, newExpenses.length)} de ${newExpenses.length} egresos...`);

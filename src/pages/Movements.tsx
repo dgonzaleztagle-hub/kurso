@@ -259,7 +259,7 @@ export default function Movements() {
           supplier: finalSupplier,
           expense_date: date,
           amount: parseFloat(amount),
-          concept: expenseConcept,
+          description: expenseConcept,
         };
 
         const { error } = await supabase.from("expenses").insert(insertPayload);

@@ -14,7 +14,7 @@ export interface ExpenseRecord {
   supplier: string;
   expense_date: string;
   amount: number;
-  concept: string;
+  description: string;
 }
 
 export const excelPayments: PaymentRecord[] = [

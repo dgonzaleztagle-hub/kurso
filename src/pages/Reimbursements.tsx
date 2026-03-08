@@ -318,7 +318,7 @@ export default function Reimbursements() {
       supplier,
       expense_date: expenseDate,
       amount: reimbursement.amount,
-      concept: reimbursement.folio
+      description: reimbursement.folio
         ? `${conceptPrefix} #${reimbursement.folio}: ${reimbursement.subject}`
         : `${conceptPrefix}: ${reimbursement.subject}`,
     };
