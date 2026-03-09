@@ -86,16 +86,44 @@ export default function SelectDonation() {
         if (byId.error) throw byId.error;
         scheduledActivity = byId.data;
       } else if (/^\d+$/.test(activityId)) {
-        const byActivityId = await supabase
-          .from("scheduled_activities")
-          .select("id, name, scheduled_date")
+        const activityNumericId = Number(activityId);
+        const sourceActivity = await supabase
+          .from("activities")
+          .select("name, activity_date, amount")
           .eq("tenant_id", studentData.tenant_id)
-          .eq("activity_id", Number(activityId))
-          .order("created_at", { ascending: false })
-          .limit(1)
+          .eq("id", activityNumericId)
           .maybeSingle();
-        if (byActivityId.error) throw byActivityId.error;
-        scheduledActivity = byActivityId.data;
+        if (sourceActivity.error) throw sourceActivity.error;
+        if (sourceActivity.data) {
+          const byNameDate = await supabase
+            .from("scheduled_activities")
+            .select("id, name, scheduled_date")
+            .eq("tenant_id", studentData.tenant_id)
+            .eq("name", sourceActivity.data.name)
+            .eq("scheduled_date", sourceActivity.data.activity_date)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (byNameDate.error) throw byNameDate.error;
+          if (byNameDate.data) {
+            scheduledActivity = byNameDate.data;
+          } else {
+            const created = await supabase
+              .from("scheduled_activities")
+              .insert({
+                tenant_id: studentData.tenant_id,
+                name: sourceActivity.data.name,
+                scheduled_date: sourceActivity.data.activity_date,
+                amount: Number(sourceActivity.data.amount || 0),
+                completed: false,
+                is_with_donations: true,
+              } as any)
+              .select("id, name, scheduled_date")
+              .single();
+            if (created.error) throw created.error;
+            scheduledActivity = created.data;
+          }
+        }
       }
 
       if (!scheduledActivity) {

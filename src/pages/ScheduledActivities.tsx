@@ -119,6 +119,9 @@ const parseNumeric = (value: string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const buildScheduleKey = (name: string, date: string | null | undefined) =>
+  `${String(name || "").trim().toUpperCase()}|${String(date || "")}`;
+
 export default function ScheduledActivities() {
   const { userRole } = useAuth();
   const { currentTenant, roleInCurrentTenant } = useTenant();
@@ -223,29 +226,24 @@ export default function ScheduledActivities() {
   const loadCompletionRates = async () => {
     try {
       const rates: Record<string, CompletionRate> = {};
-      const activityIds = activities.map((activity) => Number(activity.id)).filter((id) => Number.isFinite(id));
       const [activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_exclusions").select("student_id, activity_id"),
         supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
       ]);
-      const scheduledActivitiesResult = activityIds.length
-        ? await supabase
-          .from("scheduled_activities")
-          .select("id, activity_id")
-          .eq("tenant_id", currentTenant?.id as string)
-          .in("activity_id", activityIds)
-        : { data: [], error: null };
+      const scheduledActivitiesResult = await supabase
+        .from("scheduled_activities")
+        .select("id, name, scheduled_date")
+        .eq("tenant_id", currentTenant?.id as string);
 
       const activityExclusions = activityExclusionsResult.data || [];
       const scheduledExclusions = scheduledExclusionsResult.data || [];
-      const scheduledByActivityId = new Map<number, string>();
+      const scheduledByKey = new Map<string, string>();
       (scheduledActivitiesResult.data || []).forEach((row: any) => {
-        scheduledByActivityId.set(Number(row.activity_id), String(row.id));
+        scheduledByKey.set(buildScheduleKey(row.name, row.scheduled_date), String(row.id));
       });
 
       for (const activity of activities) {
-        const numericActivityId = Number(activity.id);
-        const scheduledActivityId = scheduledByActivityId.get(numericActivityId);
+        const scheduledActivityId = scheduledByKey.get(buildScheduleKey(activity.name, activity.activity_date));
         const excludedStudents = new Set<number>([
           ...activityExclusions
             .filter((row) => String(row.activity_id) === String(activity.id))
@@ -313,16 +311,15 @@ export default function ScheduledActivities() {
 
   const getScheduledActivityId = async (activity: ScheduledActivity, createIfMissing = false) => {
     if (!currentTenant?.id) throw new Error("Tenant no disponible");
-    const numericActivityId = Number(activity.id);
-    if (!Number.isFinite(numericActivityId)) {
-      throw new Error("ID de actividad inválido");
-    }
 
     const { data: existing, error: existingError } = await supabase
       .from("scheduled_activities")
       .select("id")
       .eq("tenant_id", currentTenant.id)
-      .eq("activity_id", numericActivityId)
+      .eq("name", activity.name)
+      .eq("scheduled_date", activity.activity_date)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existingError) throw existingError;
@@ -333,12 +330,9 @@ export default function ScheduledActivities() {
       .from("scheduled_activities")
       .insert({
         tenant_id: currentTenant.id,
-        activity_id: numericActivityId,
         name: activity.name,
         scheduled_date: activity.activity_date,
-        requires_management: activity.requires_management,
-        is_with_fee: activity.is_with_fee,
-        fee_amount: activity.fee_amount,
+        amount: Number(activity.amount || 0),
         is_with_donations: activity.is_with_donations,
         completed: activity.completed,
       } as any)
