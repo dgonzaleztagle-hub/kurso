@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { LogOut, User, Users, Phone, Mail, ChevronRight, GraduationCap, Pencil, Save, X } from "lucide-react";
+import { LogOut, User, Users, Phone, Mail, GraduationCap, Pencil, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface Student {
@@ -147,7 +147,7 @@ export default function MobileProfile() {
                         {isStudentRole ? "Cuenta de alumno" : (user?.email || "")}
                     </p>
 
-                    <div className="w-full grid grid-cols-2 gap-3">
+                    <div className={`w-full ${isStudentRole ? 'max-w-xs' : 'grid grid-cols-2 gap-3'}`}>
                         <div className="flex flex-col items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
                             <Phone className="h-5 w-5 text-gray-400 mb-1" />
                             {editingPhone ? (
@@ -181,12 +181,14 @@ export default function MobileProfile() {
                                 </button>
                             )}
                         </div>
-                        <div className="flex flex-col items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-                            <Mail className="h-5 w-5 text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500 truncate w-full text-center">
-                                {isStudentRole ? "Canal interno" : (user?.email || "Sin contacto")}
-                            </span>
-                        </div>
+                        {!isStudentRole && (
+                            <div className="flex flex-col items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                                <Mail className="h-5 w-5 text-gray-400 mb-1" />
+                                <span className="text-xs text-gray-500 truncate w-full text-center">
+                                    {user?.email || "Sin contacto"}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </Card>
 
@@ -224,7 +226,6 @@ export default function MobileProfile() {
                                             Matrícula: {new Date(student.enrollment_date).getFullYear()}
                                         </p>
                                     </div>
-                                    <ChevronRight className="h-5 w-5 text-gray-300" />
                                 </Card>
                             ))}
                         </div>
