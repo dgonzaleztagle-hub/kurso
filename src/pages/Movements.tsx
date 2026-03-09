@@ -19,6 +19,10 @@ interface Activity {
   name: string;
   amount: number;
 }
+interface PendingMonthDebt {
+  month: string;
+  amount: number;
+}
 
 export default function Movements() {
   const { currentTenant } = useTenant();
@@ -39,7 +43,7 @@ export default function Movements() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState("");
   const [students, setStudents] = useState<Array<{ id: number | string, name: string }>>([]);
-  const [pendingMonths, setPendingMonths] = useState<string[]>([]);
+  const [pendingMonths, setPendingMonths] = useState<PendingMonthDebt[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [loadingPendingMonths, setLoadingPendingMonths] = useState(false);
 
@@ -171,7 +175,7 @@ export default function Movements() {
         firstPayableMonth = enrollmentMonth;
       }
 
-      // Obtener pagos de cuotas y movimientos de crédito negativos
+      // Obtener pagos de cuotas, movimientos aplicados a cuotas y crédito disponible
       const { data: previousPayments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount')
@@ -200,6 +204,17 @@ export default function Movements() {
         creditMovements = (creditQuery.data || []) as Array<{ amount: number | string | null }>;
       }
 
+      const { data: studentCreditData, error: studentCreditError } = await supabase
+        .from('student_credits')
+        .select('amount')
+        .eq('tenant_id', currentTenant.id)
+        .eq('student_id', normalizedStudentId as any)
+        .maybeSingle();
+
+      if (studentCreditError) {
+        throw studentCreditError;
+      }
+
       const toSafeNumber = (value: unknown) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
@@ -208,16 +223,30 @@ export default function Movements() {
       // Calcular total pagado
       const totalPreviousPaid = (previousPayments || []).reduce((sum, p) => sum + toSafeNumber(p.amount), 0);
       const totalCreditRedirects = (creditMovements || []).reduce((sum, m) => sum + Math.abs(toSafeNumber(m.amount)), 0);
-      const totalPaid = totalPreviousPaid + totalCreditRedirects;
-      const monthsAlreadyPaid = Math.floor(totalPaid / MONTHLY_FEE);
+      const availableCredit = Math.max(0, toSafeNumber(studentCreditData?.amount));
+      const totalCoverage = totalPreviousPaid + totalCreditRedirects + availableCredit;
+      const monthsAlreadyPaid = Math.floor(totalCoverage / MONTHLY_FEE);
+      const partialCarry = totalCoverage - (monthsAlreadyPaid * MONTHLY_FEE);
 
-      // Calcular meses pendientes
-      const pending: string[] = [];
-      for (let i = firstPayableMonth; i <= 11; i++) { // Hasta diciembre (índice 11)
-        if (i - firstPayableMonth >= monthsAlreadyPaid) {
-          pending.push(monthNames[i]);
-        }
+      // Calcular meses pendientes con abono parcial aplicado al próximo mes
+      const payableMonths: string[] = [];
+      for (let i = firstPayableMonth; i <= 11; i++) {
+        payableMonths.push(monthNames[i]);
       }
+
+      const pendingMonthNames = payableMonths.slice(monthsAlreadyPaid);
+      const pending: PendingMonthDebt[] = [];
+
+      pendingMonthNames.forEach((month, index) => {
+        if (index === 0 && partialCarry > 0) {
+          const amountDue = Math.max(0, MONTHLY_FEE - partialCarry);
+          if (amountDue > 0) {
+            pending.push({ month, amount: amountDue });
+          }
+        } else {
+          pending.push({ month, amount: MONTHLY_FEE });
+        }
+      });
 
       setPendingMonths(pending);
       setSelectedMonths([]);
@@ -506,34 +535,34 @@ export default function Movements() {
                         <div className="space-y-2">
                           <Label>Meses Pendientes</Label>
                           <div className="grid grid-cols-2 gap-2 p-4 border rounded-md">
-                            {pendingMonths.map((month) => (
-                              <div key={month} className="flex items-center space-x-2">
+                            {pendingMonths.map((pendingMonth) => (
+                              <div key={pendingMonth.month} className="flex items-center space-x-2">
                                 <Checkbox
-                                  id={month}
-                                  checked={selectedMonths.includes(month)}
+                                  id={pendingMonth.month}
+                                  checked={selectedMonths.includes(pendingMonth.month)}
                                   onCheckedChange={(checked) => {
                                     if (checked) {
-                                      setSelectedMonths([...selectedMonths, month]);
-                                      const monthCount = selectedMonths.length + 1;
-                                      const tenantSettings = (currentTenant?.settings as any) || {};
-                                      const configuredFee = Number(tenantSettings.monthly_fee);
-                                      const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
-                                      setAmount((monthCount * monthlyFee).toString());
-                                    } else {
-                                      const newMonths = selectedMonths.filter(m => m !== month);
+                                      const newMonths = [...selectedMonths, pendingMonth.month];
                                       setSelectedMonths(newMonths);
-                                      const tenantSettings = (currentTenant?.settings as any) || {};
-                                      const configuredFee = Number(tenantSettings.monthly_fee);
-                                      const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
-                                      setAmount((newMonths.length * monthlyFee).toString());
+                                      const totalSelectedAmount = pendingMonths
+                                        .filter((m) => newMonths.includes(m.month))
+                                        .reduce((sum, m) => sum + m.amount, 0);
+                                      setAmount(totalSelectedAmount.toString());
+                                    } else {
+                                      const newMonths = selectedMonths.filter(m => m !== pendingMonth.month);
+                                      setSelectedMonths(newMonths);
+                                      const totalSelectedAmount = pendingMonths
+                                        .filter((m) => newMonths.includes(m.month))
+                                        .reduce((sum, m) => sum + m.amount, 0);
+                                      setAmount(totalSelectedAmount.toString());
                                     }
                                   }}
                                 />
                                 <label
-                                  htmlFor={month}
+                                  htmlFor={pendingMonth.month}
                                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                 >
-                                  {month}
+                                  {pendingMonth.month} (${pendingMonth.amount.toLocaleString()})
                                 </label>
                               </div>
                             ))}
