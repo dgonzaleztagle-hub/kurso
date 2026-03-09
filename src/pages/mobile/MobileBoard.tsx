@@ -2,28 +2,22 @@ import { useState, useEffect } from 'react';
 import { useTenant } from "@/contexts/TenantContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Pin, Megaphone, Calendar } from "lucide-react";
+import { Megaphone, Calendar } from "lucide-react";
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from "@/components/ui/use-toast";
 
-interface Post {
+interface Announcement {
     id: string;
-    title: string;
-    content: string;
-    is_pinned: boolean;
-    is_official: boolean;
+    message: string;
     created_at: string;
-    image_url?: string;
-    author_id?: string;
+    is_active: boolean;
 }
 
 export default function MobileBoard() {
     const { currentTenant } = useTenant();
-    const [posts, setPosts] = useState<Post[]>([]);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
-    const { toast } = useToast();
 
     useEffect(() => {
         if (currentTenant) {
@@ -33,24 +27,22 @@ export default function MobileBoard() {
 
     const fetchPosts = async () => {
         try {
-            // Fuente unica de anuncios: public.posts (gestionados por owner/admin en PostManagement)
             const { data, error } = await supabase
-                .from('posts' as any) // Casting to any until types are generated
+                .from('dashboard_notifications')
                 .select('*')
                 .eq('tenant_id', currentTenant?.id)
-                .eq('status', 'published')
-                .order('is_pinned', { ascending: false })
+                .eq('is_active', true)
                 .order('created_at', { ascending: false });
 
             if (error) {
                 console.error('Error fetching posts:', error);
-                setPosts([]);
+                setAnnouncements([]);
             } else {
-                setPosts((data as any) || []);
+                setAnnouncements((data as any) || []);
             }
         } catch (err) {
             console.error('Exception fetching posts:', err);
-            setPosts([]);
+            setAnnouncements([]);
         } finally {
             setLoading(false);
         }
@@ -75,35 +67,23 @@ export default function MobileBoard() {
             <div className="space-y-4">
                 {loading ? (
                     <div className="text-center py-10 text-gray-400">Cargando anuncios...</div>
-                ) : posts.length === 0 ? (
+                ) : announcements.length === 0 ? (
                     <div className="text-center py-10 text-gray-500">
                         No hay anuncios publicados.
                     </div>
                 ) : (
-                    posts.map((post) => (
+                    announcements.map((item) => (
                         <Card
-                            key={post.id}
-                            className={`border-none shadow-sm overflow-hidden transition-all duration-200 
-                ${post.is_pinned
-                                    ? 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-l-4 border-l-amber-400'
-                                    : 'bg-white dark:bg-[#1c2630]'
-                                }`}
+                            key={item.id}
+                            className="border-none shadow-sm overflow-hidden transition-all duration-200 bg-white dark:bg-[#1c2630]"
                         >
                             <div className="p-5">
                                 <div className="flex items-start justify-between gap-3 mb-2">
                                     <div className="flex gap-2">
-                                        {post.is_pinned && (
-                                            <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/50 dark:text-amber-400 dark:border-amber-800 px-2 py-0.5 h-6 gap-1">
-                                                <Pin className="h-3 w-3" /> Fijado
-                                            </Badge>
-                                        )}
-                                        {post.is_official && !post.is_pinned && (
-                                            <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 h-6">
-                                                Oficial
-                                            </Badge>
-                                        )}
-                                        {/* Logic for NEW badge ( < 3 days ) */}
-                                        {new Date(post.created_at) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) && (
+                                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 h-6">
+                                            Oficial
+                                        </Badge>
+                                        {new Date(item.created_at) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) && (
                                             <Badge className="bg-red-500 hover:bg-red-600 text-white h-6 animate-pulse">
                                                 NUEVO
                                             </Badge>
@@ -111,16 +91,12 @@ export default function MobileBoard() {
                                     </div>
                                     <span className="text-xs text-gray-400 whitespace-nowrap flex items-center gap-1">
                                         <Calendar className="h-3 w-3" />
-                                        {format(new Date(post.created_at), "d MMM", { locale: es })}
+                                        {format(new Date(item.created_at), "d MMM", { locale: es })}
                                     </span>
                                 </div>
 
-                                <h3 className={`font-semibold text-lg mb-2 leading-tight ${post.is_pinned ? 'text-gray-900 dark:text-gray-100' : 'text-gray-800 dark:text-gray-200'}`}>
-                                    {post.title}
-                                </h3>
-
                                 <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 mb-3">
-                                    {post.content}
+                                    {item.message}
                                 </p>
                             </div>
                         </Card>

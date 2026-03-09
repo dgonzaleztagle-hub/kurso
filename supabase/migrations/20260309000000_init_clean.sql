@@ -51,6 +51,18 @@ CREATE TABLE IF NOT EXISTS public.organizations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Auditoria base (requerida por triggers y vista de auditoria)
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid REFERENCES public.tenants(id) ON DELETE SET NULL,
+    user_id uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
+    action text NOT NULL,
+    table_name text,
+    record_id text,
+    payload jsonb,
+    created_at timestamptz DEFAULT now()
+);
+
 -- 3. TABLAS TENANT (CURSOS)
 
 -- A. Tenants (Cursos Individuales)
@@ -181,6 +193,85 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- RPC onboarding canonical (compat: 2 args y 1 arg)
+CREATE OR REPLACE FUNCTION public.create_own_tenant(
+  new_institution_name text,
+  new_tenant_name text
+)
+RETURNS public.tenants
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_tenant public.tenants%ROWTYPE;
+  v_org_id uuid;
+  v_slug_base text;
+  v_slug text;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Usuario no autenticado';
+  END IF;
+
+  IF coalesce(trim(new_tenant_name), '') = '' THEN
+    RAISE EXCEPTION 'new_tenant_name es requerido';
+  END IF;
+
+  -- Garantizar perfil en app_users
+  INSERT INTO public.app_users (id, email, full_name, is_superadmin)
+  SELECT
+    au.id,
+    au.email,
+    COALESCE(au.raw_user_meta_data->>'full_name', ''),
+    false
+  FROM auth.users au
+  WHERE au.id = v_user_id
+  ON CONFLICT (id) DO NOTHING;
+
+  IF coalesce(trim(new_institution_name), '') <> '' THEN
+    INSERT INTO public.organizations (name)
+    VALUES (trim(new_institution_name))
+    RETURNING id INTO v_org_id;
+  END IF;
+
+  v_slug_base := regexp_replace(lower(trim(new_tenant_name)), '[^a-z0-9]+', '-', 'g');
+  v_slug_base := trim(both '-' from v_slug_base);
+  IF v_slug_base = '' THEN
+    v_slug_base := 'tenant';
+  END IF;
+
+  v_slug := v_slug_base;
+  IF EXISTS (SELECT 1 FROM public.tenants t WHERE t.slug = v_slug) THEN
+    v_slug := v_slug_base || '-' || substring(replace(gen_random_uuid()::text, '-', '') from 1 for 8);
+  END IF;
+
+  INSERT INTO public.tenants (organization_id, name, slug, owner_id, subscription_status, status)
+  VALUES (v_org_id, trim(new_tenant_name), v_slug, v_user_id, 'trial', 'active')
+  RETURNING * INTO v_tenant;
+
+  INSERT INTO public.tenant_members (tenant_id, user_id, role, status)
+  VALUES (v_tenant.id, v_user_id, 'owner', 'active')
+  ON CONFLICT (tenant_id, user_id) DO UPDATE
+    SET role = excluded.role,
+        status = excluded.status;
+
+  RETURN v_tenant;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.create_own_tenant(new_tenant_name text)
+RETURNS public.tenants
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.create_own_tenant(NULL::text, new_tenant_name);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.create_own_tenant(text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_own_tenant(text) TO authenticated;
 
 
 -- ============================================================================
@@ -2254,3 +2345,375 @@ $$;
 --   - Nuevo Alumno + checkbox => create account
 --   - Generar Cuentas Faltantes => batch create accounts
 DROP TRIGGER IF EXISTS tr_student_create_auth_account ON public.students;
+
+
+-- ============================================================================
+-- SOURCE: schema_concordance_full.sql
+-- ============================================================================
+
+-- Concordancia full app vs schema
+-- Ejecutar una sola vez en el proyecto nuevo.
+
+create extension if not exists pgcrypto;
+
+-- ===========
+-- Missing tables
+-- ===========
+
+create table if not exists public.dashboard_notifications (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  message text not null,
+  is_active boolean not null default true,
+  created_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.meeting_minutes (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  title text,
+  content text,
+  image_url text,
+  meeting_date date not null default current_date,
+  status text default 'published',
+  created_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.forms (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  title text not null,
+  description text,
+  is_active boolean not null default true,
+  created_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.form_fields (
+  id uuid primary key default gen_random_uuid(),
+  form_id uuid not null references public.forms(id) on delete cascade,
+  label text not null,
+  field_type text not null default 'text',
+  options jsonb default '[]'::jsonb,
+  is_required boolean not null default false,
+  order_index integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.form_responses (
+  id uuid primary key default gen_random_uuid(),
+  form_id uuid not null references public.forms(id) on delete cascade,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  student_id uuid references public.students(id) on delete set null,
+  responses jsonb not null default '{}'::jsonb,
+  responder_name text,
+  responder_email text,
+  submitted_at timestamptz not null default now()
+);
+
+create table if not exists public.form_exclusions (
+  id uuid primary key default gen_random_uuid(),
+  form_id uuid not null references public.forms(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  reason text,
+  created_at timestamptz not null default now(),
+  unique(form_id, student_id)
+);
+
+create table if not exists public.scheduled_activities (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  name text not null,
+  scheduled_date date not null default current_date,
+  amount numeric(12,2) not null default 0,
+  completed boolean not null default false,
+  is_with_donations boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.scheduled_activity_exclusions (
+  id uuid primary key default gen_random_uuid(),
+  scheduled_activity_id uuid not null references public.scheduled_activities(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  reason text,
+  created_at timestamptz not null default now(),
+  unique(scheduled_activity_id, student_id)
+);
+
+create table if not exists public.activity_donations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  scheduled_activity_id uuid not null references public.scheduled_activities(id) on delete cascade,
+  student_id uuid references public.students(id) on delete set null,
+  name text not null,
+  amount numeric(12,2) not null default 0,
+  donated_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.student_credits (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  amount numeric(12,2) not null default 0,
+  updated_at timestamptz not null default now(),
+  unique(student_id)
+);
+
+create table if not exists public.admin_permissions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  module text not null,
+  can_view boolean not null default true,
+  can_create boolean not null default false,
+  can_update boolean not null default false,
+  can_delete boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, module)
+);
+
+-- Folio columns used by UI/RPCs
+alter table public.payments add column if not exists folio text;
+alter table public.expenses add column if not exists folio text;
+alter table public.reimbursements add column if not exists folio text;
+
+-- ===========
+-- Missing RPCs
+-- ===========
+
+create or replace function public.get_next_payment_folio()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select lpad((coalesce(max(nullif(regexp_replace(folio, '\D', '', 'g'), '')::int), 0) + 1)::text, 6, '0')
+  from public.payments;
+$$;
+
+create or replace function public.get_next_expense_folio()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select lpad((coalesce(max(nullif(regexp_replace(folio, '\D', '', 'g'), '')::int), 0) + 1)::text, 6, '0')
+  from public.expenses;
+$$;
+
+create or replace function public.get_next_reimbursement_folio()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select lpad((coalesce(max(nullif(regexp_replace(folio, '\D', '', 'g'), '')::int), 0) + 1)::text, 6, '0')
+  from public.reimbursements;
+$$;
+
+create or replace function public.get_users_by_tenant(target_tenant_id uuid)
+returns table (
+  user_id uuid,
+  email text,
+  full_name text,
+  role public.app_role,
+  status text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select tm.user_id, au.email, au.full_name, tm.role, coalesce(tm.status,'active')
+  from public.tenant_members tm
+  join public.app_users au on au.id = tm.user_id
+  where tm.tenant_id = target_tenant_id
+  order by au.full_name nulls last, au.email;
+$$;
+
+create or replace function public.get_platform_clients()
+returns table (
+  tenant_id uuid,
+  tenant_name text,
+  organization_name text,
+  owner_email text,
+  subscription_status public.subscription_status,
+  valid_until date,
+  status text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    t.id,
+    t.name,
+    o.name,
+    au.email,
+    t.subscription_status,
+    t.valid_until,
+    t.status,
+    t.created_at
+  from public.tenants t
+  left join public.organizations o on o.id = t.organization_id
+  left join public.app_users au on au.id = t.owner_id
+  order by t.created_at desc;
+$$;
+
+create or replace function public.archive_tenant(target_tenant_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.tenants
+  set status = 'archived',
+      updated_at = now()
+  where id = target_tenant_id;
+end;
+$$;
+
+create or replace function public.migrate_course_year(
+  source_tenant_id uuid,
+  new_tenant_name text,
+  new_fiscal_year integer
+)
+returns public.tenants
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  src public.tenants%rowtype;
+  dst public.tenants%rowtype;
+begin
+  select * into src from public.tenants where id = source_tenant_id;
+  if src.id is null then
+    raise exception 'source tenant not found';
+  end if;
+
+  insert into public.tenants (
+    organization_id,
+    name,
+    slug,
+    owner_id,
+    subscription_status,
+    valid_until,
+    settings,
+    status,
+    previous_tenant_id,
+    fiscal_year
+  )
+  values (
+    src.organization_id,
+    coalesce(nullif(trim(new_tenant_name), ''), src.name),
+    src.slug || '-' || substring(replace(gen_random_uuid()::text, '-', '') from 1 for 6),
+    src.owner_id,
+    src.subscription_status,
+    src.valid_until,
+    src.settings,
+    'active',
+    src.id,
+    new_fiscal_year
+  )
+  returning * into dst;
+
+  update public.tenants set next_tenant_id = dst.id where id = src.id;
+
+  insert into public.tenant_members (tenant_id, user_id, role, status)
+  select dst.id, tm.user_id, tm.role, tm.status
+  from public.tenant_members tm
+  where tm.tenant_id = src.id
+  on conflict (tenant_id, user_id) do nothing;
+
+  return dst;
+end;
+$$;
+
+grant execute on function public.get_next_payment_folio() to authenticated;
+grant execute on function public.get_next_expense_folio() to authenticated;
+grant execute on function public.get_next_reimbursement_folio() to authenticated;
+grant execute on function public.get_users_by_tenant(uuid) to authenticated;
+grant execute on function public.get_platform_clients() to authenticated;
+grant execute on function public.archive_tenant(uuid) to authenticated;
+grant execute on function public.migrate_course_year(uuid, text, integer) to authenticated;
+
+-- ===========
+-- Basic RLS for newly created tables
+-- ===========
+
+alter table public.dashboard_notifications enable row level security;
+alter table public.meeting_minutes enable row level security;
+alter table public.forms enable row level security;
+alter table public.form_fields enable row level security;
+alter table public.form_responses enable row level security;
+alter table public.form_exclusions enable row level security;
+alter table public.scheduled_activities enable row level security;
+alter table public.scheduled_activity_exclusions enable row level security;
+alter table public.activity_donations enable row level security;
+alter table public.student_credits enable row level security;
+alter table public.admin_permissions enable row level security;
+
+-- tenant scoped read for authenticated users with membership
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'dashboard_notifications',
+    'meeting_minutes',
+    'forms',
+    'form_responses',
+    'form_exclusions',
+    'scheduled_activities',
+    'scheduled_activity_exclusions',
+    'activity_donations',
+    'student_credits'
+  ]
+  loop
+    execute format('drop policy if exists %I on public.%I;', t || '_select', t);
+    execute format(
+      'create policy %I on public.%I for select to authenticated using (public.rls_is_superadmin(auth.uid()) or public.rls_is_tenant_member(tenant_id, auth.uid()) or public.rls_is_tenant_owner(tenant_id, auth.uid()));',
+      t || '_select',
+      t
+    );
+  end loop;
+end $$;
+
+-- form_fields are scoped by parent form
+drop policy if exists form_fields_select on public.form_fields;
+create policy form_fields_select
+on public.form_fields
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.forms f
+    where f.id = form_fields.form_id
+      and (
+        public.rls_is_superadmin(auth.uid())
+        or public.rls_is_tenant_member(f.tenant_id, auth.uid())
+        or public.rls_is_tenant_owner(f.tenant_id, auth.uid())
+      )
+  )
+);
+
+drop policy if exists admin_permissions_select on public.admin_permissions;
+create policy admin_permissions_select
+on public.admin_permissions
+for select
+to authenticated
+using (user_id = auth.uid() or public.rls_is_superadmin(auth.uid()));
+
+notify pgrst, 'reload schema';
