@@ -41,6 +41,7 @@ export default function Movements() {
   const [students, setStudents] = useState<Array<{ id: number, name: string }>>([]);
   const [pendingMonths, setPendingMonths] = useState<string[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [loadingPendingMonths, setLoadingPendingMonths] = useState(false);
 
   // Expense fields
   const [supplier, setSupplier] = useState("");
@@ -131,64 +132,91 @@ export default function Movements() {
 
   const loadPendingMonths = async (selectedStudentId: string) => {
     if (!currentTenant?.id) return;
-    const MONTHLY_FEE = 3000;
+    setLoadingPendingMonths(true);
+    const tenantSettings = (currentTenant.settings as any) || {};
+    const configuredFee = Number(tenantSettings.monthly_fee);
+    const MONTHLY_FEE = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
     const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
-    // Obtener fecha de matrícula del estudiante
-    const { data: studentData } = await supabase
-      .from('students')
-      .select('enrollment_date')
-      .eq('tenant_id', currentTenant.id)
-      .eq('id', parseInt(selectedStudentId))
-      .single();
+    try {
+      // Obtener fecha de matrícula del estudiante
+      const { data: studentData, error: studentError } = await supabase
+        .from('students')
+        .select('enrollment_date')
+        .eq('tenant_id', currentTenant.id)
+        .eq('id', parseInt(selectedStudentId))
+        .single();
 
-    if (!studentData) return;
-
-    const enrollmentDate = parseDateFromDB(studentData.enrollment_date);
-    const enrollmentMonth = enrollmentDate.getMonth();
-    const enrollmentYear = enrollmentDate.getFullYear();
-    const currentYear = new Date().getFullYear();
-
-    // Determinar el primer mes a pagar (marzo = 2, o mes de matrícula si es posterior)
-    const startMonth = 2; // Marzo
-    let firstPayableMonth = startMonth;
-
-    if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
-      firstPayableMonth = enrollmentMonth;
-    }
-
-    // Obtener pagos de cuotas y movimientos de crédito negativos
-    const { data: previousPayments } = await supabase
-      .from('payments')
-      .select('amount')
-      .eq('tenant_id', currentTenant.id)
-      .eq('student_id', parseInt(selectedStudentId))
-      .or('concept.ilike.%cuota%,concept.ilike.%CUOTA%');
-
-    const { data: creditMovements } = await supabase
-      .from('credit_movements')
-      .select('amount')
-      .eq('tenant_id', currentTenant.id)
-      .eq('student_id', parseInt(selectedStudentId))
-      .eq('type', 'payment_redirect')
-      .lt('amount', 0);
-
-    // Calcular total pagado
-    const totalPreviousPaid = (previousPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalCreditRedirects = (creditMovements || []).reduce((sum, m) => sum + Math.abs(Number(m.amount)), 0);
-    const totalPaid = totalPreviousPaid + totalCreditRedirects;
-    const monthsAlreadyPaid = Math.floor(totalPaid / MONTHLY_FEE);
-
-    // Calcular meses pendientes
-    const pending: string[] = [];
-    for (let i = firstPayableMonth; i <= 11; i++) { // Hasta diciembre (índice 11)
-      if (i - firstPayableMonth >= monthsAlreadyPaid) {
-        pending.push(monthNames[i]);
+      if (studentError) throw studentError;
+      if (!studentData?.enrollment_date) {
+        setPendingMonths([]);
+        setSelectedMonths([]);
+        toast.error("El estudiante no tiene fecha de matrícula");
+        return;
       }
-    }
 
-    setPendingMonths(pending);
-    setSelectedMonths([]);
+      const enrollmentDate = parseDateFromDB(studentData.enrollment_date);
+      const enrollmentMonth = enrollmentDate.getMonth();
+      const enrollmentYear = enrollmentDate.getFullYear();
+      const currentYear = new Date().getFullYear();
+
+      // Determinar el primer mes a pagar (marzo = 2, o mes de matrícula si es posterior)
+      const startMonth = 2; // Marzo
+      let firstPayableMonth = startMonth;
+
+      if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
+        firstPayableMonth = enrollmentMonth;
+      }
+
+      // Obtener pagos de cuotas y movimientos de crédito negativos
+      const { data: previousPayments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('tenant_id', currentTenant.id)
+        .eq('student_id', parseInt(selectedStudentId))
+        .ilike('concept', 'Cuota%');
+
+      if (paymentsError) throw paymentsError;
+
+      const { data: creditMovements, error: creditsError } = await supabase
+        .from('credit_movements')
+        .select('amount')
+        .eq('tenant_id', currentTenant.id)
+        .eq('student_id', parseInt(selectedStudentId))
+        .eq('type', 'payment_redirect')
+        .lt('amount', 0);
+
+      if (creditsError) throw creditsError;
+
+      const toSafeNumber = (value: unknown) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      // Calcular total pagado
+      const totalPreviousPaid = (previousPayments || []).reduce((sum, p) => sum + toSafeNumber(p.amount), 0);
+      const totalCreditRedirects = (creditMovements || []).reduce((sum, m) => sum + Math.abs(toSafeNumber(m.amount)), 0);
+      const totalPaid = totalPreviousPaid + totalCreditRedirects;
+      const monthsAlreadyPaid = Math.floor(totalPaid / MONTHLY_FEE);
+
+      // Calcular meses pendientes
+      const pending: string[] = [];
+      for (let i = firstPayableMonth; i <= 11; i++) { // Hasta diciembre (índice 11)
+        if (i - firstPayableMonth >= monthsAlreadyPaid) {
+          pending.push(monthNames[i]);
+        }
+      }
+
+      setPendingMonths(pending);
+      setSelectedMonths([]);
+    } catch (error: any) {
+      console.error("Error loading pending months:", error);
+      setPendingMonths([]);
+      setSelectedMonths([]);
+      toast.error(error?.message || "No se pudo calcular meses pendientes");
+    } finally {
+      setLoadingPendingMonths(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -475,11 +503,17 @@ export default function Movements() {
                                     if (checked) {
                                       setSelectedMonths([...selectedMonths, month]);
                                       const monthCount = selectedMonths.length + 1;
-                                      setAmount((monthCount * 3000).toString());
+                                      const tenantSettings = (currentTenant?.settings as any) || {};
+                                      const configuredFee = Number(tenantSettings.monthly_fee);
+                                      const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
+                                      setAmount((monthCount * monthlyFee).toString());
                                     } else {
                                       const newMonths = selectedMonths.filter(m => m !== month);
                                       setSelectedMonths(newMonths);
-                                      setAmount((newMonths.length * 3000).toString());
+                                      const tenantSettings = (currentTenant?.settings as any) || {};
+                                      const configuredFee = Number(tenantSettings.monthly_fee);
+                                      const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
+                                      setAmount((newMonths.length * monthlyFee).toString());
                                     }
                                   }}
                                 />
@@ -494,13 +528,17 @@ export default function Movements() {
                           </div>
                           {selectedMonths.length > 0 && (
                             <p className="text-sm text-muted-foreground">
-                              {selectedMonths.length} {selectedMonths.length === 1 ? 'mes' : 'meses'} seleccionado{selectedMonths.length === 1 ? '' : 's'}: ${(selectedMonths.length * 3000).toLocaleString()}
+                              {selectedMonths.length} {selectedMonths.length === 1 ? 'mes' : 'meses'} seleccionado{selectedMonths.length === 1 ? '' : 's'}: ${Number(amount || 0).toLocaleString()}
                             </p>
                           )}
                         </div>
                       )}
 
-                      {studentId && pendingMonths.length === 0 && (
+                      {studentId && loadingPendingMonths && (
+                        <p className="text-sm text-muted-foreground">Calculando meses pendientes...</p>
+                      )}
+
+                      {studentId && !loadingPendingMonths && pendingMonths.length === 0 && (
                         <p className="text-sm text-green-600">Este estudiante no tiene meses pendientes de pago.</p>
                       )}
                     </>
