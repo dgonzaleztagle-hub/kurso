@@ -302,11 +302,13 @@ export default function ScheduledActivities() {
   };
 
   const replaceBaseDonationItems = async (activityId: string) => {
+    if (!currentTenant?.id) throw new Error("Tenant no disponible");
     await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activityId).is("student_id", null);
 
     const validItems = donationItems
       .filter((item) => item.name.trim() && item.amount.trim())
       .map((item) => ({
+        tenant_id: currentTenant.id,
         scheduled_activity_id: activityId as any,
         name: item.name.trim(),
         amount: item.amount.trim(),
@@ -637,7 +639,7 @@ export default function ScheduledActivities() {
   };
 
   const handleAssignDonation = async () => {
-    if (!selectedActivity || !assignToStudentId) return;
+    if (!selectedActivity || !assignToStudentId || !currentTenant?.id) return;
     if (!assignDonationForm.name.trim() || !assignDonationForm.amount.trim()) {
       toast.error("Complete nombre y cantidad");
       return;
@@ -645,6 +647,7 @@ export default function ScheduledActivities() {
 
     try {
       const payload = {
+        tenant_id: currentTenant.id,
         scheduled_activity_id: selectedActivity.id as any,
         student_id: assignToStudentId,
         name: assignDonationForm.name.trim(),
