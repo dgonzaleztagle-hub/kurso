@@ -55,27 +55,19 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
 
       if (updateError) throw updateError;
 
-      // Obtener el usuario actual
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) throw new Error("Usuario no encontrado");
-
-      // Marcar que ya no es el primer login
-      const { error: roleUpdateError } = await supabase
-        .from('user_roles')
-        .update({ first_login: false })
-        .eq('user_id', user.id);
-
-      if (roleUpdateError) {
-        console.error("Error actualizando first_login:", roleUpdateError);
-        throw roleUpdateError;
+      // Marcar que ya no es el primer login (server-side para evitar problemas de RLS)
+      const { error: markError } = await supabase.rpc('mark_first_login_completed');
+      if (markError) {
+        console.error("Error actualizando first_login:", markError);
+        throw markError;
       }
 
       toast.success("Contraseña actualizada exitosamente");
 
-      // Esperar un poco y recargar los datos del usuario
+      // Esperar un poco, recargar datos y forzar entrada al flujo normal
       await new Promise(resolve => setTimeout(resolve, 300));
       await onPasswordChanged();
+      window.location.replace("/");
     } catch (error: any) {
       console.error("Error cambiando contraseña:", error);
       toast.error(error.message || "Error al cambiar la contraseña");
