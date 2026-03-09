@@ -311,7 +311,17 @@ export default function Movements() {
           insertData.month_period = monthPeriod;
         }
 
-        const { error } = await supabase.from("payments").insert(insertData);
+        let { error } = await supabase.from("payments").insert(insertData);
+
+        if (error && incomeType === "actividad") {
+          const errorText = String(error.message || "").toLowerCase();
+          if (errorText.includes("invalid input syntax for type uuid")) {
+            const fallbackInsert = { ...insertData };
+            delete fallbackInsert.activity_id;
+            const retry = await supabase.from("payments").insert(fallbackInsert);
+            error = retry.error;
+          }
+        }
 
         if (error) throw error;
         toast.success(`Ingreso registrado con folio ${folio}`);
