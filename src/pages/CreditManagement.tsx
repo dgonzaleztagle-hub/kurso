@@ -16,20 +16,20 @@ import { Loader2, ArrowRight, DollarSign, Info } from "lucide-react";
 import { generateTransferReceipt } from "@/lib/receiptGenerator";
 
 interface StudentWithCredit {
-  id: number;
+  id: number | string;
   name: string;
   credit_amount: number;
 }
 
 interface Payment {
-  id: number;
-  folio: number;
+  id: number | string;
+  folio: number | string;
   payment_date: string;
-  student_id: number | null;
+  student_id: number | string | null;
   student_name: string | null;
   concept: string;
   amount: number;
-  activity_id?: number | null;
+  activity_id?: number | string | null;
 }
 
 interface Activity {
@@ -69,32 +69,36 @@ export default function CreditManagement() {
   const loadData = async () => {
     try {
       setLoading(true);
+      if (!currentTenant?.id) return;
 
       // 1. Fetch Students
       const { data: studentsData, error: studentsError } = await supabase
         .from("students")
-        .select("id, first_name, last_name");
+        .select("id, first_name, last_name")
+        .eq("tenant_id", currentTenant.id);
 
       if (studentsError) throw studentsError;
 
       // 2. Fetch Credit Movements (to calculate balances)
       const { data: movementsData, error: movementsError } = await supabase
         .from("credit_movements")
-        .select("student_id, amount");
+        .select("student_id, amount")
+        .eq("tenant_id", currentTenant.id);
 
       if (movementsError) throw movementsError;
 
       // Calculate credit per student
-      const creditMap = new Map<number, number>();
+      const creditMap = new Map<string, number>();
       movementsData?.forEach(m => {
-        const current = creditMap.get(m.student_id) || 0;
-        creditMap.set(m.student_id, current + Number(m.amount));
+        const key = String(m.student_id);
+        const current = creditMap.get(key) || 0;
+        creditMap.set(key, current + Number(m.amount));
       });
 
       const studentsWithCredit = (studentsData || []).map(s => ({
         id: s.id,
         name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre',
-        credit_amount: creditMap.get(s.id) || 0
+        credit_amount: creditMap.get(String(s.id)) || 0
       }));
 
       setStudents(studentsWithCredit);
@@ -105,6 +109,7 @@ export default function CreditManagement() {
       const { data: paymentsData, error: paymentsError } = await supabase
         .from("payments")
         .select("*")
+        .eq("tenant_id", currentTenant.id)
         .order("payment_date", { ascending: false })
         .limit(50);
 
@@ -151,11 +156,15 @@ export default function CreditManagement() {
 
     setProcessing(true);
     try {
+      const movementAmount = redirectType === "monthly_fees"
+        ? -Math.abs(Number(selectedPayment.amount))
+        : Math.abs(Number(selectedPayment.amount));
+
       // Create credit movement
       const { error } = await supabase.from("credit_movements").insert({
         tenant_id: currentTenant.id,
-        student_id: selectedPayment.student_id,
-        amount: selectedPayment.amount,
+        student_id: selectedPayment.student_id as any,
+        amount: movementAmount,
         type: 'payment_redirect',
         created_by: user.id,
         description: `Redirección de pago folio #${selectedPayment.folio}: ${selectedPayment.concept} (${redirectType})`,
@@ -168,7 +177,8 @@ export default function CreditManagement() {
       loadData(); // Refresh to show new credit
     } catch (error) {
       console.error("Error redirecting payment:", error);
-      toast.error("Error al redirigir pago");
+      const message = (error as any)?.message || "Error al redirigir pago";
+      toast.error(`Error al redirigir pago: ${message}`);
     } finally {
       setProcessing(false);
     }
