@@ -60,13 +60,13 @@ interface ScheduledActivity {
 }
 
 interface Student {
-  id: number;
+  id: number | string;
   name: string;
 }
 
 interface Donation {
   id: string;
-  student_id: number | null;
+  student_id: number | string | null;
   amount: string;
   donated_at: string | null;
   name: string;
@@ -142,7 +142,7 @@ export default function ScheduledActivities() {
   const [activityCompletionRates, setActivityCompletionRates] = useState<Record<string, CompletionRate>>({});
   const [donationItems, setDonationItems] = useState<DonationItem[]>([emptyDonationItem()]);
   const [availableDonationItems, setAvailableDonationItems] = useState<DonationItem[]>([]);
-  const [assignToStudentId, setAssignToStudentId] = useState<number | null>(null);
+  const [assignToStudentId, setAssignToStudentId] = useState<number | string | null>(null);
   const [selectedScheduledActivityId, setSelectedScheduledActivityId] = useState<string | null>(null);
   const [assignDonationForm, setAssignDonationForm] = useState<DonationItem>(emptyDonationItem());
   const [formData, setFormData] = useState({
@@ -214,7 +214,7 @@ export default function ScheduledActivities() {
 
       setStudents(
         (data || []).map((student) => ({
-          id: Number(student.id),
+          id: student.id as any,
           name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
         })),
       );
@@ -244,16 +244,16 @@ export default function ScheduledActivities() {
 
       for (const activity of activities) {
         const scheduledActivityId = scheduledByKey.get(buildScheduleKey(activity.name, activity.activity_date));
-        const excludedStudents = new Set<number>([
+        const excludedStudents = new Set<string>([
           ...activityExclusions
             .filter((row) => String(row.activity_id) === String(activity.id))
-            .map((row) => Number(row.student_id)),
+            .map((row) => String(row.student_id)),
           ...scheduledExclusions
             .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId || ""))
-            .map((row) => Number(row.student_id)),
+            .map((row) => String(row.student_id)),
         ]);
 
-        const eligibleStudentsCount = students.filter((student) => !excludedStudents.has(student.id)).length;
+        const eligibleStudentsCount = students.filter((student) => !excludedStudents.has(String(student.id))).length;
         let completed = 0;
         let total = eligibleStudentsCount;
         let received = 0;
@@ -588,17 +588,17 @@ export default function ScheduledActivities() {
 
       if (donationsResult.error) throw donationsResult.error;
 
-      const excludedStudents = new Set<number>([
+      const excludedStudents = new Set<string>([
         ...(activityExclusionsResult.data || [])
           .filter((row) => String(row.activity_id) === String(activity.id))
-          .map((row) => Number(row.student_id)),
+          .map((row) => String(row.student_id)),
         ...(scheduledExclusionsResult.data || [])
           .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId || ""))
-          .map((row) => Number(row.student_id)),
+          .map((row) => String(row.student_id)),
       ]);
 
       setDonations((donationsResult.data || []) as Donation[]);
-      setEligibleDonationStudents(students.filter((student) => !excludedStudents.has(student.id)));
+      setEligibleDonationStudents(students.filter((student) => !excludedStudents.has(String(student.id))));
       setDonationsDialogOpen(true);
     } catch (error: any) {
       toast.error("Error al cargar donaciones: " + error.message);
@@ -660,7 +660,7 @@ export default function ScheduledActivities() {
     }
   };
 
-  const openAssignDonationDialog = async (studentId: number) => {
+  const openAssignDonationDialog = async (studentId: number | string) => {
     if (!selectedActivity) return;
     let scheduledActivityId = selectedScheduledActivityId;
 
@@ -703,7 +703,10 @@ export default function ScheduledActivities() {
   };
 
   const handleAssignDonation = async () => {
-    if (!selectedActivity || !assignToStudentId || !currentTenant?.id) return;
+    if (!selectedActivity || assignToStudentId === null || !currentTenant?.id) {
+      toast.error("No se pudo determinar alumno o actividad");
+      return;
+    }
     if (!assignDonationForm.name.trim() || !assignDonationForm.amount.trim()) {
       toast.error("Complete nombre y cantidad");
       return;
@@ -767,7 +770,7 @@ export default function ScheduledActivities() {
 
     const pendingRows = eligibleDonationStudents
       .map((student) => {
-        const studentDonations = donations.filter((donation) => donation.student_id === student.id);
+        const studentDonations = donations.filter((donation) => String(donation.student_id) === String(student.id));
         if (studentDonations.length === 0) {
           return { student, detail: "Sin registrar" };
         }
@@ -829,13 +832,13 @@ export default function ScheduledActivities() {
       if (donationsResult.error) throw donationsResult.error;
 
       const donationsData = (donationsResult.data || []) as Donation[];
-      const excludedStudents = new Set<number>([
+      const excludedStudents = new Set<string>([
         ...(activityExclusionsResult.data || [])
           .filter((row) => String(row.activity_id) === String(activity.id))
-          .map((row) => Number(row.student_id)),
+          .map((row) => String(row.student_id)),
         ...(scheduledExclusionsResult.data || [])
           .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId))
-          .map((row) => Number(row.student_id)),
+          .map((row) => String(row.student_id)),
       ]);
 
       const doc = new jsPDF();
@@ -897,10 +900,10 @@ export default function ScheduledActivities() {
       }
 
       const studentsWhoDonated = new Set(
-        donationsData.filter((donation) => donation.student_id != null).map((donation) => Number(donation.student_id)),
+        donationsData.filter((donation) => donation.student_id != null).map((donation) => String(donation.student_id)),
       );
       const studentsWithoutDonation = students.filter(
-        (student) => !studentsWhoDonated.has(student.id) && !excludedStudents.has(student.id),
+        (student) => !studentsWhoDonated.has(String(student.id)) && !excludedStudents.has(String(student.id)),
       );
 
       if (y > 235) {
@@ -957,7 +960,7 @@ export default function ScheduledActivities() {
     () =>
       eligibleDonationStudents.map((student) => ({
         student,
-        donations: donations.filter((donation) => donation.student_id === student.id),
+        donations: donations.filter((donation) => String(donation.student_id) === String(student.id)),
       })),
     [donations, eligibleDonationStudents],
   );
@@ -1377,7 +1380,7 @@ export default function ScheduledActivities() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Asignar Donación</DialogTitle>
-            <DialogDescription>{students.find((student) => student.id === assignToStudentId)?.name}</DialogDescription>
+            <DialogDescription>{students.find((student) => String(student.id) === String(assignToStudentId))?.name}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {availableDonationItems.length > 0 && (
