@@ -1,10 +1,23 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { Home, Wallet, MessageCircle, Calendar, FileText, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const MobileLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { roleInCurrentTenant, loading: tenantLoading } = useTenant();
+    const { userRole, loading: authLoading } = useAuth();
+    const effectiveRole = roleInCurrentTenant ?? userRole;
+
+    useEffect(() => {
+        if (authLoading || tenantLoading) return;
+        if (effectiveRole !== "alumnos" && effectiveRole !== "student") {
+            navigate("/", { replace: true });
+        }
+    }, [authLoading, tenantLoading, effectiveRole, navigate]);
 
     const isActive = (path: string) => location.pathname.includes(path);
 
