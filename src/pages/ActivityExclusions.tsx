@@ -15,20 +15,20 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 
 interface Student {
-  id: number;
+  id: string | number;
   name: string;
 }
 
 interface Activity {
-  id: number;
+  id: string | number;
   name: string;
   activity_date?: string;
 }
 
 interface Exclusion {
-  id: number;
-  student_id: number;
-  activity_id: number;
+  id: string | number;
+  student_id: string | number;
+  activity_id: string | number;
   students: { name: string };
   activities: { name: string; activity_date?: string };
 }
@@ -118,10 +118,11 @@ export default function ActivityExclusions() {
     }
 
     try {
+      const coerceId = (value: string) => (/^\d+$/.test(value) ? Number(value) : value);
       const { error } = await supabase.from("activity_exclusions").insert({
         tenant_id: currentTenant.id,
-        student_id: parseInt(newExclusion.student_id),
-        activity_id: parseInt(newExclusion.activity_id),
+        student_id: coerceId(newExclusion.student_id) as any,
+        activity_id: coerceId(newExclusion.activity_id) as any,
       });
 
       if (error) {
@@ -143,7 +144,7 @@ export default function ActivityExclusions() {
     }
   };
 
-  const handleDeleteExclusion = async (id: number) => {
+  const handleDeleteExclusion = async (id: string | number) => {
     if (!confirm("¿Está seguro de eliminar esta exclusión?")) return;
     if (!currentTenant?.id) {
       toast.error("No se pudo detectar el curso activo");
@@ -155,7 +156,7 @@ export default function ActivityExclusions() {
         .from("activity_exclusions")
         .delete()
         .eq("tenant_id", currentTenant.id)
-        .eq("id", id);
+        .eq("id", id as any);
 
       if (error) throw error;
 
