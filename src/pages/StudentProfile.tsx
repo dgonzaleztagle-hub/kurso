@@ -84,7 +84,7 @@ export default function StudentProfile() {
   }, [currentTenant]);
 
   useEffect(() => {
-    if (selectedStudentId) {
+    if (selectedStudentId !== null && Number.isFinite(selectedStudentId)) {
       loadStudentData();
     }
   }, [selectedStudentId]);
@@ -321,7 +321,10 @@ export default function StudentProfile() {
               <Label htmlFor="student">Estudiante</Label>
               <Select
                 value={selectedStudentId?.toString() || ""}
-                onValueChange={(value) => setSelectedStudentId(Number(value))}
+                onValueChange={(value) => {
+                  const parsed = Number(value);
+                  setSelectedStudentId(Number.isFinite(parsed) ? parsed : null);
+                }}
               >
                 <SelectTrigger id="student">
                   <SelectValue placeholder="Selecciona un estudiante..." />
@@ -338,7 +341,7 @@ export default function StudentProfile() {
           </CardContent>
         </Card>
 
-        {selectedStudentId && !isNaN(selectedStudentId) && !loading && (
+        {selectedStudentId !== null && Number.isFinite(selectedStudentId) && !loading && (
           <>
             {/* Welcome Message */}
             <Card className="bg-gradient-to-r from-purple-500 to-blue-500 text-white">

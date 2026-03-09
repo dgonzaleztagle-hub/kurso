@@ -152,7 +152,7 @@ export default function CreditManagement() {
   };
 
   const handleRedirect = async () => {
-    if (!selectedPayment || !selectedPayment.student_id || !user?.id || !currentTenant?.id) return;
+    if (!selectedPayment || !selectedPayment.student_id || !currentTenant?.id) return;
 
     setProcessing(true);
     try {
@@ -166,7 +166,6 @@ export default function CreditManagement() {
         student_id: selectedPayment.student_id as any,
         amount: movementAmount,
         type: 'payment_redirect',
-        created_by: user.id,
         description: `Redirección de pago folio #${selectedPayment.folio}: ${selectedPayment.concept} (${redirectType})`,
       });
 

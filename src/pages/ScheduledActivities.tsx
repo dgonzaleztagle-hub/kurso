@@ -119,9 +119,6 @@ const parseNumeric = (value: string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
 export default function ScheduledActivities() {
   const { userRole } = useAuth();
   const { currentTenant, roleInCurrentTenant } = useTenant();
@@ -143,6 +140,7 @@ export default function ScheduledActivities() {
   const [donationItems, setDonationItems] = useState<DonationItem[]>([emptyDonationItem()]);
   const [availableDonationItems, setAvailableDonationItems] = useState<DonationItem[]>([]);
   const [assignToStudentId, setAssignToStudentId] = useState<number | null>(null);
+  const [selectedScheduledActivityId, setSelectedScheduledActivityId] = useState<string | null>(null);
   const [assignDonationForm, setAssignDonationForm] = useState<DonationItem>(emptyDonationItem());
   const [formData, setFormData] = useState({
     name: "",
@@ -225,23 +223,35 @@ export default function ScheduledActivities() {
   const loadCompletionRates = async () => {
     try {
       const rates: Record<string, CompletionRate> = {};
+      const activityIds = activities.map((activity) => Number(activity.id)).filter((id) => Number.isFinite(id));
       const [activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        activities.some((activity) => isUuid(activity.id))
-          ? supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id")
-          : Promise.resolve({ data: [], error: null }),
+        supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
       ]);
+      const scheduledActivitiesResult = activityIds.length
+        ? await supabase
+          .from("scheduled_activities")
+          .select("id, activity_id")
+          .eq("tenant_id", currentTenant?.id as string)
+          .in("activity_id", activityIds)
+        : { data: [], error: null };
 
       const activityExclusions = activityExclusionsResult.data || [];
       const scheduledExclusions = scheduledExclusionsResult.data || [];
+      const scheduledByActivityId = new Map<number, string>();
+      (scheduledActivitiesResult.data || []).forEach((row: any) => {
+        scheduledByActivityId.set(Number(row.activity_id), String(row.id));
+      });
 
       for (const activity of activities) {
+        const numericActivityId = Number(activity.id);
+        const scheduledActivityId = scheduledByActivityId.get(numericActivityId);
         const excludedStudents = new Set<number>([
           ...activityExclusions
             .filter((row) => String(row.activity_id) === String(activity.id))
             .map((row) => Number(row.student_id)),
           ...scheduledExclusions
-            .filter((row) => String((row as any).scheduled_activity_id) === String(activity.id))
+            .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId || ""))
             .map((row) => Number(row.student_id)),
         ]);
 
@@ -250,11 +260,11 @@ export default function ScheduledActivities() {
         let total = eligibleStudentsCount;
         let received = 0;
 
-        if (activity.is_with_donations && isUuid(activity.id)) {
+        if (activity.is_with_donations && scheduledActivityId) {
           const { data: donationRows, error } = await supabase
             .from("activity_donations")
             .select("name, unit, amount, cantidad_original, donated_at, student_id")
-            .eq("scheduled_activity_id", activity.id as any);
+            .eq("scheduled_activity_id", scheduledActivityId as any);
 
           if (error) throw error;
 
@@ -301,15 +311,56 @@ export default function ScheduledActivities() {
     setDonationItems([emptyDonationItem()]);
   };
 
-  const replaceBaseDonationItems = async (activityId: string) => {
+  const getScheduledActivityId = async (activity: ScheduledActivity, createIfMissing = false) => {
     if (!currentTenant?.id) throw new Error("Tenant no disponible");
-    await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activityId).is("student_id", null);
+    const numericActivityId = Number(activity.id);
+    if (!Number.isFinite(numericActivityId)) {
+      throw new Error("ID de actividad inválido");
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("scheduled_activities")
+      .select("id")
+      .eq("tenant_id", currentTenant.id)
+      .eq("activity_id", numericActivityId)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing?.id) return String(existing.id);
+    if (!createIfMissing) return null;
+
+    const { data: created, error: createError } = await supabase
+      .from("scheduled_activities")
+      .insert({
+        tenant_id: currentTenant.id,
+        activity_id: numericActivityId,
+        name: activity.name,
+        scheduled_date: activity.activity_date,
+        requires_management: activity.requires_management,
+        is_with_fee: activity.is_with_fee,
+        fee_amount: activity.fee_amount,
+        is_with_donations: activity.is_with_donations,
+        completed: activity.completed,
+      } as any)
+      .select("id")
+      .single();
+
+    if (createError) throw createError;
+    return String(created.id);
+  };
+
+  const replaceBaseDonationItems = async (activity: ScheduledActivity) => {
+    if (!currentTenant?.id) throw new Error("Tenant no disponible");
+    const scheduledActivityId = await getScheduledActivityId(activity, true);
+    if (!scheduledActivityId) throw new Error("No se pudo resolver actividad programada");
+
+    await supabase.from("activity_donations").delete().eq("scheduled_activity_id", scheduledActivityId).is("student_id", null);
 
     const validItems = donationItems
       .filter((item) => item.name.trim() && item.amount.trim())
       .map((item) => ({
         tenant_id: currentTenant.id,
-        scheduled_activity_id: activityId as any,
+        scheduled_activity_id: scheduledActivityId as any,
         name: item.name.trim(),
         amount: item.amount.trim(),
         cantidad_original: item.amount.trim(),
@@ -368,7 +419,18 @@ export default function ScheduledActivities() {
       }
 
       if (formData.is_with_donations && activityId) {
-        await replaceBaseDonationItems(activityId);
+        await replaceBaseDonationItems({
+          id: activityId,
+          name: formData.name.trim(),
+          activity_date: formData.activity_date,
+          amount: formData.is_with_fee ? Number(formData.fee_amount || 0) : 0,
+          description: nextDescription,
+          requires_management: formData.requires_management,
+          is_with_fee: formData.is_with_fee,
+          fee_amount: formData.is_with_fee ? Number(formData.fee_amount || 0) : null,
+          is_with_donations: formData.is_with_donations,
+          completed: editingActivity?.completed || false,
+        });
       }
 
       setDialogOpen(false);
@@ -393,10 +455,16 @@ export default function ScheduledActivities() {
     });
 
     if (activity.is_with_donations) {
+      const scheduledActivityId = await getScheduledActivityId(activity, false);
+      if (!scheduledActivityId) {
+        setDonationItems([emptyDonationItem()]);
+        setDialogOpen(true);
+        return;
+      }
       const { data } = await supabase
         .from("activity_donations")
         .select("name, amount, cantidad_original, unit")
-        .eq("scheduled_activity_id", activity.id as any)
+        .eq("scheduled_activity_id", scheduledActivityId as any)
         .is("student_id", null);
 
       setDonationItems(
@@ -441,7 +509,11 @@ export default function ScheduledActivities() {
 
   const handleDeleteActivity = async (activity: ScheduledActivity) => {
     try {
-      await supabase.from("activity_donations").delete().eq("scheduled_activity_id", activity.id);
+      const scheduledActivityId = await getScheduledActivityId(activity, false);
+      if (scheduledActivityId) {
+        await supabase.from("activity_donations").delete().eq("scheduled_activity_id", scheduledActivityId);
+        await supabase.from("scheduled_activities").delete().eq("id", scheduledActivityId);
+      }
 
       const { error: deleteError } = await supabase
         .from("activities")
@@ -460,9 +532,8 @@ export default function ScheduledActivities() {
 
   const openEditDonationsDialog = async (activity: ScheduledActivity) => {
     setEditingDonationsActivity(activity);
-
-    // Si el ID no es UUID, activity_donations no puede filtrar por él
-    if (!isUuid(activity.id)) {
+    const scheduledActivityId = await getScheduledActivityId(activity, false);
+    if (!scheduledActivityId) {
       setDonationItems([emptyDonationItem()]);
       setEditDonationsDialogOpen(true);
       return;
@@ -472,7 +543,7 @@ export default function ScheduledActivities() {
       const { data, error } = await supabase
         .from("activity_donations")
         .select("name, amount, cantidad_original, unit")
-        .eq("scheduled_activity_id", activity.id as any)
+        .eq("scheduled_activity_id", scheduledActivityId as any)
         .is("student_id", null);
 
       if (error) throw error;
@@ -496,7 +567,7 @@ export default function ScheduledActivities() {
     if (!editingDonationsActivity) return;
 
     try {
-      await replaceBaseDonationItems(editingDonationsActivity.id);
+      await replaceBaseDonationItems(editingDonationsActivity);
       setEditDonationsDialogOpen(false);
       setEditingDonationsActivity(null);
       await fetchActivities();
@@ -509,22 +580,16 @@ export default function ScheduledActivities() {
 
   const openDonationsDialog = async (activity: ScheduledActivity) => {
     setSelectedActivity(activity);
-
-    // Si el ID no es UUID, activity_donations no puede filtrar por él
-    if (!isUuid(activity.id)) {
-      setDonations([]);
-      setEligibleDonationStudents(students);
-      setDonationsDialogOpen(true);
-      return;
-    }
+    const scheduledActivityId = await getScheduledActivityId(activity, false);
+    setSelectedScheduledActivityId(scheduledActivityId);
 
     try {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
-        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id as any).not("student_id", "is", null),
+        scheduledActivityId
+          ? supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId as any).not("student_id", "is", null)
+          : Promise.resolve({ data: [], error: null } as any),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        isUuid(activity.id)
-          ? supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id")
-          : Promise.resolve({ data: [], error: null }),
+        supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
       ]);
 
       if (donationsResult.error) throw donationsResult.error;
@@ -534,7 +599,7 @@ export default function ScheduledActivities() {
           .filter((row) => String(row.activity_id) === String(activity.id))
           .map((row) => Number(row.student_id)),
         ...(scheduledExclusionsResult.data || [])
-          .filter((row) => String((row as any).scheduled_activity_id) === String(activity.id))
+          .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId || ""))
           .map((row) => Number(row.student_id)),
       ]);
 
@@ -603,12 +668,17 @@ export default function ScheduledActivities() {
 
   const openAssignDonationDialog = async (studentId: number) => {
     if (!selectedActivity) return;
+    let scheduledActivityId = selectedScheduledActivityId;
 
     try {
+      if (!scheduledActivityId) {
+        scheduledActivityId = await getScheduledActivityId(selectedActivity, true);
+        setSelectedScheduledActivityId(scheduledActivityId);
+      }
       const { data, error } = await supabase
         .from("activity_donations")
         .select("name, cantidad_original, unit")
-        .eq("scheduled_activity_id", selectedActivity.id)
+        .eq("scheduled_activity_id", scheduledActivityId as any)
         .is("student_id", null);
 
       if (error) throw error;
@@ -646,9 +716,10 @@ export default function ScheduledActivities() {
     }
 
     try {
+      const scheduledActivityId = selectedScheduledActivityId || await getScheduledActivityId(selectedActivity, true);
       const payload = {
         tenant_id: currentTenant.id,
-        scheduled_activity_id: selectedActivity.id as any,
+        scheduled_activity_id: scheduledActivityId as any,
         student_id: assignToStudentId,
         name: assignDonationForm.name.trim(),
         amount: assignDonationForm.amount.trim(),

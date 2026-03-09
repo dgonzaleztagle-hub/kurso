@@ -37,6 +37,9 @@ export default function MobileFinances() {
     const fetchData = async () => {
         try {
             const isStudentView = !!studentId;
+            const normalizedStudentId = typeof studentId === "string" && /^\d+$/.test(studentId)
+                ? Number(studentId)
+                : studentId;
             const tenantSettings = (currentTenant?.settings as any) || {};
             const configuredFee = Number(tenantSettings.monthly_fee);
             const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
@@ -50,7 +53,7 @@ export default function MobileFinances() {
                 .limit(20);
 
             if (isStudentView) {
-                paymentsQuery = paymentsQuery.eq("student_id", studentId as any);
+                paymentsQuery = paymentsQuery.eq("student_id", normalizedStudentId as any);
             }
 
             const { data: paymentsData, error: paymentsError } = await paymentsQuery;
@@ -103,7 +106,7 @@ export default function MobileFinances() {
                 .eq("tenant_id", currentTenant?.id);
 
             if (isStudentView) {
-                allPaymentsQuery = allPaymentsQuery.eq("student_id", studentId as any);
+                allPaymentsQuery = allPaymentsQuery.eq("student_id", normalizedStudentId as any);
             }
 
             const { data: allPayments } = await allPaymentsQuery;
@@ -130,7 +133,7 @@ export default function MobileFinances() {
                     .from("students")
                     .select("enrollment_date")
                     .eq("tenant_id", currentTenant?.id)
-                    .eq("id", studentId as any)
+                    .eq("id", normalizedStudentId as any)
                     .maybeSingle();
 
                 if (studentData?.enrollment_date) {
@@ -155,7 +158,7 @@ export default function MobileFinances() {
                         .from("credit_movements")
                         .select("amount")
                         .eq("tenant_id", currentTenant?.id)
-                        .eq("student_id", studentId as any)
+                        .eq("student_id", normalizedStudentId as any)
                         .eq("type", "payment_redirect")
                         .lt("amount", 0);
 
@@ -163,7 +166,19 @@ export default function MobileFinances() {
                         redirectedToFees = (redirectsResult.data || []).reduce((sum, r: any) => sum + Math.abs(Number(r.amount || 0)), 0);
                     }
 
-                    setMonthlyDebt(Math.max(0, expected - paidMonthly - redirectedToFees));
+                    let availableCredit = 0;
+                    const studentCreditResult = await supabase
+                        .from("student_credits")
+                        .select("amount")
+                        .eq("tenant_id", currentTenant?.id)
+                        .eq("student_id", normalizedStudentId as any)
+                        .maybeSingle();
+
+                    if (!studentCreditResult.error) {
+                        availableCredit = Math.max(0, Number(studentCreditResult.data?.amount || 0));
+                    }
+
+                    setMonthlyDebt(Math.max(0, expected - paidMonthly - redirectedToFees - availableCredit));
                 } else {
                     setMonthlyDebt(0);
                 }
@@ -236,7 +251,7 @@ export default function MobileFinances() {
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <p className="text-gray-500 text-sm font-medium">Flujo Mensual</p>
-                        <p className="text-[#111418] dark:text-white text-xl font-bold">Resumen 2024</p>
+                        <p className="text-[#111418] dark:text-white text-xl font-bold">Resumen {new Date().getFullYear()}</p>
                     </div>
                 </div>
                 {/* CSS Only Chart (Mocked Visuals for now) */}
