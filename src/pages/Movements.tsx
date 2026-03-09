@@ -38,7 +38,7 @@ export default function Movements() {
   const [incomeGlosas, setIncomeGlosas] = useState<string[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState("");
-  const [students, setStudents] = useState<Array<{ id: number, name: string }>>([]);
+  const [students, setStudents] = useState<Array<{ id: number | string, name: string }>>([]);
   const [pendingMonths, setPendingMonths] = useState<string[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [loadingPendingMonths, setLoadingPendingMonths] = useState(false);
@@ -138,13 +138,16 @@ export default function Movements() {
     const MONTHLY_FEE = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
     const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
+    const isNumericId = /^\d+$/.test(selectedStudentId);
+    const normalizedStudentId: number | string = isNumericId ? Number(selectedStudentId) : selectedStudentId;
+
     try {
       // Obtener fecha de matrícula del estudiante
       const { data: studentData, error: studentError } = await supabase
         .from('students')
         .select('enrollment_date')
         .eq('tenant_id', currentTenant.id)
-        .eq('id', parseInt(selectedStudentId))
+        .eq('id', normalizedStudentId as any)
         .single();
 
       if (studentError) throw studentError;
@@ -173,20 +176,29 @@ export default function Movements() {
         .from('payments')
         .select('amount')
         .eq('tenant_id', currentTenant.id)
-        .eq('student_id', parseInt(selectedStudentId))
+        .eq('student_id', normalizedStudentId as any)
         .ilike('concept', 'Cuota%');
 
       if (paymentsError) throw paymentsError;
 
-      const { data: creditMovements, error: creditsError } = await supabase
+      let creditMovements: Array<{ amount: number | string | null }> = [];
+      const creditQuery = await supabase
         .from('credit_movements')
         .select('amount')
         .eq('tenant_id', currentTenant.id)
-        .eq('student_id', parseInt(selectedStudentId))
+        .eq('student_id', normalizedStudentId as any)
         .eq('type', 'payment_redirect')
         .lt('amount', 0);
 
-      if (creditsError) throw creditsError;
+      if (creditQuery.error) {
+        const msg = String(creditQuery.error.message || '');
+        // Compatibilidad: algunos tenants quedaron con credit_movements.student_id UUID legacy.
+        if (!(isNumericId && msg.toLowerCase().includes('invalid input syntax for type uuid'))) {
+          throw creditQuery.error;
+        }
+      } else {
+        creditMovements = (creditQuery.data || []) as Array<{ amount: number | string | null }>;
+      }
 
       const toSafeNumber = (value: unknown) => {
         const n = Number(value);
@@ -255,7 +267,7 @@ export default function Movements() {
         const insertData: any = {
           folio,
           tenant_id: currentTenant.id,
-          student_id: studentId ? parseInt(studentId) : null,
+          student_id: studentId ? (/^\d+$/.test(studentId) ? Number(studentId) : studentId) : null,
           student_name: studentName,
           payment_date: date,
           amount: parseFloat(amount),
