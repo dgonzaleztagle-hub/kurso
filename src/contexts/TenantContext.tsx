@@ -169,7 +169,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (data) {
             setRoleInCurrentTenant(data.role);
         } else {
-            setRoleInCurrentTenant('student'); // Fallback seguro
+            // Avoid forcing student role when membership lookup fails.
+            // Let auth/global role handle the fallback instead.
+            setRoleInCurrentTenant(null);
         }
     };
 

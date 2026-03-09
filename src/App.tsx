@@ -267,7 +267,7 @@ function AppRoutes() {
 
       {/* STITCH MOBILE ROUTES */}
       <Route path="/mobile" element={
-        <ProtectedRoute allowedRoles={['master', 'owner', 'admin', 'alumnos']}>
+        <ProtectedRoute allowedRoles={['alumnos']}>
           <MobileLayout />
         </ProtectedRoute>
       }>
