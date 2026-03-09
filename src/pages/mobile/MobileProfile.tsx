@@ -3,9 +3,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { LogOut, User, Users, Phone, Mail, ChevronRight, GraduationCap } from "lucide-react";
+import { LogOut, User, Users, Phone, Mail, ChevronRight, GraduationCap, Pencil, Save, X } from "lucide-react";
+import { toast } from "sonner";
 
 interface Student {
     id: string;
@@ -15,10 +17,13 @@ interface Student {
 }
 
 export default function MobileProfile() {
-    const { user, appUser, signOut } = useAuth();
+    const { user, appUser, userRole, signOut, updateProfile, refreshUserData } = useAuth();
     const { currentTenant } = useTenant();
     const [myStudents, setMyStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
+    const [editingPhone, setEditingPhone] = useState(false);
+    const [phoneDraft, setPhoneDraft] = useState("");
+    const [savingPhone, setSavingPhone] = useState(false);
 
     useEffect(() => {
         if (currentTenant && user) {
@@ -28,35 +33,75 @@ export default function MobileProfile() {
         }
     }, [currentTenant, user]);
 
+    useEffect(() => {
+        setPhoneDraft(appUser?.whatsapp_number || "");
+    }, [appUser?.whatsapp_number]);
+
     const fetchStudents = async () => {
         try {
-            // Join student_guardians -> students
-            const { data, error } = await supabase
-                .from('student_guardians')
-                .select(`
-                    students (
-                        id,
-                        first_name,
-                        last_name,
-                        enrollment_date
-                    )
-                `)
-                .eq('guardian_id', user?.id)
-                .eq('tenant_id', currentTenant?.id);
+            if (userRole === 'alumnos') {
+                const { data, error } = await supabase
+                    .from('user_students')
+                    .select(`
+                        students (
+                            id,
+                            first_name,
+                            last_name,
+                            enrollment_date
+                        )
+                    `)
+                    .eq('user_id', user?.id);
 
-            if (error) {
-                console.error("Error fetching students:", error);
-                // Fallback for demo if table/relation fails
-                setMyStudents([]);
+                if (error) {
+                    console.error("Error fetching own student link:", error);
+                    setMyStudents([]);
+                } else {
+                    const list = (data || []).map((item: any) => item.students).filter(Boolean);
+                    setMyStudents(list);
+                }
             } else {
-                // Flatten structure
-                const studentsList = data.map((item: any) => item.students).filter(Boolean);
-                setMyStudents(studentsList);
+                // Guardian/staff view: children associated in this tenant
+                const { data, error } = await supabase
+                    .from('student_guardians')
+                    .select(`
+                        students (
+                            id,
+                            first_name,
+                            last_name,
+                            enrollment_date
+                        )
+                    `)
+                    .eq('guardian_id', user?.id)
+                    .eq('tenant_id', currentTenant?.id);
+
+                if (error) {
+                    console.error("Error fetching students:", error);
+                    setMyStudents([]);
+                } else {
+                    const studentsList = data.map((item: any) => item.students).filter(Boolean);
+                    setMyStudents(studentsList);
+                }
             }
         } catch (err) {
             console.error("Exception fetching students:", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSavePhone = async () => {
+        if (!user) return;
+        setSavingPhone(true);
+        try {
+            const { error } = await updateProfile({ whatsapp_number: phoneDraft || null });
+            if (error) throw error;
+            await refreshUserData();
+            setEditingPhone(false);
+            toast.success("Contacto actualizado");
+        } catch (error: any) {
+            toast.error(error?.message || "No se pudo actualizar el contacto");
+        } finally {
+            setSavingPhone(false);
         }
     };
 
@@ -72,6 +117,8 @@ export default function MobileProfile() {
             .toUpperCase()
             .substring(0, 2);
     };
+
+    const isStudentRole = userRole === 'alumnos';
 
     return (
         <div className="pb-24 pt-6 px-4 max-w-md mx-auto min-h-screen bg-gray-50/50 dark:bg-gray-900/50">
@@ -96,19 +143,48 @@ export default function MobileProfile() {
                     <h2 className="text-xl font-bold text-center text-gray-900 dark:text-gray-100">
                         {appUser?.full_name || user?.email?.split('@')[0]}
                     </h2>
-                    <p className="text-sm text-gray-500 mb-6">{user?.email}</p>
+                    <p className="text-sm text-gray-500 mb-6">
+                        {isStudentRole ? "Cuenta de alumno" : (user?.email || "")}
+                    </p>
 
                     <div className="w-full grid grid-cols-2 gap-3">
                         <div className="flex flex-col items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
                             <Phone className="h-5 w-5 text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500">
-                                {appUser?.whatsapp_number || "Sin teléfono"}
-                            </span>
+                            {editingPhone ? (
+                                <div className="w-full flex items-center gap-1">
+                                    <Input
+                                        value={phoneDraft}
+                                        onChange={(e) => setPhoneDraft(e.target.value)}
+                                        placeholder="+56912345678"
+                                        className="h-8 text-xs"
+                                    />
+                                    <Button size="icon" variant="ghost" onClick={handleSavePhone} disabled={savingPhone}>
+                                        <Save className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => { setEditingPhone(false); setPhoneDraft(appUser?.whatsapp_number || ""); }}
+                                        disabled={savingPhone}
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-500 inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300"
+                                    onClick={() => setEditingPhone(true)}
+                                >
+                                    {appUser?.whatsapp_number || "Sin teléfono"}
+                                    <Pencil className="h-3 w-3" />
+                                </button>
+                            )}
                         </div>
                         <div className="flex flex-col items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
                             <Mail className="h-5 w-5 text-gray-400 mb-1" />
                             <span className="text-xs text-gray-500 truncate w-full text-center">
-                                Contacto
+                                {isStudentRole ? "Canal interno" : (user?.email || "Sin contacto")}
                             </span>
                         </div>
                     </div>
@@ -117,7 +193,7 @@ export default function MobileProfile() {
                 {/* Students / Children Section */}
                 <div>
                     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">
-                        Mis Estudiantes
+                        {isStudentRole ? 'Mi Cuenta de Alumno' : 'Mis Estudiantes'}
                     </h3>
 
                     {loading ? (
@@ -128,7 +204,9 @@ export default function MobileProfile() {
                                 <Users className="h-6 w-6 text-gray-400" />
                             </div>
                             <p className="text-gray-500 text-sm">
-                                No tienes estudiantes asociados en este curso.
+                                {isStudentRole
+                                    ? 'No tienes un perfil de alumno vinculado.'
+                                    : 'No tienes estudiantes asociados en este curso.'}
                             </p>
                         </Card>
                     ) : (
@@ -164,7 +242,7 @@ export default function MobileProfile() {
                         Cerrar Sesión
                     </Button>
                     <p className="text-center text-xs text-gray-400 mt-4">
-                        Stitch Mobile v1.0.0
+                        Mi Kurso Mobile
                     </p>
                 </div>
             </div>

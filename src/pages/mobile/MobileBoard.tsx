@@ -33,8 +33,7 @@ export default function MobileBoard() {
 
     const fetchPosts = async () => {
         try {
-            // Fetch posts for the current tenant
-            // Note: If the table doesn't exist yet (migration pending), this will fail gracefully.
+            // Fuente unica de anuncios: public.posts (gestionados por owner/admin en PostManagement)
             const { data, error } = await supabase
                 .from('posts' as any) // Casting to any until types are generated
                 .select('*')
@@ -45,37 +44,17 @@ export default function MobileBoard() {
 
             if (error) {
                 console.error('Error fetching posts:', error);
-                // Fallback to mock data if table doesn't exist or error
-                setPosts(MOCK_POSTS);
+                setPosts([]);
             } else {
                 setPosts((data as any) || []);
             }
         } catch (err) {
             console.error('Exception fetching posts:', err);
-            setPosts(MOCK_POSTS);
+            setPosts([]);
         } finally {
             setLoading(false);
         }
     };
-
-    const MOCK_POSTS: Post[] = [
-        {
-            id: '1',
-            title: '¡Bienvenidos al Año Escolar 2026!',
-            content: 'Estamos muy emocionados de comenzar este nuevo ciclo. Recuerden revisar la agenda para los próximos eventos.',
-            is_pinned: true,
-            is_official: true,
-            created_at: new Date().toISOString(),
-        },
-        {
-            id: '2',
-            title: 'Cambio de horario Reunión',
-            content: 'La reunión de apoderados se ha movido para las 19:30 hrs. Favor tomar nota.',
-            is_pinned: false,
-            is_official: true,
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-        }
-    ];
 
     return (
         <div className="pb-24 pt-6 px-4 max-w-md mx-auto min-h-screen bg-gray-50/50 dark:bg-gray-900/50">
