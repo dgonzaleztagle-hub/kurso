@@ -742,7 +742,12 @@ export default function ScheduledActivities() {
   };
 
   const handleShareDonations = async (activity: ScheduledActivity) => {
-    const donationUrl = `${window.location.origin}/donaciones/${activity.id}`;
+    const scheduledActivityId = await getScheduledActivityId(activity, true);
+    if (!scheduledActivityId) {
+      toast.error("No se pudo generar enlace de donaciones");
+      return;
+    }
+    const donationUrl = `${window.location.origin}/donaciones/${scheduledActivityId}`;
     const shareText = `Selecciona tu donacion para la actividad "${activity.name}".`;
 
     if (navigator.share) {
@@ -814,19 +819,17 @@ export default function ScheduledActivities() {
   };
 
   const handleDownloadDonationsReport = async (activity: ScheduledActivity) => {
-    // Si el ID no es UUID, activity_donations no puede filtrar por él
-    if (!isUuid(activity.id)) {
-      toast.error("No se pueden generar reportes de donaciones para actividades con ID numérico");
+    const scheduledActivityId = await getScheduledActivityId(activity, false);
+    if (!scheduledActivityId) {
+      toast.error("No hay actividad programada asociada para generar reporte");
       return;
     }
 
     try {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
-        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", activity.id).order("name", { ascending: true }),
+        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId as any).order("name", { ascending: true }),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        isUuid(activity.id)
-          ? supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id")
-          : Promise.resolve({ data: [], error: null }),
+        supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
       ]);
 
       if (donationsResult.error) throw donationsResult.error;
@@ -837,7 +840,7 @@ export default function ScheduledActivities() {
           .filter((row) => String(row.activity_id) === String(activity.id))
           .map((row) => Number(row.student_id)),
         ...(scheduledExclusionsResult.data || [])
-          .filter((row) => String((row as any).scheduled_activity_id) === String(activity.id))
+          .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId))
           .map((row) => Number(row.student_id)),
       ]);
 

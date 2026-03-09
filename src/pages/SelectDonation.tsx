@@ -43,6 +43,8 @@ export default function SelectDonation() {
   const { user, studentId, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [activity, setActivity] = useState<ScheduledActivity | null>(null);
+  const [resolvedScheduledActivityId, setResolvedScheduledActivityId] = useState<string | null>(null);
+  const [studentTenantId, setStudentTenantId] = useState<string | null>(null);
   const [availableItems, setAvailableItems] = useState<DonationItem[]>([]);
   const [selectedDonations, setSelectedDonations] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -59,37 +61,60 @@ export default function SelectDonation() {
   const loadActivity = async () => {
     try {
       setLoading(true);
+      if (!activityId) throw new Error("Actividad no especificada");
+      if (!studentId) throw new Error("No hay alumno autenticado");
 
-      // Obtener información de la actividad programada
-      let { data: activityData, error: activityError } = await supabase
-        .from("activities")
-        .select("id, name, activity_date")
-        .eq("id", activityId)
-        .single();
+      const { data: studentData, error: studentError } = await supabase
+        .from("students")
+        .select("tenant_id")
+        .eq("id", studentId as any)
+        .maybeSingle();
+      if (studentError) throw studentError;
+      if (!studentData?.tenant_id) throw new Error("No se pudo determinar el curso del alumno");
+      setStudentTenantId(studentData.tenant_id);
 
-      if (activityError?.message?.includes("relation") || activityError?.message?.includes("activity_date")) {
-        const legacyResult = await supabase
+      const isUuidParam = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activityId);
+      let scheduledActivity: any = null;
+
+      if (isUuidParam) {
+        const byId = await supabase
           .from("scheduled_activities")
           .select("id, name, scheduled_date")
+          .eq("tenant_id", studentData.tenant_id)
           .eq("id", activityId)
-          .single();
-
-        activityData = legacyResult.data as any;
-        activityError = legacyResult.error;
+          .maybeSingle();
+        if (byId.error) throw byId.error;
+        scheduledActivity = byId.data;
+      } else if (/^\d+$/.test(activityId)) {
+        const byActivityId = await supabase
+          .from("scheduled_activities")
+          .select("id, name, scheduled_date")
+          .eq("tenant_id", studentData.tenant_id)
+          .eq("activity_id", Number(activityId))
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (byActivityId.error) throw byActivityId.error;
+        scheduledActivity = byActivityId.data;
       }
 
-      if (activityError) throw activityError;
+      if (!scheduledActivity) {
+        throw new Error("No se encontró actividad programada para este enlace");
+      }
+
+      setResolvedScheduledActivityId(String(scheduledActivity.id));
       setActivity({
-        id: activityData.id,
-        name: activityData.name,
-        scheduled_date: activityData.scheduled_date || activityData.activity_date,
+        id: String(scheduledActivity.id),
+        name: scheduledActivity.name,
+        scheduled_date: scheduledActivity.scheduled_date,
       });
 
       // Cargar TODOS los items de donación de esta actividad
       const { data: allDonations, error: donationsError } = await supabase
         .from("activity_donations")
         .select("*")
-        .eq("scheduled_activity_id", activityId)
+        .eq("tenant_id", studentData.tenant_id)
+        .eq("scheduled_activity_id", scheduledActivity.id)
         .order("student_id", { nullsFirst: true });
 
       if (donationsError) throw donationsError;
@@ -206,11 +231,12 @@ export default function SelectDonation() {
     }
 
     // ADVERTENCIA: Verificar si el estudiante ya tiene donaciones registradas
-    if (studentId) {
+    if (studentId && resolvedScheduledActivityId && studentTenantId) {
       const { data: existingDonations } = await supabase
         .from("activity_donations")
         .select("id, name, amount, unit")
-        .eq("scheduled_activity_id", activityId)
+        .eq("tenant_id", studentTenantId)
+        .eq("scheduled_activity_id", resolvedScheduledActivityId)
         .eq("student_id", studentId);
 
       if (existingDonations && existingDonations.length > 0) {
@@ -230,6 +256,10 @@ export default function SelectDonation() {
 
   const handleConfirm = async () => {
     if (!studentId) return;
+    if (!resolvedScheduledActivityId || !studentTenantId) {
+      toast.error("No se pudo resolver la actividad de donaciones");
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -247,7 +277,8 @@ export default function SelectDonation() {
         const { data: baseItem, error: fetchError } = await supabase
           .from("activity_donations")
           .select("*")
-          .eq("scheduled_activity_id", activityId)
+          .eq("tenant_id", studentTenantId)
+          .eq("scheduled_activity_id", resolvedScheduledActivityId)
           .eq("name", item.name)
           .eq("unit", item.unit)
           .is("student_id", null)
@@ -271,7 +302,8 @@ export default function SelectDonation() {
 
         // Crear múltiples registros de donación (uno por cada unidad donada)
         const donationsToInsert = Array.from({ length: numQuantity }, () => ({
-          scheduled_activity_id: activityId!,
+          tenant_id: studentTenantId,
+          scheduled_activity_id: resolvedScheduledActivityId,
           name: item.name,
           amount: "1", // Cada registro representa 1 unidad
           unit: item.unit,
@@ -296,6 +328,7 @@ export default function SelectDonation() {
         const { error: updateError } = await supabase
           .from("activity_donations")
           .update({ amount: remainingAmount.toString() })
+          .eq("tenant_id", studentTenantId)
           .eq("id", baseItem.id);
 
         if (updateError) {
