@@ -147,23 +147,18 @@ export default function CreditManagement() {
   };
 
   const handleRedirect = async () => {
-    if (!selectedPayment || !selectedPayment.student_id || !user?.id) return;
+    if (!selectedPayment || !selectedPayment.student_id || !user?.id || !currentTenant?.id) return;
 
     setProcessing(true);
     try {
       // Create credit movement
       const { error } = await supabase.from("credit_movements").insert({
+        tenant_id: currentTenant.id,
         student_id: selectedPayment.student_id,
         amount: selectedPayment.amount,
         type: 'payment_redirect',
         created_by: user.id,
-        description: `Redirección de pago folio #${selectedPayment.folio}: ${selectedPayment.concept}`,
-        source_payment_id: selectedPayment.id,
-        details: {
-          redirect_type: redirectType,
-          payment_folio: selectedPayment.folio,
-          payment_concept: selectedPayment.concept,
-        }
+        description: `Redirección de pago folio #${selectedPayment.folio}: ${selectedPayment.concept} (${redirectType})`,
       });
 
       if (error) throw error;

@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ArrowUpRight, ArrowDownLeft, Banknote, ShoppingCart, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { parseDateFromDB } from "@/lib/dateUtils";
 
 interface Movement {
     id: number;
@@ -17,11 +19,14 @@ interface Movement {
 
 export default function MobileFinances() {
     const { currentTenant } = useTenant();
+    const { studentId } = useAuth();
     const [movements, setMovements] = useState<Movement[]>([]);
     const [loading, setLoading] = useState(true);
     const [balance, setBalance] = useState(0);
     const [income, setIncome] = useState(0);
     const [expenses, setExpenses] = useState(0);
+    const [monthlyDebt, setMonthlyDebt] = useState(0);
+    const [paymentCount, setPaymentCount] = useState(0);
 
     useEffect(() => {
         if (currentTenant) {
@@ -31,25 +36,39 @@ export default function MobileFinances() {
 
     const fetchData = async () => {
         try {
+            const isStudentView = !!studentId;
+            const tenantSettings = (currentTenant?.settings as any) || {};
+            const configuredFee = Number(tenantSettings.monthly_fee);
+            const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
+
             // 1. Fetch Income (Payments)
-            const { data: paymentsData, error: paymentsError } = await supabase
+            let paymentsQuery = supabase
                 .from("payments")
                 .select("*")
                 .eq("tenant_id", currentTenant?.id)
                 .order("payment_date", { ascending: false })
                 .limit(20);
 
+            if (isStudentView) {
+                paymentsQuery = paymentsQuery.eq("student_id", studentId as any);
+            }
+
+            const { data: paymentsData, error: paymentsError } = await paymentsQuery;
             if (paymentsError) throw paymentsError;
 
-            // 2. Fetch Expenses
-            const { data: expensesData, error: expensesError } = await supabase
-                .from("expenses")
-                .select("*")
-                .eq("tenant_id", currentTenant?.id)
-                .order("expense_date", { ascending: false })
-                .limit(20);
+            // 2. Fetch Expenses (solo vista admin/global)
+            let expensesData: any[] = [];
+            if (!isStudentView) {
+                const { data, error: expensesError } = await supabase
+                    .from("expenses")
+                    .select("*")
+                    .eq("tenant_id", currentTenant?.id)
+                    .order("expense_date", { ascending: false })
+                    .limit(20);
 
-            if (expensesError) throw expensesError;
+                if (expensesError) throw expensesError;
+                expensesData = data || [];
+            }
 
             // 3. Normalize and Merge
             const incomes: Movement[] = (paymentsData || []).map((p: any) => ({
@@ -75,17 +94,28 @@ export default function MobileFinances() {
             );
 
             setMovements(merged.slice(0, 20));
+            setPaymentCount((paymentsData || []).length);
 
             // 4. Calculate Totals (Separate simple query for totals)
-            const { data: allPayments } = await supabase
+            let allPaymentsQuery = supabase
                 .from("payments")
-                .select("amount")
+                .select("amount, concept")
                 .eq("tenant_id", currentTenant?.id);
 
-            const { data: allExpenses } = await supabase
-                .from("expenses")
-                .select("amount")
-                .eq("tenant_id", currentTenant?.id);
+            if (isStudentView) {
+                allPaymentsQuery = allPaymentsQuery.eq("student_id", studentId as any);
+            }
+
+            const { data: allPayments } = await allPaymentsQuery;
+
+            let allExpenses: any[] = [];
+            if (!isStudentView) {
+                const { data } = await supabase
+                    .from("expenses")
+                    .select("amount")
+                    .eq("tenant_id", currentTenant?.id);
+                allExpenses = data || [];
+            }
 
             const totalInc = (allPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
             const totalExp = (allExpenses || []).reduce((sum, e) => sum + Number(e.amount), 0);
@@ -93,6 +123,53 @@ export default function MobileFinances() {
             setIncome(totalInc);
             setExpenses(totalExp);
             setBalance(totalInc - totalExp);
+
+            if (isStudentView) {
+                // Deuda estimada de cuotas para el año actual (marzo-diciembre)
+                const { data: studentData } = await supabase
+                    .from("students")
+                    .select("enrollment_date")
+                    .eq("tenant_id", currentTenant?.id)
+                    .eq("id", studentId as any)
+                    .maybeSingle();
+
+                if (studentData?.enrollment_date) {
+                    const enrollmentDate = parseDateFromDB(studentData.enrollment_date);
+                    const currentYear = new Date().getFullYear();
+                    const enrollmentMonth = enrollmentDate.getMonth();
+                    const enrollmentYear = enrollmentDate.getFullYear();
+                    const startMonth = 2; // marzo
+                    const firstPayableMonth = (enrollmentYear === currentYear && enrollmentMonth > startMonth)
+                        ? enrollmentMonth
+                        : startMonth;
+
+                    const payableMonthsCount = Math.max(0, 12 - firstPayableMonth);
+                    const expected = payableMonthsCount * monthlyFee;
+
+                    const paidMonthly = (allPayments || [])
+                        .filter((p: any) => String(p.concept || "").toLowerCase().startsWith("cuota"))
+                        .reduce((sum, p: any) => sum + Number(p.amount || 0), 0);
+
+                    let redirectedToFees = 0;
+                    const redirectsResult = await supabase
+                        .from("credit_movements")
+                        .select("amount")
+                        .eq("tenant_id", currentTenant?.id)
+                        .eq("student_id", studentId as any)
+                        .eq("type", "payment_redirect")
+                        .lt("amount", 0);
+
+                    if (!redirectsResult.error) {
+                        redirectedToFees = (redirectsResult.data || []).reduce((sum, r: any) => sum + Math.abs(Number(r.amount || 0)), 0);
+                    }
+
+                    setMonthlyDebt(Math.max(0, expected - paidMonthly - redirectedToFees));
+                } else {
+                    setMonthlyDebt(0);
+                }
+            } else {
+                setMonthlyDebt(0);
+            }
 
         } catch (err) {
             console.error("Error fetching finances:", err);
@@ -127,7 +204,7 @@ export default function MobileFinances() {
 
                 <div className="flex items-center gap-2 bg-white/20 w-fit px-3 py-1 rounded-lg backdrop-blur-sm">
                     <span className="text-xs font-semibold">
-                        {balance >= 0 ? "Finanzas Saludables" : "Saldo Negativo"}
+                        {studentId ? `${paymentCount} pagos registrados` : (balance >= 0 ? "Finanzas Saludables" : "Saldo Negativo")}
                     </span>
                 </div>
             </div>
@@ -148,9 +225,9 @@ export default function MobileFinances() {
                         <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600">
                             <ArrowUpRight className="w-4 h-4" />
                         </div>
-                        <span className="text-xs text-gray-500 uppercase font-medium">Gastos</span>
+                        <span className="text-xs text-gray-500 uppercase font-medium">{studentId ? "Deuda Cuotas" : "Gastos"}</span>
                     </div>
-                    <p className="text-lg font-bold text-[#111418] dark:text-white">{formatCurrency(expenses)}</p>
+                    <p className="text-lg font-bold text-[#111418] dark:text-white">{formatCurrency(studentId ? monthlyDebt : expenses)}</p>
                 </div>
             </div>
 
