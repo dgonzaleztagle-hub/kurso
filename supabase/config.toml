@@ -22,7 +22,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.create-supplier-request-link]
-verify_jwt = true
+verify_jwt = false
 
 [functions.submit-supplier-payment-request]
 verify_jwt = false
