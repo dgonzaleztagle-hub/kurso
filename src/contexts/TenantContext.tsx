@@ -74,6 +74,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             name,
             subscription_status,
             owner_id,
+            settings,
             status,
             fiscal_year,
             previous_tenant_id,
