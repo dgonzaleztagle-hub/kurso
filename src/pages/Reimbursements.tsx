@@ -198,7 +198,9 @@ export default function Reimbursements() {
     setUploading(true);
 
     try {
-      const { data: folioData } = await supabase.rpc('get_next_reimbursement_folio');
+      const { data: folioData } = await supabase.rpc('get_next_reimbursement_folio_for_tenant' as any, {
+        target_tenant_id: resolvedTenantId,
+      });
 
       const accountInfo = {
         bank,
@@ -301,7 +303,9 @@ export default function Reimbursements() {
   };
 
   const buildExpensePayload = async (reimbursement: ReimbursementWithUser) => {
-    const { data: folioData, error: folioError } = await supabase.rpc('get_next_expense_folio');
+    const { data: folioData, error: folioError } = await supabase.rpc('get_next_expense_folio_for_tenant' as any, {
+      target_tenant_id: currentTenant!.id,
+    });
     if (folioError) throw folioError;
 
     const supplier =

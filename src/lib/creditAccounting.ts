@@ -59,6 +59,48 @@ export const getMonthLabel = (key: string) => {
   return month && year ? `${month} ${year}` : key;
 };
 
+const MONTH_NAME_SET = new Set(SCHOOL_MONTHS.map((item) => item.name));
+
+const normalizeMonthName = (value: string | null | undefined): SchoolMonthName | null => {
+  if (!value) return null;
+  const normalized = String(value).trim().toUpperCase();
+  return MONTH_NAME_SET.has(normalized as SchoolMonthName) ? (normalized as SchoolMonthName) : null;
+};
+
+const resolveMonthKeysFromPeriod = (
+  rawPeriod: string | null | undefined,
+  payableMonths: Array<{ month: SchoolMonthName; key: string; sortOrder: number }>,
+  year: number,
+) => {
+  if (!rawPeriod) return [] as string[];
+
+  const directMonthName = normalizeMonthName(rawPeriod);
+  if (directMonthName) {
+    return [getMonthKey(year, directMonthName)];
+  }
+
+  const normalized = String(rawPeriod).trim().toUpperCase();
+
+  if (/^\d{4}-[A-ZÁÉÍÓÚÑ]+$/.test(normalized)) {
+    return [normalized];
+  }
+
+  const [rangeStartRaw, rangeEndRaw] = normalized.split("-");
+  const rangeStart = normalizeMonthName(rangeStartRaw);
+  const rangeEnd = normalizeMonthName(rangeEndRaw);
+
+  if (rangeStart && rangeEnd) {
+    const startIndex = payableMonths.findIndex((month) => month.month === rangeStart);
+    const endIndex = payableMonths.findIndex((month) => month.month === rangeEnd);
+
+    if (startIndex >= 0 && endIndex >= startIndex) {
+      return payableMonths.slice(startIndex, endIndex + 1).map((month) => month.key);
+    }
+  }
+
+  return [] as string[];
+};
+
 export const getPayableSchoolMonths = (
   enrollmentDateRaw: string,
   year = getCurrentSchoolYear(),
@@ -109,6 +151,26 @@ export const calculateMonthlyDebtItems = ({
 }): MonthDebtItem[] => {
   const payableMonths = getPayableSchoolMonths(enrollmentDate, year, period);
   const creditByMonth = new Map<string, number>();
+  const directByMonth = new Map<string, number>();
+
+  const applyAmountAcrossMonths = (amount: number, monthKeys: string[]) => {
+    let remaining = amount;
+
+    for (const monthKey of monthKeys) {
+      if (remaining <= 0) break;
+      if (!payableMonths.some((month) => month.key === monthKey)) continue;
+
+      const current = directByMonth.get(monthKey) || 0;
+      const available = Math.max(0, monthlyFee - current);
+      if (available <= 0) continue;
+
+      const applied = Math.min(remaining, available);
+      directByMonth.set(monthKey, current + applied);
+      remaining -= applied;
+    }
+
+    return remaining;
+  };
 
   applications
     .filter((application) => application.target_type === "monthly_fee" && application.target_month)
@@ -121,13 +183,29 @@ export const calculateMonthlyDebtItems = ({
       );
     });
 
-  let remainingDirectCoverage = payments
+  let untargetedDirectCoverage = 0;
+
+  payments
     .filter((payment) => String(payment.concept || "").toLowerCase().startsWith("cuota"))
-    .reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
+    .forEach((payment) => {
+      let remaining = getNetPaymentAmount(payment);
+      if (remaining <= 0) return;
+
+      const targetedMonthKeys = resolveMonthKeysFromPeriod(payment.month_period, payableMonths, year);
+      if (targetedMonthKeys.length > 0) {
+        remaining = applyAmountAcrossMonths(remaining, targetedMonthKeys);
+      }
+
+      untargetedDirectCoverage += remaining;
+    });
+
+  untargetedDirectCoverage = applyAmountAcrossMonths(
+    untargetedDirectCoverage,
+    payableMonths.map((month) => month.key),
+  );
 
   return payableMonths.map((monthInfo) => {
-    const directApplied = Math.min(monthlyFee, remainingDirectCoverage);
-    remainingDirectCoverage = Math.max(0, remainingDirectCoverage - directApplied);
+    const directApplied = directByMonth.get(monthInfo.key) || 0;
     const creditApplied = creditByMonth.get(monthInfo.key) || 0;
     const paid = directApplied + creditApplied;
 

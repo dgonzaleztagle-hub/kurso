@@ -91,7 +91,7 @@ export default function MonthlyFees() {
         monthly_fee: newFee
       };
 
-      const { error } = await supabase
+      const { data: updatedTenant, error } = await supabase
         .from('tenants')
         .update({ settings: updatedSettings })
         .eq('id', currentTenant.id);
@@ -99,9 +99,10 @@ export default function MonthlyFees() {
       if (error) throw error;
 
       toast.success("Monto de cuota actualizado");
-      setCurrentFee(newFee);
+      const persistedFee = Number(((updatedTenant as any)?.[0]?.settings || updatedSettings).monthly_fee);
+      setCurrentFee(Number.isFinite(persistedFee) ? persistedFee : newFee);
       setIsEditing(false);
-      loadMonthlyFeeStatuses(newFee); // Reload with new fee
+      loadMonthlyFeeStatuses(Number.isFinite(persistedFee) ? persistedFee : newFee); // Reload with new fee
       await refreshTenants(currentTenant.id);
     } catch (error) {
       console.error("Error updating fee:", error);

@@ -1446,9 +1446,21 @@ export type Database = {
         Args: { p_tenant_id: string }
         Returns: Json
       }
-      get_next_expense_folio: { Args: never; Returns: number }
-      get_next_payment_folio: { Args: never; Returns: number }
-      get_next_reimbursement_folio: { Args: never; Returns: number }
+        get_next_expense_folio: { Args: never; Returns: number }
+        get_next_expense_folio_for_tenant: {
+          Args: { target_tenant_id: string }
+          Returns: number
+        }
+        get_next_payment_folio: { Args: never; Returns: number }
+        get_next_payment_folio_for_tenant: {
+          Args: { target_tenant_id: string }
+          Returns: number
+        }
+        get_next_reimbursement_folio: { Args: never; Returns: number }
+        get_next_reimbursement_folio_for_tenant: {
+          Args: { target_tenant_id: string }
+          Returns: number
+        }
       get_platform_clients: {
         Args: never
         Returns: {

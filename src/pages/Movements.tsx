@@ -16,7 +16,7 @@ type MovementType = "ingreso" | "egreso" | null;
 type IncomeType = "actividad" | "cuota_mensual" | "otros" | null;
 
 interface Activity {
-  id: number;
+  id: string;
   name: string;
   amount: number;
 }
@@ -250,7 +250,9 @@ export default function Movements() {
     try {
       if (movementType === "ingreso") {
         // Get next folio for payment
-        const { data: folioData } = await supabase.rpc("get_next_payment_folio");
+        const { data: folioData } = await supabase.rpc("get_next_payment_folio_for_tenant" as any, {
+          target_tenant_id: currentTenant.id,
+        });
         const folio = folioData || 1;
 
         let finalConcept = "";
@@ -282,7 +284,7 @@ export default function Movements() {
         };
 
         if (incomeType === "actividad" && selectedActivity) {
-          insertData.activity_id = parseInt(selectedActivity);
+          insertData.activity_id = selectedActivity;
         }
 
         if (monthPeriod) {
@@ -305,7 +307,9 @@ export default function Movements() {
         toast.success(`Ingreso registrado con folio ${folio}`);
       } else {
         // Get next folio for expense
-        const { data: folioData } = await supabase.rpc("get_next_expense_folio");
+        const { data: folioData } = await supabase.rpc("get_next_expense_folio_for_tenant" as any, {
+          target_tenant_id: currentTenant.id,
+        });
         const folio = folioData || 1;
 
         const finalSupplier = supplier === "NUEVO" ? customSupplier : supplier;

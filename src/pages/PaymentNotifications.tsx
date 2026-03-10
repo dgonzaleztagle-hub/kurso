@@ -25,7 +25,7 @@ import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
 interface PaymentNotification {
   id: string;
   user_id: string;
-  student_id: number;
+  student_id: string;
   payment_date: string;
   amount: number;
   payer_name: string;
@@ -37,7 +37,7 @@ interface PaymentNotification {
   processed_at?: string;
   created_at: string;
   students?: {
-    id: number;
+    id: string;
     first_name: string;
     last_name: string;
   };
@@ -148,8 +148,13 @@ export default function PaymentNotifications() {
       console.log('Selected debts to process:', selectedDebts.length);
 
       // Obtener el siguiente folio
-      const { data: folioData } = await supabase.rpc('get_next_payment_folio');
+      const { data: folioData } = await supabase.rpc('get_next_payment_folio_for_tenant' as any, {
+        target_tenant_id: currentTenant.id,
+      });
       let currentFolio = folioData || 1;
+      const configuredFee = Number((currentTenant.settings as any)?.monthly_fee);
+      const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
+      const normalizeMonthName = (value: string) => String(value).trim().toUpperCase().split(' ')[0];
 
       // Registrar pagos según la distribución
       for (const debt of selectedDebts) {
@@ -169,17 +174,44 @@ export default function PaymentNotifications() {
           });
           if (insertError) console.error('Error inserting activity payment:', insertError);
         } else if (debt.type === 'monthly_fee') {
-          // Registrar cuotas mensuales
-          const { error: insertError } = await supabase.from('payments').insert({
-            folio: currentFolio++,
-            tenant_id: currentTenant.id,
-            payment_date: notification.payment_date,
-            student_id: notification.student_id,
-            student_name: studentFullName,
-            concept: 'Cuota Mensual',
-            amount: debt.paid_amount, // Usar el monto realmente pagado
-          });
-          if (insertError) console.error('Error inserting monthly fee payment:', insertError);
+          let remainingMonthlyAmount = Number(debt.paid_amount) || 0;
+          const monthTargets: string[] = Array.isArray(debt.months)
+            ? debt.months.map((month: string) => normalizeMonthName(month)).filter(Boolean)
+            : [];
+
+          if (monthTargets.length === 0 && debt.target_month) {
+            monthTargets.push(normalizeMonthName(debt.target_month));
+          }
+
+          for (const month of monthTargets) {
+            if (remainingMonthlyAmount <= 0) break;
+            const amountForMonth = Math.min(remainingMonthlyAmount, monthlyFee);
+            const { error: insertError } = await supabase.from('payments').insert({
+              folio: currentFolio++,
+              tenant_id: currentTenant.id,
+              payment_date: notification.payment_date,
+              student_id: notification.student_id,
+              student_name: studentFullName,
+              concept: `Cuota ${month}`,
+              month_period: month,
+              amount: amountForMonth,
+            });
+            if (insertError) console.error('Error inserting monthly fee payment:', insertError);
+            remainingMonthlyAmount -= amountForMonth;
+          }
+
+          if (remainingMonthlyAmount > 0) {
+            const { error: insertError } = await supabase.from('payments').insert({
+              folio: currentFolio++,
+              tenant_id: currentTenant.id,
+              payment_date: notification.payment_date,
+              student_id: notification.student_id,
+              student_name: studentFullName,
+              concept: 'Cuota Mensual',
+              amount: remainingMonthlyAmount,
+            });
+            if (insertError) console.error('Error inserting monthly fee payment:', insertError);
+          }
         }
       }
 

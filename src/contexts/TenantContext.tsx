@@ -120,7 +120,21 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             if (uniqueTenants.length > 0) {
                 const lastTenantId = localStorage.getItem('kurso_last_tenant');
                 const activeTenantId = preferredTenantId || currentTenant?.id || lastTenantId;
-                const target = uniqueTenants.find(t => t.id === activeTenantId) || uniqueTenants[0];
+                let target = uniqueTenants.find(t => t.id === activeTenantId) || uniqueTenants[0];
+
+                if (target?.id) {
+                    const { data: freshTenant, error: freshTenantError } = await supabase
+                        .from('tenants')
+                        .select('*')
+                        .eq('id', target.id)
+                        .maybeSingle();
+
+                    if (!freshTenantError && freshTenant) {
+                        target = freshTenant as Tenant;
+                        uniqueTenants = uniqueTenants.map((tenant) => tenant.id === target.id ? target : tenant);
+                        setAvailableTenants(uniqueTenants);
+                    }
+                }
 
                 setCurrentTenant(target);
                 localStorage.setItem('kurso_last_tenant', target.id);

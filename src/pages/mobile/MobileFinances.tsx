@@ -103,7 +103,7 @@ export default function MobileFinances() {
             // 4. Calculate Totals (Separate simple query for totals)
             let allPaymentsQuery = supabase
                 .from("payments")
-                .select("amount, concept")
+                .select("amount, concept, redirected_amount, month_period")
                 .eq("tenant_id", currentTenant?.id);
 
             if (isStudentView) {

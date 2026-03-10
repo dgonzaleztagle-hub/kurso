@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { paymentNotificationSchema } from '@/lib/validationSchemas';
 import { Loader2, CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { calculateMonthlyDebtItems } from '@/lib/creditAccounting';
 
 const CHILEAN_BANKS = [
   'Banco de Chile',
@@ -36,10 +37,11 @@ const CHILEAN_BANKS = [
 
 interface DebtItem {
   type: 'activity' | 'monthly_fee';
-  id?: number;
+  id?: string;
   name: string;
   amount: number;
   months?: string[];
+  month_key?: string;
 }
 
 export default function PaymentPortal() {
@@ -51,6 +53,7 @@ export default function PaymentPortal() {
   const [debts, setDebts] = useState<DebtItem[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [tenantSettings, setTenantSettings] = useState<any>(null);
 
   // Form state
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(undefined);
@@ -88,8 +91,17 @@ export default function PaymentPortal() {
 
       setStudent(studentLink.students);
 
+      if (studentLink.students?.tenant_id) {
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('settings')
+          .eq('id', studentLink.students.tenant_id)
+          .maybeSingle();
+        setTenantSettings(tenantData?.settings || null);
+      }
+
       // Cargar deudas
-      await loadDebts(studentLink.student_id);
+      await loadDebts(studentLink.student_id, studentLink.students?.enrollment_date, studentLink.students?.tenant_id);
 
       // Cargar historial de pagos
       await loadPaymentHistory(studentLink.student_id);
@@ -108,14 +120,12 @@ export default function PaymentPortal() {
     }
   };
 
-  const loadDebts = async (studentId: number) => {
+  const loadDebts = async (studentId: string, enrollmentDate?: string, tenantId?: string) => {
     const debtsData: DebtItem[] = [];
 
     // Calcular deuda de cuotas mensuales
-    const monthlyFeeDebt = await calculateMonthlyFeeDebt(studentId);
-    if (monthlyFeeDebt.amount > 0) {
-      debtsData.push(monthlyFeeDebt);
-    }
+    const monthlyFeeDebts = await calculateMonthlyFeeDebt(studentId, enrollmentDate, tenantId);
+    debtsData.push(...monthlyFeeDebts);
 
     // Calcular deudas de actividades
     const activityDebts = await calculateActivityDebts(studentId);
@@ -124,44 +134,45 @@ export default function PaymentPortal() {
     setDebts(debtsData);
   };
 
-  const calculateMonthlyFeeDebt = async (studentId: number) => {
-    const MONTHLY_FEE = 3000;
-    const TOTAL_ANNUAL_FEE = 30000;
+  const calculateMonthlyFeeDebt = async (studentId: string, enrollmentDate?: string, tenantId?: string) => {
+    if (!enrollmentDate || !tenantId) return [] as DebtItem[];
 
-    // Obtener pagos de cuotas mensuales
-    const { data: payments } = await supabase
-      .from('payments')
-      .select('amount')
-      .eq('student_id', studentId)
-      .ilike('concept', 'cuota%');
+    const configuredFee = Number((tenantSettings as any)?.monthly_fee);
+    const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
 
-    const totalPaid = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-    const remainingDebt = TOTAL_ANNUAL_FEE - totalPaid;
+    const [{ data: payments }, { data: applications }] = await Promise.all([
+      supabase
+        .from('payments')
+        .select('amount, redirected_amount, concept, month_period')
+        .eq('tenant_id', tenantId)
+        .eq('student_id', studentId),
+      supabase
+        .from('credit_applications')
+        .select('amount, reversed_amount, target_type, target_month')
+        .eq('tenant_id', tenantId)
+        .eq('student_id', studentId)
+        .eq('target_type', 'monthly_fee'),
+    ]);
 
-    const pendingMonths: string[] = [];
-    if (remainingDebt > 0) {
-      const months = ['Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      const paidMonths = Math.floor(totalPaid / MONTHLY_FEE);
-      const partialMonth = totalPaid % MONTHLY_FEE;
-
-      for (let i = paidMonths; i < months.length; i++) {
-        if (i === paidMonths && partialMonth > 0) {
-          pendingMonths.push(`${months[i]} (parcial: $${MONTHLY_FEE - partialMonth})`);
-        } else {
-          pendingMonths.push(months[i]);
-        }
-      }
-    }
-
-    return {
-      type: 'monthly_fee' as const,
-      name: 'Cuotas Mensuales',
-      amount: remainingDebt,
-      months: pendingMonths,
-    };
+    return calculateMonthlyDebtItems({
+      enrollmentDate,
+      monthlyFee,
+      payments: payments || [],
+      applications: applications || [],
+      period: 'year',
+    })
+      .filter((item) => item.due > 0)
+      .map((item) => ({
+        type: 'monthly_fee' as const,
+        id: item.key,
+        month_key: item.key,
+        name: `Cuota ${item.label}`,
+        amount: item.due,
+        months: [item.month],
+      }));
   };
 
-  const calculateActivityDebts = async (studentId: number) => {
+  const calculateActivityDebts = async (studentId: string) => {
     const { data: activities } = await supabase
       .from('activities')
       .select('*')
@@ -192,7 +203,7 @@ export default function PaymentPortal() {
       .select('activity_id, amount, concept')
       .eq('student_id', studentId);
 
-    const paidActivities = new Map<number, number>();
+    const paidActivities = new Map<string, number>();
     
     for (const activity of activities) {
       // Sumar todos los pagos relacionados con esta actividad
@@ -212,7 +223,7 @@ export default function PaymentPortal() {
       }) || [];
       
       const totalPaid = relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      paidActivities.set(activity.id, totalPaid);
+      paidActivities.set(String(activity.id), totalPaid);
     }
 
     const debts: DebtItem[] = [];
@@ -234,13 +245,13 @@ export default function PaymentPortal() {
       // Excluir si el alumno se matriculó después de la actividad
       if (enrollmentDate > activityDate) continue;
 
-      const paid = paidActivities.get(activity.id) || 0;
+      const paid = paidActivities.get(String(activity.id)) || 0;
       const owed = Number(activity.amount) - paid;
 
       if (owed > 0) {
         debts.push({
           type: 'activity',
-          id: activity.id,
+          id: String(activity.id),
           name: activity.name,
           amount: owed,
         });
@@ -290,7 +301,7 @@ export default function PaymentPortal() {
   };
 
   const getDebtKey = (debt: DebtItem) => {
-    return debt.type === 'activity' ? `activity_${debt.id}` : 'monthly_fee';
+    return debt.type === 'activity' ? `activity_${debt.id}` : `monthly_fee_${debt.month_key || debt.id}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -380,20 +391,33 @@ export default function PaymentPortal() {
           name: monthlyFee.name,
           amount: monthlyFee.amount,
           paid_amount: paidAmount,
+          target_month: monthlyFee.month_key,
+          months: monthlyFee.months,
         });
       }
-      
+
       // Si aún queda dinero después de procesar las cuotas seleccionadas,
-      // agregar como abono a cuota mensual general
+      // aplicar a las cuotas mensuales pendientes más antiguas no seleccionadas
       if (remainingPayment > 0) {
-        selectedDebtsArray.push({
-          type: 'monthly_fee',
-          id: null,
-          name: 'Cuotas Mensuales',
-          amount: remainingPayment,
-          paid_amount: remainingPayment,
-        });
-        remainingPayment = 0;
+        const remainingMonthlyDebts = debts
+          .filter((debt): debt is DebtItem => debt.type === 'monthly_fee' && !selectedDebts.has(getDebtKey(debt)));
+
+        for (const monthlyDebt of remainingMonthlyDebts) {
+          if (remainingPayment <= 0) break;
+
+          const paidAmount = Math.min(remainingPayment, monthlyDebt.amount);
+          remainingPayment -= paidAmount;
+
+          selectedDebtsArray.push({
+            type: 'monthly_fee',
+            id: monthlyDebt.id,
+            name: monthlyDebt.name,
+            amount: monthlyDebt.amount,
+            paid_amount: paidAmount,
+            target_month: monthlyDebt.month_key,
+            months: monthlyDebt.months,
+          });
+        }
       }
     }
 
@@ -496,7 +520,7 @@ export default function PaymentPortal() {
 
       // Reload data - important to reload debts so user can report another payment
       if (student) {
-        await loadDebts(student.id);
+        await loadDebts(student.id, student.enrollment_date, student.tenant_id);
         await loadPaymentHistory(student.id);
       }
       loadNotifications();
