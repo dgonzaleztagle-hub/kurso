@@ -280,7 +280,7 @@ export type Database = {
           reversal_reason: string | null
           reversed_at: string | null
           reversed_by: string | null
-          source_payment_id: number | null
+          source_payment_id: string | null
           student_id: number
           target_activity_id: number | null
           target_month: string | null
@@ -299,7 +299,7 @@ export type Database = {
           reversal_reason?: string | null
           reversed_at?: string | null
           reversed_by?: string | null
-          source_payment_id?: number | null
+          source_payment_id?: string | null
           student_id: number
           target_activity_id?: number | null
           target_month?: string | null
@@ -318,7 +318,7 @@ export type Database = {
           reversal_reason?: string | null
           reversed_at?: string | null
           reversed_by?: string | null
-          source_payment_id?: number | null
+          source_payment_id?: string | null
           student_id?: number
           target_activity_id?: number | null
           target_month?: string | null
@@ -376,7 +376,7 @@ export type Database = {
           reversed_at: string | null
           reversed_by: string | null
           source_credit_movement_id: string
-          source_payment_id: number | null
+          source_payment_id: string | null
           status: string
           student_id: number
           target_activity_id: number | null
@@ -395,7 +395,7 @@ export type Database = {
           reversed_at?: string | null
           reversed_by?: string | null
           source_credit_movement_id: string
-          source_payment_id?: number | null
+          source_payment_id?: string | null
           status?: string
           student_id: number
           target_activity_id?: number | null
@@ -414,7 +414,7 @@ export type Database = {
           reversed_at?: string | null
           reversed_by?: string | null
           source_credit_movement_id?: string
-          source_payment_id?: number | null
+          source_payment_id?: string | null
           status?: string
           student_id?: number
           target_activity_id?: number | null

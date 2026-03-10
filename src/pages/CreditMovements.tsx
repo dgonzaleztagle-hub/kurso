@@ -23,7 +23,7 @@ interface CreditMovement {
   description: string | null;
   created_at: string;
   created_by: string | null;
-  source_payment_id: number | null;
+  source_payment_id: string | null;
   details?: Array<{ concept: string; amount: number }>;
   student_name?: string;
   creator_name?: string;

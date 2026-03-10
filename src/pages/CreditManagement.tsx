@@ -31,7 +31,7 @@ interface StudentWithCredit {
 }
 
 interface Payment {
-  id: number;
+  id: string | number;
   folio: number | string;
   payment_date: string;
   student_id: number | null;

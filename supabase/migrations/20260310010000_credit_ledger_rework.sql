@@ -7,7 +7,7 @@ alter table public.payments
   add column if not exists redirect_notes text;
 
 alter table public.credit_movements
-  add column if not exists source_payment_id integer references public.payments(id) on delete set null,
+  add column if not exists source_payment_id uuid references public.payments(id) on delete set null,
   add column if not exists target_type text,
   add column if not exists target_month text,
   add column if not exists target_activity_id integer references public.activities(id) on delete set null,
@@ -21,7 +21,7 @@ create table if not exists public.credit_applications (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   student_id integer not null references public.students(id) on delete cascade,
-  source_payment_id integer references public.payments(id) on delete set null,
+  source_payment_id uuid references public.payments(id) on delete set null,
   source_credit_movement_id uuid not null references public.credit_movements(id) on delete cascade,
   applied_movement_id uuid not null references public.credit_movements(id) on delete cascade,
   target_type text not null check (target_type in ('monthly_fee', 'activity')),
@@ -163,7 +163,7 @@ $$;
 grant execute on function public.recompute_student_credit_balance(uuid, integer) to authenticated;
 
 create or replace function public.redirect_payment_to_credit(
-  p_payment_id integer,
+  p_payment_id uuid,
   p_amount numeric,
   p_notes text default null
 )
@@ -254,7 +254,7 @@ begin
 end;
 $$;
 
-grant execute on function public.redirect_payment_to_credit(integer, numeric, text) to authenticated;
+grant execute on function public.redirect_payment_to_credit(uuid, numeric, text) to authenticated;
 
 create or replace function public.apply_credit_manually(
   p_student_id integer,
