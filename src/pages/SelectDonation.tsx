@@ -366,7 +366,7 @@ export default function SelectDonation() {
       }
 
       toast.success("¡Donación(es) registrada(s) exitosamente!");
-      navigate("/student-dashboard");
+      navigate("/mobile/board");
     } catch (error: any) {
       console.error("Error al registrar donación:", error);
       toast.error(error.message || "Error al registrar donación");
@@ -412,7 +412,7 @@ export default function SelectDonation() {
             <p className="text-muted-foreground">
               Todas las donaciones para esta actividad ya han sido asignadas.
             </p>
-            <Button onClick={() => navigate("/student-dashboard")} className="w-full">
+            <Button onClick={() => navigate("/mobile/board")} className="w-full">
               Volver al Inicio
             </Button>
           </CardContent>
@@ -500,7 +500,7 @@ export default function SelectDonation() {
 
               <div className="flex gap-2 pt-4">
                 <Button
-                  onClick={() => navigate("/student-dashboard")}
+                  onClick={() => navigate("/mobile/board")}
                   variant="outline"
                   className="flex-1"
                 >

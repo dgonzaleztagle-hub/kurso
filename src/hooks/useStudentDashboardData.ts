@@ -1,0 +1,235 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount } from "@/lib/creditAccounting";
+import { parseDateFromDB } from "@/lib/dateUtils";
+
+export interface StudentDashboardDebtDetail {
+  monthlyDebt: number;
+  activityDebts: { name: string; amount: number }[];
+  totalDebt: number;
+}
+
+export interface StudentDashboardPaymentHistory {
+  id: number;
+  payment_date: string;
+  amount: number;
+  concept: string;
+}
+
+export interface StudentDashboardScheduledActivity {
+  id: string;
+  name: string;
+  scheduled_date: string;
+  completed: boolean;
+}
+
+export interface StudentDashboardNotification {
+  id: string;
+  message: string;
+  created_at: string;
+}
+
+export interface StudentDashboardDonation {
+  id: string;
+  name: string;
+  amount: string;
+  unit: string;
+  donated_at: string | null;
+  scheduled_activity: {
+    name: string;
+  };
+}
+
+type StudentDashboardDataState = {
+  studentName: string;
+  debtDetail: StudentDashboardDebtDetail | null;
+  paymentHistory: StudentDashboardPaymentHistory[];
+  activities: StudentDashboardScheduledActivity[];
+  notifications: StudentDashboardNotification[];
+  upcomingActivities: StudentDashboardScheduledActivity[];
+  activityDonations: { [activityId: string]: StudentDashboardDonation[] };
+  totalPaid: number;
+  creditBalance: number;
+  loading: boolean;
+};
+
+const initialState: StudentDashboardDataState = {
+  studentName: "",
+  debtDetail: null,
+  paymentHistory: [],
+  activities: [],
+  notifications: [],
+  upcomingActivities: [],
+  activityDonations: {},
+  totalPaid: 0,
+  creditBalance: 0,
+  loading: true,
+};
+
+export function useStudentDashboardData(studentId?: string | number | null) {
+  const [state, setState] = useState<StudentDashboardDataState>(initialState);
+
+  useEffect(() => {
+    if (!studentId) {
+      setState((current) => ({ ...current, loading: false }));
+      return;
+    }
+
+    let active = true;
+
+    const loadStudentData = async () => {
+      try {
+        if (!studentId) return;
+        setState((current) => ({ ...current, loading: true }));
+
+        const [studentResult, paymentsResult, exclusionsResult, creditResult, applicationsResult] = await Promise.all([
+          supabase.from("students").select("first_name, last_name, enrollment_date, tenant_id").eq("id", studentId).single(),
+          supabase.from("payments").select("*").eq("student_id", studentId).order("payment_date", { ascending: false }),
+          supabase.from("activity_exclusions").select("activity_id").eq("student_id", studentId),
+          supabase.from("student_credits").select("amount").eq("student_id", studentId).single(),
+          supabase.from("credit_applications").select("amount, reversed_amount, target_type, target_month, target_activity_id").eq("student_id", studentId),
+        ]);
+
+        if (studentResult.error) throw studentResult.error;
+        if (paymentsResult.error) throw paymentsResult.error;
+        if (creditResult.error && creditResult.error.code !== "PGRST116") throw creditResult.error;
+        if (applicationsResult.error) throw applicationsResult.error;
+
+        const tenantId = studentResult.data.tenant_id;
+        if (!tenantId) {
+          throw new Error("No se pudo detectar el curso del alumno");
+        }
+
+        const [tenantResult, activitiesResult, scheduledActivitiesResult, notificationsResult] = await Promise.all([
+          supabase.from("tenants").select("settings").eq("id", tenantId).maybeSingle(),
+          supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", tenantId),
+          supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").eq("tenant_id", tenantId).order("scheduled_date", { ascending: false }),
+          supabase.from("dashboard_notifications").select("id, message, created_at").eq("tenant_id", tenantId).eq("is_active", true).order("created_at", { ascending: false }).limit(5),
+        ]);
+
+        if (tenantResult.error) throw tenantResult.error;
+        if (activitiesResult.error) throw activitiesResult.error;
+        if (scheduledActivitiesResult.error) throw scheduledActivitiesResult.error;
+        if (notificationsResult.error) throw notificationsResult.error;
+
+        const fullName = `${studentResult.data.first_name || ""} ${studentResult.data.last_name || ""}`.trim() || "Sin Nombre";
+        const scheduledActivities = scheduledActivitiesResult.data || [];
+
+        const activeActivities = scheduledActivities
+          .filter((act) => !act.completed)
+          .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
+          .slice(0, 2);
+
+        const donationsMap: { [activityId: string]: StudentDashboardDonation[] } = {};
+
+        for (const nextAct of activeActivities) {
+          const { data: nextActDonations, error: donationsError } = await supabase
+            .from("activity_donations")
+            .select("id, name, amount, unit, donated_at")
+            .eq("student_id", studentId)
+            .eq("scheduled_activity_id", nextAct.id)
+            .order("created_at", { ascending: false });
+
+          if (donationsError) throw donationsError;
+
+          donationsMap[nextAct.id] = (nextActDonations || []).map((donation) => ({
+            ...donation,
+            scheduled_activity: { name: nextAct.name },
+          }));
+        }
+
+        const paymentHistory = (paymentsResult.data || []) as StudentDashboardPaymentHistory[];
+        const totalPaid = paymentHistory.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
+
+        const configuredFee = Number((tenantResult.data?.settings as any)?.monthly_fee);
+        const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
+        const enrollmentDate = parseDateFromDB(studentResult.data.enrollment_date);
+        const monthlyItems = calculateMonthlyDebtItems({
+          enrollmentDate: studentResult.data.enrollment_date,
+          monthlyFee,
+          payments: paymentHistory,
+          applications: applicationsResult.data || [],
+          period: "current",
+        });
+
+        const monthlyDebt = monthlyItems.reduce((sum, item) => sum + item.due, 0);
+        const exclusionsSet = new Set(exclusionsResult.data?.map((item) => item.activity_id) || []);
+        const activityDebts: { name: string; amount: number }[] = [];
+        const activityPayments = new Map<number, number>();
+
+        for (const activity of activitiesResult.data || []) {
+          const relatedPayments = paymentHistory.filter((payment: any) => {
+            if (payment.activity_id !== null && payment.activity_id === activity.id) {
+              return true;
+            }
+
+            const activityNameNormalized = activity.name.toUpperCase().trim().replace(/\s+/g, " ");
+            const conceptNormalized = (payment.concept || "").toUpperCase().trim().replace(/\s+/g, " ");
+            return conceptNormalized.includes(activityNameNormalized);
+          });
+
+          activityPayments.set(
+            activity.id,
+            relatedPayments.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0),
+          );
+        }
+
+        for (const activity of activitiesResult.data || []) {
+          if (!activity.activity_date) continue;
+
+          const activityDate = new Date(activity.activity_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          if (activityDate > today) continue;
+          if (exclusionsSet.has(activity.id)) continue;
+          if (enrollmentDate > activityDate) continue;
+
+          const paid = activityPayments.get(activity.id) || 0;
+          const expectedAmount = Number(activity.amount);
+          const appliedCredit = getAppliedCreditForActivity(applicationsResult.data || [], activity.id);
+          const owed = Math.max(0, expectedAmount - paid - appliedCredit);
+
+          if (owed > 0) {
+            activityDebts.push({ name: activity.name, amount: owed });
+          }
+        }
+
+        const debtDetail: StudentDashboardDebtDetail = {
+          monthlyDebt,
+          activityDebts,
+          totalDebt: monthlyDebt + activityDebts.reduce((sum, item) => sum + item.amount, 0),
+        };
+
+        if (!active) return;
+
+        setState({
+          studentName: fullName,
+          debtDetail,
+          paymentHistory,
+          activities: scheduledActivities,
+          notifications: (notificationsResult.data || []) as StudentDashboardNotification[],
+          upcomingActivities: activeActivities,
+          activityDonations: donationsMap,
+          totalPaid,
+          creditBalance: creditResult.data?.amount || 0,
+          loading: false,
+        });
+      } catch (error) {
+        console.error("Error loading student dashboard data:", error);
+        if (!active) return;
+        toast.error("Error al cargar tus datos");
+        setState((current) => ({ ...current, loading: false }));
+      }
+    };
+
+    void loadStudentData();
+
+    return () => {
+      active = false;
+    };
+  }, [studentId]);
+
+  return state;
+}

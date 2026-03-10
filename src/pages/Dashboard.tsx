@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,7 +30,8 @@ import { useTenant } from "@/contexts/TenantContext";
 export default function Dashboard() {
   const navigate = useNavigate();
   const { appUser } = useAuth();
-  const { currentTenant, refreshTenants } = useTenant();
+  const { currentTenant } = useTenant();
+  const refreshTimeoutRef = useRef<number | null>(null);
 
   // Safe Fallback for display
   const userName = appUser?.full_name || "Usuario";
@@ -57,9 +58,82 @@ export default function Dashboard() {
     }
   }, [currentTenant]);
 
+  useEffect(() => {
+    if (!currentTenant?.id) return;
+
+    const scheduleRefresh = () => {
+      if (refreshTimeoutRef.current) {
+        window.clearTimeout(refreshTimeoutRef.current);
+      }
+
+      refreshTimeoutRef.current = window.setTimeout(() => {
+        void loadStats();
+      }, 250);
+    };
+
+    const channel = supabase
+      .channel(`dashboard-live-${currentTenant.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "payments", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "expenses", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tenant_opening_balances", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "students", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "activities", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "payment_notifications", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reimbursements", filter: `tenant_id=eq.${currentTenant.id}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "activity_exclusions" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "credit_applications" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        window.clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+
+      supabase.removeChannel(channel);
+    };
+  }, [currentTenant?.id]);
+
   const loadStats = async () => {
     if (!currentTenant?.id) return;
     try {
+      setLoading(true);
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       const firstDayOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
@@ -75,7 +149,7 @@ export default function Dashboard() {
       const studentIds = studentsData.map(s => s.id);
 
       // 2. Fetch Dependent Data (Student Scope)
-      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, applicationsResult] = await Promise.all([
+      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, applicationsResult, openingBalancesResult] = await Promise.all([
         // Payments: Filter by student_id
         (studentIds.length > 0
           ? supabase.from("payments").select("amount, student_id, concept, activity_id, redirected_amount, month_period").in("student_id", studentIds)
@@ -104,10 +178,17 @@ export default function Dashboard() {
         (studentIds.length > 0
           ? supabase.from("credit_applications").select("student_id, amount, reversed_amount, target_type, target_month, target_activity_id").in("student_id", studentIds)
           : { data: [], error: null }) as unknown as Promise<any>,
+
+        supabase
+          .from("tenant_opening_balances" as any)
+          .select("amount")
+          .eq("tenant_id", currentTenant.id)
+          .eq("status", "active") as unknown as Promise<any>,
       ]);
 
       if (paymentsResult.error) throw paymentsResult.error;
       if (expensesResult.error) throw expensesResult.error;
+      if (openingBalancesResult.error) throw openingBalancesResult.error;
       // if (studentsResult.error) throw studentsResult.error; // Already handled above
 
       // Map students to include full name
@@ -118,13 +199,12 @@ export default function Dashboard() {
 
       const totalIncome = (paymentsResult.data as any[]).reduce((sum: number, p: any) => sum + getNetPaymentAmount(p), 0);
       const totalExpenses = (expensesResult.data as any[]).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      const openingBalance = (openingBalancesResult.data as any[]).reduce((sum: number, item: any) => sum + Number(item.amount), 0);
       const monthlyIncome = (monthlyPaymentsResult.data as any[])?.reduce((sum: number, p: any) => sum + getNetPaymentAmount(p), 0) || 0;
 
       // Calcular deuda total y detalles
       let totalDebt = 0;
       const details: DebtDetail[] = [];
-      const currentMonthIndex = new Date().getMonth();
-
       const exclusionsMap = new Map<number, Set<number>>();
       exclusionsResult.data?.forEach(exc => {
         if (!exclusionsMap.has(exc.student_id)) {
@@ -213,7 +293,7 @@ export default function Dashboard() {
       setStats({
         totalIncome,
         totalExpenses,
-        balance: totalIncome - totalExpenses,
+        balance: openingBalance + totalIncome - totalExpenses,
         studentCount: students.length,
         pendingNotifications: notificationsResult.data?.length || 0,
         pendingReimbursements,
