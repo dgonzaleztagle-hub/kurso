@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { TenantProvider } from "./contexts/TenantContext";
@@ -11,7 +11,6 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { IndexSwitcher } from "./components/IndexSwitcher";
 
 import Dashboard from "./pages/Dashboard";
-import StudentDashboard from "./pages/StudentDashboard";
 import Students from "./pages/Students";
 import Income from "./pages/Income";
 import Expenses from "./pages/Expenses";
@@ -166,7 +165,7 @@ function AppRoutes() {
 
       <Route path="/student-dashboard" element={
         <ProtectedRoute allowedRoles={['alumnos']}>
-          <Layout><StudentDashboard /></Layout>
+          <Navigate to="/mobile/board" replace />
         </ProtectedRoute>
       } />
 
