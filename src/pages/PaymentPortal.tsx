@@ -91,6 +91,7 @@ export default function PaymentPortal() {
 
       setStudent(studentLink.students);
 
+      let resolvedMonthlyFee = 3000;
       if (studentLink.students?.tenant_id) {
         const { data: tenantData } = await supabase
           .from('tenants')
@@ -98,10 +99,17 @@ export default function PaymentPortal() {
           .eq('id', studentLink.students.tenant_id)
           .maybeSingle();
         setTenantSettings(tenantData?.settings || null);
+        const configuredFee = Number((tenantData?.settings as any)?.monthly_fee);
+        resolvedMonthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
       }
 
       // Cargar deudas
-      await loadDebts(studentLink.student_id, studentLink.students?.enrollment_date, studentLink.students?.tenant_id);
+      await loadDebts(
+        studentLink.student_id,
+        studentLink.students?.enrollment_date,
+        studentLink.students?.tenant_id,
+        resolvedMonthlyFee,
+      );
 
       // Cargar historial de pagos
       await loadPaymentHistory(studentLink.student_id);
@@ -120,11 +128,16 @@ export default function PaymentPortal() {
     }
   };
 
-  const loadDebts = async (studentId: string, enrollmentDate?: string, tenantId?: string) => {
+  const loadDebts = async (
+    studentId: string,
+    enrollmentDate?: string,
+    tenantId?: string,
+    monthlyFeeAmount?: number,
+  ) => {
     const debtsData: DebtItem[] = [];
 
     // Calcular deuda de cuotas mensuales
-    const monthlyFeeDebts = await calculateMonthlyFeeDebt(studentId, enrollmentDate, tenantId);
+    const monthlyFeeDebts = await calculateMonthlyFeeDebt(studentId, enrollmentDate, tenantId, monthlyFeeAmount);
     debtsData.push(...monthlyFeeDebts);
 
     // Calcular deudas de actividades
@@ -134,10 +147,15 @@ export default function PaymentPortal() {
     setDebts(debtsData);
   };
 
-  const calculateMonthlyFeeDebt = async (studentId: string, enrollmentDate?: string, tenantId?: string) => {
+  const calculateMonthlyFeeDebt = async (
+    studentId: string,
+    enrollmentDate?: string,
+    tenantId?: string,
+    monthlyFeeAmount?: number,
+  ) => {
     if (!enrollmentDate || !tenantId) return [] as DebtItem[];
 
-    const configuredFee = Number((tenantSettings as any)?.monthly_fee);
+    const configuredFee = Number(monthlyFeeAmount);
     const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
 
     const [{ data: payments }, { data: applications }] = await Promise.all([
@@ -468,6 +486,7 @@ export default function PaymentPortal() {
 
       const insertData = {
         user_id: user!.id,
+        tenant_id: student.tenant_id,
         student_id: student.id,
         payment_date: format(paymentDate, 'yyyy-MM-dd'),
         amount: paymentAmount,
@@ -520,7 +539,9 @@ export default function PaymentPortal() {
 
       // Reload data - important to reload debts so user can report another payment
       if (student) {
-        await loadDebts(student.id, student.enrollment_date, student.tenant_id);
+        const configuredFee = Number((tenantSettings as any)?.monthly_fee);
+        const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
+        await loadDebts(student.id, student.enrollment_date, student.tenant_id, monthlyFee);
         await loadPaymentHistory(student.id);
       }
       loadNotifications();

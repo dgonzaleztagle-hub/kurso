@@ -95,12 +95,14 @@ export default function StudentDashboard() {
         throw new Error("No se pudo detectar el curso del alumno");
       }
 
-      const [activitiesResult, scheduledActivitiesResult, notificationsResult] = await Promise.all([
+      const [tenantResult, activitiesResult, scheduledActivitiesResult, notificationsResult] = await Promise.all([
+        supabase.from("tenants").select("settings").eq("id", tenantId).maybeSingle(),
         supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", tenantId),
         supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").eq("tenant_id", tenantId).order("scheduled_date", { ascending: false }),
         supabase.from("dashboard_notifications").select("id, message, created_at").eq("tenant_id", tenantId).eq("is_active", true).order("created_at", { ascending: false }).limit(5),
       ]);
 
+      if (tenantResult.error) throw tenantResult.error;
       if (activitiesResult.error) throw activitiesResult.error;
       if (scheduledActivitiesResult.error) throw scheduledActivitiesResult.error;
       if (notificationsResult.error) throw notificationsResult.error;
@@ -147,7 +149,8 @@ export default function StudentDashboard() {
       setTotalPaid(totalPaidAmount);
 
       // Calcular deudas
-      const MONTHLY_FEE = 3000;
+      const configuredFee = Number((tenantResult.data?.settings as any)?.monthly_fee);
+      const MONTHLY_FEE = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
       const enrollmentDate = parseDateFromDB(studentResult.data.enrollment_date);
       const monthlyItems = calculateMonthlyDebtItems({
         enrollmentDate: studentResult.data.enrollment_date,

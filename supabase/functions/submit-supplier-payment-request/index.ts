@@ -154,7 +154,9 @@ serve(async (req) => {
       attachmentUrls.push(publicUrl);
     }
 
-    const { data: nextFolio, error: folioError } = await supabaseAdmin.rpc("get_next_reimbursement_folio");
+    const { data: nextFolio, error: folioError } = await supabaseAdmin.rpc("get_next_reimbursement_folio_for_tenant", {
+      target_tenant_id: tenantId,
+    });
     if (folioError) {
       return new Response(JSON.stringify({ error: "No se pudo generar folio" }), {
         status: 500,

@@ -4,7 +4,7 @@ language sql
 security definer
 set search_path = public
 as $$
-  select coalesce(max(folio), 0) + 1
+  select coalesce(max(nullif(regexp_replace(folio::text, '\D', '', 'g'), '')::integer), 0) + 1
   from public.payments
   where tenant_id = target_tenant_id;
 $$;
@@ -15,7 +15,7 @@ language sql
 security definer
 set search_path = public
 as $$
-  select coalesce(max(folio), 0) + 1
+  select coalesce(max(nullif(regexp_replace(folio::text, '\D', '', 'g'), '')::integer), 0) + 1
   from public.expenses
   where tenant_id = target_tenant_id;
 $$;
@@ -26,7 +26,7 @@ language sql
 security definer
 set search_path = public
 as $$
-  select coalesce(max(folio), 0) + 1
+  select coalesce(max(nullif(regexp_replace(folio::text, '\D', '', 'g'), '')::integer), 0) + 1
   from public.reimbursements
   where tenant_id = target_tenant_id;
 $$;
