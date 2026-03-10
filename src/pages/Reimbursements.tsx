@@ -982,10 +982,22 @@ export default function Reimbursements() {
       toast.error("No se pudo detectar el curso activo");
       return;
     }
+
+    const { data: authData } = await supabase.auth.getSession();
+    const accessToken = authData.session?.access_token;
+
+    if (!accessToken) {
+      toast.error("Sesión no válida. Vuelva a iniciar sesión.");
+      return;
+    }
+
     const { data, error } = await supabase.functions.invoke('create-supplier-request-link', {
       body: {
         tenantId: currentTenant.id,
         origin: window.location.origin,
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
