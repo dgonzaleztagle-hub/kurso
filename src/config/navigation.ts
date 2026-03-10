@@ -54,6 +54,7 @@ export const mainNavigation: NavCategory[] = [
         isTab: true,
         items: [
             { name: "Balance", href: "/balance", icon: Wallet, module: "balance" },
+            { name: "Carga Histórica", href: "/historical-setup", icon: Archive },
             { name: "Ingresos", href: "/income", icon: DollarSign, module: "income" },
             { name: "Egresos", href: "/expenses", icon: TrendingDown, module: "expenses" },
             { name: "Gestión de Créditos", href: "/credit-management", icon: Coins, module: "credit_management" },

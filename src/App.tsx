@@ -21,6 +21,7 @@ import Balance from "./pages/Balance";
 import AuditLogs from "./pages/admin/AuditLogs";
 import MeetingMinutes from "./pages/MeetingMinutes";
 import ImportData from "./pages/ImportData";
+import HistoricalSetup from "./pages/HistoricalSetup";
 import Movements from "./pages/Movements";
 import Activities from "./pages/Activities";
 import ActivityExclusions from "./pages/ActivityExclusions";
@@ -202,6 +203,11 @@ function AppRoutes() {
       <Route path="/import" element={
         <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="import">
           <Layout><ImportData /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/historical-setup" element={
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+          <Layout><HistoricalSetup /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/movements" element={

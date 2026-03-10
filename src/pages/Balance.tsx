@@ -33,6 +33,14 @@ interface DetailedItem {
   amount: number;
 }
 
+interface OpeningBalance {
+  id: string;
+  amount: number;
+  effective_date: string;
+  notes: string | null;
+  status: string;
+}
+
 const normalizeConcept = (value?: string | null, fallback = "Sin concepto") =>
   (value && value.trim()) || fallback;
 
@@ -45,6 +53,7 @@ export default function Balance() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [openingBalances, setOpeningBalances] = useState<OpeningBalance[]>([]);
 
   useEffect(() => {
     if (currentTenant?.id) {
@@ -56,13 +65,15 @@ export default function Balance() {
     if (!currentTenant?.id) return;
     try {
       setLoading(true);
-      const [paymentsResult, expensesResult] = await Promise.all([
+      const [paymentsResult, expensesResult, openingResult] = await Promise.all([
         supabase.from("payments" as any).select("*").eq("tenant_id", currentTenant.id),
-        supabase.from("expenses" as any).select("*").eq("tenant_id", currentTenant.id)
+        supabase.from("expenses" as any).select("*").eq("tenant_id", currentTenant.id),
+        supabase.from("tenant_opening_balances" as any).select("*").eq("tenant_id", currentTenant.id).eq("status", "active"),
       ]);
 
       if (paymentsResult.error) throw paymentsResult.error;
       if (expensesResult.error) throw expensesResult.error;
+      if (openingResult.error) throw openingResult.error;
 
       const normalizedPayments: Payment[] = (paymentsResult.data || []).map((row: any) => ({
         id: row.id,
@@ -80,6 +91,7 @@ export default function Balance() {
 
       setPayments(normalizedPayments);
       setExpenses(normalizedExpenses);
+      setOpeningBalances((openingResult.data || []) as OpeningBalance[]);
     } catch (error) {
       console.error("Error loading data:", error);
       toast.error("Error al cargar datos");
@@ -178,7 +190,8 @@ export default function Balance() {
 
   const totalIncome = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const balance = totalIncome - totalExpenses;
+  const openingBalance = openingBalances.reduce((sum, item) => sum + Number(item.amount), 0);
+  const balance = openingBalance + totalIncome - totalExpenses;
 
   const { incomeItems, expenseItems } = viewType === "detailed"
     ? calculateDetailed()
@@ -295,30 +308,38 @@ export default function Balance() {
 
       // Summary boxes
       doc.setFillColor(237, 247, 237);
-      doc.roundedRect(15, yPos, 55, 20, 2, 2, 'F');
+      doc.roundedRect(15, yPos, 42, 20, 2, 2, 'F');
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(34, 197, 94);
-      doc.text("TOTAL INGRESOS", 42.5, yPos + 6, { align: "center" });
+      doc.text("INGRESOS", 36, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${totalIncome.toLocaleString("es-CL")}`, 42.5, yPos + 14, { align: "center" });
+      doc.text(`$${totalIncome.toLocaleString("es-CL")}`, 36, yPos + 14, { align: "center" });
+
+      doc.setFillColor(255, 247, 237);
+      doc.roundedRect(61.5, yPos, 42, 20, 2, 2, 'F');
+      doc.setFontSize(9);
+      doc.setTextColor(234, 88, 12);
+      doc.text("SALDO INICIAL", 82.5, yPos + 6, { align: "center" });
+      doc.setFontSize(12);
+      doc.text(`$${openingBalance.toLocaleString("es-CL")}`, 82.5, yPos + 14, { align: "center" });
 
       doc.setFillColor(254, 242, 242);
-      doc.roundedRect(77.5, yPos, 55, 20, 2, 2, 'F');
+      doc.roundedRect(108, yPos, 42, 20, 2, 2, 'F');
       doc.setFontSize(9);
       doc.setTextColor(220, 38, 38);
-      doc.text("TOTAL EGRESOS", 105, yPos + 6, { align: "center" });
+      doc.text("EGRESOS", 129, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${totalExpenses.toLocaleString("es-CL")}`, 105, yPos + 14, { align: "center" });
+      doc.text(`$${totalExpenses.toLocaleString("es-CL")}`, 129, yPos + 14, { align: "center" });
 
       const balanceColor = balance >= 0 ? [30, 58, 138] : [220, 38, 38];
       doc.setFillColor(balance >= 0 ? 240 : 254, balance >= 0 ? 245 : 242, balance >= 0 ? 255 : 242);
-      doc.roundedRect(140, yPos, 55, 20, 2, 2, 'F');
+      doc.roundedRect(154.5, yPos, 40.5, 20, 2, 2, 'F');
       doc.setFontSize(9);
       doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
-      doc.text("SALDO BANCO", 167.5, yPos + 6, { align: "center" });
+      doc.text("SALDO BANCO", 174.75, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${balance.toLocaleString("es-CL")}`, 167.5, yPos + 14, { align: "center" });
+      doc.text(`$${balance.toLocaleString("es-CL")}`, 174.75, yPos + 14, { align: "center" });
 
       yPos += 30;
 
@@ -502,7 +523,7 @@ export default function Balance() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Ingresos</CardTitle>
@@ -523,6 +544,18 @@ export default function Balance() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
               ${totalExpenses.toLocaleString("es-CL")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Saldo Inicial</CardTitle>
+            <Wallet className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">
+              ${openingBalance.toLocaleString("es-CL")}
             </div>
           </CardContent>
         </Card>
@@ -674,7 +707,7 @@ export default function Balance() {
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center text-lg">
-            <span className="font-medium">Ingresos - Egresos =</span>
+            <span className="font-medium">Saldo inicial + Ingresos - Egresos =</span>
             <span className={`text-3xl font-bold ${balance >= 0 ? 'text-primary' : 'text-red-600'}`}>
               ${balance.toLocaleString("es-CL")}
             </span>
