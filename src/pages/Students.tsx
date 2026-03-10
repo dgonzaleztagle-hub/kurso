@@ -55,6 +55,24 @@ export default function Students() {
     setFilteredStudents(filtered);
   }, [searchTerm, students]);
 
+  const getFriendlyStudentError = (error: any) => {
+    const message = String(error?.message || "").toLowerCase();
+    const details = String(error?.details || "").toLowerCase();
+    const hint = String(error?.hint || "").toLowerCase();
+    const combined = `${message} ${details} ${hint}`;
+
+    if (
+      error?.code === "23505" ||
+      combined.includes("students_rut_unique_idx") ||
+      combined.includes("duplicate key value") ||
+      combined.includes("unique constraint") && combined.includes("rut")
+    ) {
+      return "Ya existe un alumno con ese RUT. No se permiten duplicados.";
+    }
+
+    return error?.message || "Error al agregar estudiante";
+  };
+
   const loadStudents = async () => {
     if (!currentTenant) return;
     try {
@@ -173,7 +191,7 @@ export default function Students() {
 
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "Error al agregar estudiante");
+      toast.error(getFriendlyStudentError(error));
     } finally {
       setCreating(false);
     }
