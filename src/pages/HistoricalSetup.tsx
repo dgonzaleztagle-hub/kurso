@@ -28,7 +28,7 @@ const MONTH_OPTIONS = [
 ] as const;
 
 type StudentRow = {
-  id: number;
+  id: string;
   first_name: string;
   last_name: string;
   rut: string | null;
@@ -51,6 +51,12 @@ type HistoricalPaymentImportRow = {
   payment_date?: string;
   concept?: string;
 };
+
+const isMissingPaymentsCreatedByColumn = (error: any) =>
+  error?.code === "PGRST204" &&
+  typeof error?.message === "string" &&
+  error.message.includes("'created_by'") &&
+  error.message.includes("'payments'");
 
 export default function HistoricalSetup() {
   const { currentTenant } = useTenant();
@@ -186,17 +192,25 @@ export default function HistoricalSetup() {
     });
     if (folioError) throw folioError;
 
-    const { error } = await supabase.from("payments").insert({
+    const paymentInsert = {
       tenant_id: currentTenant.id,
       folio: folio || 1,
-      student_id: Number(studentId) as any,
+      student_id: studentId as any,
       student_name: studentName,
       payment_date: date,
       amount,
       concept,
       month_period: month,
       created_by: user.id,
-    } as any);
+    } as any;
+
+    const { error } = await supabase.from("payments").insert(paymentInsert);
+    if (error && isMissingPaymentsCreatedByColumn(error)) {
+      const { created_by: _ignored, ...fallbackInsert } = paymentInsert;
+      const { error: fallbackError } = await supabase.from("payments").insert(fallbackInsert as any);
+      if (fallbackError) throw fallbackError;
+      return;
+    }
     if (error) throw error;
   };
 
@@ -233,7 +247,7 @@ export default function HistoricalSetup() {
       setSavingCredit(true);
       const { error } = await supabase.from("credit_movements").insert({
         tenant_id: currentTenant.id,
-        student_id: Number(creditStudentId) as any,
+        student_id: creditStudentId as any,
         amount,
         type: "manual_adjustment",
         description: creditDescription.trim() || "Saldo a favor previo a la app",
@@ -247,7 +261,7 @@ export default function HistoricalSetup() {
 
       const { error: recomputeError } = await supabase.rpc("recompute_student_credit_balance" as any, {
         p_tenant_id: currentTenant.id,
-        p_student_id: Number(creditStudentId) as any,
+        p_student_id: creditStudentId as any,
       });
       if (recomputeError) throw recomputeError;
 
