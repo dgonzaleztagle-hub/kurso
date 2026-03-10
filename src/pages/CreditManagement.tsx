@@ -128,16 +128,16 @@ export default function CreditManagement() {
       if (creditsResult.error) throw creditsResult.error;
       if (paymentsResult.error) throw paymentsResult.error;
 
-      const creditMap = new Map<number, number>();
+      const creditMap = new Map<string, number>();
       (creditsResult.data || []).forEach((credit) => {
-        creditMap.set(credit.student_id, toSafeNumber(credit.amount));
+        creditMap.set(String(credit.student_id), toSafeNumber(credit.amount));
       });
 
       setStudents(
         (studentsResult.data || []).map((student) => ({
           id: student.id,
           name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
-          credit_amount: creditMap.get(student.id) || 0,
+          credit_amount: creditMap.get(String(student.id)) || 0,
         })),
       );
 

@@ -3,7 +3,9 @@ import logoImage from "@/assets/logo-colegio.png";
 
 interface PaymentReceiptData {
   folio: number;
-  studentId: number;
+  studentId?: string | number | null;
+  studentReferenceLabel?: string;
+  studentReferenceValue?: string | number | null;
   studentName: string;
   paymentDate: string;
   amount: number;
@@ -19,7 +21,9 @@ interface ExpenseReceiptData {
 }
 
 interface TransferReceiptData {
-  studentId: number;
+  studentId?: string | number | null;
+  studentReferenceLabel?: string;
+  studentReferenceValue?: string | number | null;
   studentName: string;
   transferDate: string;
   amount: number;
@@ -74,9 +78,9 @@ export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
   doc.setTextColor(51, 65, 85);
   
   doc.setFont("helvetica", "bold");
-  doc.text("ID del Estudiante:", 40, yPos);
+  doc.text(data.studentReferenceLabel || "N° Correlativo:", 40, yPos);
   doc.setFont("helvetica", "normal");
-  doc.text(data.studentId.toString(), 95, yPos);
+  doc.text(String(data.studentReferenceValue ?? data.studentId ?? "-"), 95, yPos);
   
   yPos += 12;
   doc.setFont("helvetica", "bold");
@@ -249,9 +253,9 @@ export const generateTransferReceipt = async (data: TransferReceiptData) => {
   doc.setTextColor(51, 65, 85);
   
   doc.setFont("helvetica", "bold");
-  doc.text("ID del Estudiante:", 30, yPos);
+  doc.text(data.studentReferenceLabel || "N° Correlativo:", 30, yPos);
   doc.setFont("helvetica", "normal");
-  doc.text(data.studentId.toString(), 90, yPos);
+  doc.text(String(data.studentReferenceValue ?? data.studentId ?? "-"), 90, yPos);
   
   yPos += 10;
   doc.setFont("helvetica", "bold");

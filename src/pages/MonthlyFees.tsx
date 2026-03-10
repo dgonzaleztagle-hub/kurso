@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { calculateMonthlyDebtItems } from "@/lib/creditAccounting";
 
 interface MonthlyFeeStatus {
-  student_id: number | null;
+  student_id: string | null;
   student_name: string;
   total_required: number;
   total_paid: number;
@@ -55,7 +55,7 @@ export default function MonthlyFees() {
   }, [currentTenant]);
 
   const handleEditClick = () => {
-    setEditValue("0"); // "Siempre en 0 antes de grabar"
+    setEditValue(String(currentFee));
     setIsEditing(true);
   };
 
@@ -102,7 +102,7 @@ export default function MonthlyFees() {
       setCurrentFee(newFee);
       setIsEditing(false);
       loadMonthlyFeeStatuses(newFee); // Reload with new fee
-      refreshTenants(); // Sync context
+      await refreshTenants(currentTenant.id);
     } catch (error) {
       console.error("Error updating fee:", error);
       toast.error("Error al guardar la configuración");

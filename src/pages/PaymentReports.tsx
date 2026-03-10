@@ -14,20 +14,20 @@ import { StudentCombobox } from "@/components/StudentCombobox";
 import { useTenant } from "@/contexts/TenantContext";
 
 interface Student {
-  id: number;
+  id: string;
   name: string;
   enrollment_date: string;
 }
 
 interface Activity {
-  id: number;
+  id: string;
   name: string;
   amount: number;
   activity_date: string;
 }
 
 interface Payment {
-  id: number;
+  id: string;
   payment_date: string;
   concept: string;
   amount: number;
@@ -107,7 +107,7 @@ export default function PaymentReports() {
       let query = supabase
         .from("payments")
         .select("*")
-        .eq("student_id", parseInt(selectedStudent))
+        .eq("student_id", selectedStudent)
         .order("payment_date", { ascending: false });
 
       if (period === "current") {
@@ -139,7 +139,7 @@ export default function PaymentReports() {
       let query = supabase
         .from("payments")
         .select("*")
-        .eq("activity_id", parseInt(selectedActivity))
+        .eq("activity_id", selectedActivity)
         .order("payment_date", { ascending: false });
 
       if (period === "current") {

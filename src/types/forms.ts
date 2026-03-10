@@ -48,6 +48,7 @@ export interface FormField {
 
 export interface Form {
   id: string;
+  tenant_id?: string;
   title: string;
   description?: string;
   is_active: boolean;
@@ -64,7 +65,7 @@ export interface FormResponse {
   id: string;
   form_id: string;
   user_id?: string;
-  student_id?: number;
+  student_id?: string;
   submitted_at: string;
   response_data: Record<string, any>;
 }

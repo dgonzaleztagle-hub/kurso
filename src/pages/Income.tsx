@@ -40,9 +40,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface Payment {
-  id: number;
+  id: string;
   folio: number;
-  student_id: number | null;
+  student_id: string | null;
   student_name: string | null;
   payment_date: string;
   concept: string;
@@ -235,9 +235,25 @@ export default function Income() {
     }
 
     try {
+      const { data: orderedStudents, error: studentsError } = await supabase
+        .from("students")
+        .select("id")
+        .eq("tenant_id", currentTenant?.id as string)
+        .order("last_name")
+        .order("first_name");
+
+      if (studentsError) throw studentsError;
+
+      const correlativo = Math.max(
+        1,
+        (orderedStudents || []).findIndex((student) => String(student.id) === String(payment.student_id)) + 1,
+      );
+
       await generatePaymentReceipt({
         folio: payment.folio,
         studentId: payment.student_id,
+        studentReferenceLabel: "N° Correlativo",
+        studentReferenceValue: correlativo,
         studentName: payment.student_name,
         paymentDate: payment.payment_date,
         amount: payment.amount,

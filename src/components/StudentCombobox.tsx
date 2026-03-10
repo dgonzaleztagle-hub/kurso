@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/popover";
 
 interface Student {
-  id: number;
+  id: string | number;
   name: string;
 }
 

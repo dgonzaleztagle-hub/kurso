@@ -14,7 +14,7 @@ import { Calendar as CalendarIcon, FileIcon, Image as ImageIcon, Plus, Loader2 }
 import { useToast } from "@/components/ui/use-toast";
 
 export default function MeetingMinutes() {
-    const { userRole } = useAuth();
+    const { userRole, user } = useAuth();
     const { currentTenant, roleInCurrentTenant } = useTenant();
     const { toast } = useToast();
 
@@ -94,6 +94,7 @@ export default function MeetingMinutes() {
                     meeting_date: date,
                     content,
                     image_url: imageUrl,
+                    created_by: user?.id || null,
                 });
 
             if (error) throw error;

@@ -81,7 +81,7 @@ serve(async (req) => {
       });
     }
 
-    const secret = Deno.env.get("SUPPLIER_LINK_SECRET");
+    const secret = Deno.env.get("SUPPLIER_LINK_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!secret) {
       return new Response(JSON.stringify({ error: "Falta SUPPLIER_LINK_SECRET en Edge Functions" }), {
         status: 500,

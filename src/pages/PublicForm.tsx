@@ -267,10 +267,11 @@ export default function PublicForm() {
         .from('form_responses')
         .insert({
           form_id: id,
+          tenant_id: form.tenant_id,
           user_id: user?.id || null,
           student_id: studentId || null,
           response_data: responseData
-        });
+        } as any);
         
       if (error) throw error;
       

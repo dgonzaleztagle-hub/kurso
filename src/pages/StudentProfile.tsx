@@ -15,7 +15,7 @@ import { es } from "date-fns/locale";
 import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount } from "@/lib/creditAccounting";
 
 interface Student {
-  id: number;
+  id: string;
   name: string;
   first_name?: string;
   last_name?: string;
@@ -29,7 +29,7 @@ interface DebtDetail {
 }
 
 interface PaymentHistory {
-  id: number;
+  id: string;
   payment_date: string;
   amount: number;
   concept: string;
@@ -64,7 +64,7 @@ import { useTenant } from "@/contexts/TenantContext";
 export default function StudentProfile() {
   const { currentTenant } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [studentName, setStudentName] = useState("");
   const [debtDetail, setDebtDetail] = useState<DebtDetail | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
@@ -85,7 +85,7 @@ export default function StudentProfile() {
   }, [currentTenant]);
 
   useEffect(() => {
-    if (selectedStudentId !== null && Number.isFinite(selectedStudentId)) {
+    if (selectedStudentId) {
       loadStudentData();
     }
   }, [selectedStudentId]);
@@ -193,7 +193,7 @@ export default function StudentProfile() {
       const exclusionsSet = new Set(exclusionsResult.data?.map(e => e.activity_id) || []);
       const activityDebts: { name: string; amount: number }[] = [];
 
-      const activityPayments = new Map<number, number>();
+      const activityPayments = new Map<string, number>();
 
       for (const activity of activitiesResult.data || []) {
         const relatedPayments = paymentsResult.data.filter(p => {
@@ -222,7 +222,7 @@ export default function StudentProfile() {
         if (exclusionsSet.has(activity.id)) continue;
         if (enrollmentDate > activityDate) continue;
 
-        const paid = activityPayments.get(activity.id) || 0;
+        const paid = activityPayments.get(String(activity.id)) || 0;
         const expectedAmount = Number(activity.amount);
         const appliedCredit = getAppliedCreditForActivity(applicationsResult.data || [], activity.id);
         const owed = Math.max(0, expectedAmount - paid - appliedCredit);
@@ -286,10 +286,9 @@ export default function StudentProfile() {
             <div className="space-y-2">
               <Label htmlFor="student">Estudiante</Label>
               <Select
-                value={selectedStudentId?.toString() || ""}
+                value={selectedStudentId || ""}
                 onValueChange={(value) => {
-                  const parsed = Number(value);
-                  setSelectedStudentId(Number.isFinite(parsed) ? parsed : null);
+                  setSelectedStudentId(value || null);
                 }}
               >
                 <SelectTrigger id="student">
@@ -307,7 +306,7 @@ export default function StudentProfile() {
           </CardContent>
         </Card>
 
-        {selectedStudentId !== null && Number.isFinite(selectedStudentId) && !loading && (
+        {selectedStudentId && !loading && (
           <>
             {/* Welcome Message */}
             <Card className="bg-gradient-to-r from-purple-500 to-blue-500 text-white">

@@ -49,10 +49,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
                 setAvailableTenants(allTenants as Tenant[]);
 
-                if (allTenants && allTenants.length > 0 && !currentTenant) {
+                if (allTenants && allTenants.length > 0) {
                     const lastTenantId = localStorage.getItem('kurso_last_tenant');
                     const target =
                         allTenants.find((t: any) => t.id === preferredTenantId) ||
+                        allTenants.find((t: any) => t.id === currentTenant?.id) ||
                         allTenants.find((t: any) => t.id === lastTenantId) ||
                         allTenants[0];
                     setCurrentTenant(target as Tenant);
