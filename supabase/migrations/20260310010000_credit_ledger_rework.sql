@@ -10,7 +10,7 @@ alter table public.credit_movements
   add column if not exists source_payment_id uuid references public.payments(id) on delete set null,
   add column if not exists target_type text,
   add column if not exists target_month text,
-  add column if not exists target_activity_id integer references public.activities(id) on delete set null,
+  add column if not exists target_activity_id uuid references public.activities(id) on delete set null,
   add column if not exists related_movement_id uuid references public.credit_movements(id) on delete set null,
   add column if not exists details jsonb not null default '[]'::jsonb,
   add column if not exists reversed_at timestamptz,
@@ -20,13 +20,13 @@ alter table public.credit_movements
 create table if not exists public.credit_applications (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
-  student_id integer not null references public.students(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
   source_payment_id uuid references public.payments(id) on delete set null,
   source_credit_movement_id uuid not null references public.credit_movements(id) on delete cascade,
   applied_movement_id uuid not null references public.credit_movements(id) on delete cascade,
   target_type text not null check (target_type in ('monthly_fee', 'activity')),
   target_month text,
-  target_activity_id integer references public.activities(id) on delete set null,
+  target_activity_id uuid references public.activities(id) on delete set null,
   amount numeric(12,2) not null check (amount > 0),
   created_at timestamptz not null default now(),
   created_by uuid,
@@ -134,7 +134,7 @@ grant execute on function public.can_manage_credit(uuid) to authenticated;
 
 create or replace function public.recompute_student_credit_balance(
   p_tenant_id uuid,
-  p_student_id integer
+  p_student_id uuid
 )
 returns numeric
 language plpgsql
@@ -160,7 +160,7 @@ begin
 end;
 $$;
 
-grant execute on function public.recompute_student_credit_balance(uuid, integer) to authenticated;
+grant execute on function public.recompute_student_credit_balance(uuid, uuid) to authenticated;
 
 create or replace function public.redirect_payment_to_credit(
   p_payment_id uuid,
@@ -257,10 +257,10 @@ $$;
 grant execute on function public.redirect_payment_to_credit(uuid, numeric, text) to authenticated;
 
 create or replace function public.apply_credit_manually(
-  p_student_id integer,
+  p_student_id uuid,
   p_target_type text,
   p_target_month text default null,
-  p_target_activity_id integer default null,
+  p_target_activity_id uuid default null,
   p_amount numeric default null,
   p_notes text default null
 )
@@ -438,7 +438,7 @@ begin
 end;
 $$;
 
-grant execute on function public.apply_credit_manually(integer, text, text, integer, numeric, text) to authenticated;
+grant execute on function public.apply_credit_manually(uuid, text, text, uuid, numeric, text) to authenticated;
 
 create or replace function public.reverse_credit_movement(
   p_movement_id uuid,

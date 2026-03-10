@@ -17,8 +17,8 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface CreditMovement {
   id: string;
-  student_id: number;
-  type: 'payment_redirect' | 'manual_adjustment' | 'payment_deduction' | 'activity_refund';
+  student_id: string;
+  type: 'payment_redirect' | 'credit_created_from_payment' | 'credit_applied_to_monthly_fee' | 'credit_applied_to_activity' | 'credit_reversal' | 'manual_adjustment' | 'payment_deduction' | 'activity_refund';
   amount: number;
   description: string | null;
   created_at: string;

@@ -281,8 +281,8 @@ export type Database = {
           reversed_at: string | null
           reversed_by: string | null
           source_payment_id: string | null
-          student_id: number
-          target_activity_id: number | null
+          student_id: string
+          target_activity_id: string | null
           target_month: string | null
           target_type: string | null
           tenant_id: string
@@ -300,8 +300,8 @@ export type Database = {
           reversed_at?: string | null
           reversed_by?: string | null
           source_payment_id?: string | null
-          student_id: number
-          target_activity_id?: number | null
+          student_id: string
+          target_activity_id?: string | null
           target_month?: string | null
           target_type?: string | null
           tenant_id: string
@@ -319,8 +319,8 @@ export type Database = {
           reversed_at?: string | null
           reversed_by?: string | null
           source_payment_id?: string | null
-          student_id?: number
-          target_activity_id?: number | null
+          student_id?: string
+          target_activity_id?: string | null
           target_month?: string | null
           target_type?: string | null
           tenant_id?: string
@@ -378,8 +378,8 @@ export type Database = {
           source_credit_movement_id: string
           source_payment_id: string | null
           status: string
-          student_id: number
-          target_activity_id: number | null
+          student_id: string
+          target_activity_id: string | null
           target_month: string | null
           target_type: string
           tenant_id: string
@@ -397,8 +397,8 @@ export type Database = {
           source_credit_movement_id: string
           source_payment_id?: string | null
           status?: string
-          student_id: number
-          target_activity_id?: number | null
+          student_id: string
+          target_activity_id?: string | null
           target_month?: string | null
           target_type: string
           tenant_id: string
@@ -416,8 +416,8 @@ export type Database = {
           source_credit_movement_id?: string
           source_payment_id?: string | null
           status?: string
-          student_id?: number
-          target_activity_id?: number | null
+          student_id?: string
+          target_activity_id?: string | null
           target_month?: string | null
           target_type?: string
           tenant_id?: string

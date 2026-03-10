@@ -25,20 +25,20 @@ import {
 } from "@/lib/creditAccounting";
 
 interface StudentWithCredit {
-  id: number;
+  id: string;
   name: string;
   credit_amount: number;
 }
 
 interface Payment {
-  id: string | number;
+  id: string;
   folio: number | string;
   payment_date: string;
-  student_id: number | null;
+  student_id: string | null;
   student_name: string | null;
   concept: string;
   amount: number;
-  activity_id: number | null;
+  activity_id: string | null;
   redirected_amount: number;
   redirect_status: string;
   redirect_locked: boolean;
@@ -50,7 +50,7 @@ interface ActivityDebtOption {
   label: string;
   due: number;
   sortDate: string;
-  targetActivityId: number;
+  targetActivityId: string;
 }
 
 interface MonthlyDebtOption {
