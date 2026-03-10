@@ -6,20 +6,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ArrowLeftRight, Search, Calendar, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseDateFromDB, formatDateForDisplay, formatDateForDB } from "@/lib/dateUtils";
 import { generateTransferReceipt } from "@/lib/receiptGenerator";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CreditMovement {
   id: string;
   student_id: number;
   type: 'payment_redirect' | 'manual_adjustment' | 'payment_deduction' | 'activity_refund';
   amount: number;
-  description: string;
+  description: string | null;
   created_at: string;
-  created_by: string;
+  created_by: string | null;
   source_payment_id: number | null;
   details?: Array<{ concept: string; amount: number }>;
   student_name?: string;
@@ -27,12 +30,18 @@ interface CreditMovement {
 }
 
 export default function CreditMovements() {
+  const { appUser } = useAuth();
   const [movements, setMovements] = useState<CreditMovement[]>([]);
   const [filteredMovements, setFilteredMovements] = useState<CreditMovement[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [showReverseDialog, setShowReverseDialog] = useState(false);
+  const [selectedMovement, setSelectedMovement] = useState<CreditMovement | null>(null);
+  const [reverseAmount, setReverseAmount] = useState("");
+  const [reverseReason, setReverseReason] = useState("");
+  const [reversing, setReversing] = useState(false);
 
   useEffect(() => {
     loadMovements();
@@ -102,7 +111,7 @@ export default function CreditMovements() {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(m =>
         m.student_name?.toLowerCase().includes(term) ||
-        m.description.toLowerCase().includes(term)
+        (m.description || "").toLowerCase().includes(term)
       );
     }
 
@@ -125,6 +134,10 @@ export default function CreditMovements() {
   const getTypeLabel = (type: string) => {
     const labels = {
       'payment_redirect': 'Traspaso de Pago',
+      'credit_created_from_payment': 'Crédito desde Pago',
+      'credit_applied_to_monthly_fee': 'Aplicado a Cuota',
+      'credit_applied_to_activity': 'Aplicado a Actividad',
+      'credit_reversal': 'Reversa',
       'manual_adjustment': 'Ajuste Manual',
       'payment_deduction': 'Deducción de Pago',
       'activity_refund': 'Devolución de Actividad'
@@ -135,6 +148,10 @@ export default function CreditMovements() {
   const getTypeColor = (type: string) => {
     const colors = {
       'payment_redirect': 'default',
+      'credit_created_from_payment': 'default',
+      'credit_applied_to_monthly_fee': 'secondary',
+      'credit_applied_to_activity': 'secondary',
+      'credit_reversal': 'outline',
       'manual_adjustment': 'secondary',
       'payment_deduction': 'outline',
       'activity_refund': 'outline'
@@ -184,7 +201,7 @@ export default function CreditMovements() {
         studentName: studentName,
         transferDate: movement.created_at.split('T')[0],
         amount: Math.abs(movement.amount),
-        originalConcept: paymentData?.concept || movement.description,
+        originalConcept: paymentData?.concept || movement.description || "Movimiento de crédito",
         redirectType: isCredit ? 'credit' : 'debts',
         details: details.length > 0 ? details : undefined,
         remainingCredit: isCredit ? movement.amount : undefined,
@@ -194,6 +211,45 @@ export default function CreditMovements() {
     } catch (error) {
       console.error("Error generating certificate:", error);
       toast.error("Error al generar certificado");
+    }
+  };
+
+  const canReverse = appUser?.is_superadmin;
+
+  const openReverseDialog = (movement: CreditMovement) => {
+    setSelectedMovement(movement);
+    setReverseAmount(String(Math.abs(Number(movement.amount))));
+    setReverseReason("");
+    setShowReverseDialog(true);
+  };
+
+  const handleReverse = async () => {
+    if (!selectedMovement) return;
+
+    const amount = Math.abs(Number(reverseAmount));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Debe ingresar un monto válido");
+      return;
+    }
+
+    try {
+      setReversing(true);
+      const { error } = await supabase.rpc("reverse_credit_movement", {
+        p_movement_id: selectedMovement.id,
+        p_amount: amount,
+        p_reason: reverseReason.trim() || null,
+      });
+
+      if (error) throw error;
+
+      toast.success("Reversa registrada");
+      setShowReverseDialog(false);
+      await loadMovements();
+    } catch (error: any) {
+      console.error("Error reversing credit movement:", error);
+      toast.error(error?.message || "No se pudo reversar el movimiento");
+    } finally {
+      setReversing(false);
     }
   };
 
@@ -355,7 +411,7 @@ export default function CreditMovements() {
                         </Badge>
                       </TableCell>
                       <TableCell className="px-2 sm:px-4 max-w-[200px] truncate">
-                        {movement.description}
+                        {movement.description || "Sin glosa"}
                       </TableCell>
                       <TableCell className={`px-2 sm:px-4 text-right font-medium ${movement.amount > 0 ? 'text-green-600' : 'text-red-600'
                         }`}>
@@ -363,15 +419,27 @@ export default function CreditMovements() {
                       </TableCell>
                       <TableCell className="px-2 sm:px-4">{movement.creator_name}</TableCell>
                       <TableCell className="px-2 sm:px-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewCertificate(movement)}
-                          className="text-xs"
-                        >
-                          <FileText className="h-3 w-3 mr-1" />
-                          Ver Certificado
-                        </Button>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewCertificate(movement)}
+                            className="text-xs"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            Ver Certificado
+                          </Button>
+                          {canReverse && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => openReverseDialog(movement)}
+                              className="text-xs"
+                            >
+                              Reversar
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -381,6 +449,51 @@ export default function CreditMovements() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={showReverseDialog} onOpenChange={setShowReverseDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reversar movimiento</DialogTitle>
+          </DialogHeader>
+
+          {selectedMovement && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted p-4 text-sm space-y-1">
+                <p><strong>Alumno:</strong> {selectedMovement.student_name}</p>
+                <p><strong>Tipo:</strong> {getTypeLabel(selectedMovement.type)}</p>
+                <p><strong>Monto original:</strong> {formatCurrency(Math.abs(selectedMovement.amount))}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Monto a reversar</Label>
+                <Input
+                  inputMode="numeric"
+                  value={reverseAmount}
+                  onChange={(event) => setReverseAmount(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Motivo</Label>
+                <Textarea
+                  value={reverseReason}
+                  onChange={(event) => setReverseReason(event.target.value)}
+                  placeholder="Motivo de la reversa"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReverseDialog(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={() => void handleReverse()} disabled={reversing}>
+              Reversar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -274,8 +274,17 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          details: Json
           id: string
+          related_movement_id: string | null
+          reversal_reason: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+          source_payment_id: number | null
           student_id: number
+          target_activity_id: number | null
+          target_month: string | null
+          target_type: string | null
           tenant_id: string
           type: string
         }
@@ -284,8 +293,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          details?: Json
           id?: string
+          related_movement_id?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          source_payment_id?: number | null
           student_id: number
+          target_activity_id?: number | null
+          target_month?: string | null
+          target_type?: string | null
           tenant_id: string
           type: string
         }
@@ -294,12 +312,35 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          details?: Json
           id?: string
+          related_movement_id?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          source_payment_id?: number | null
           student_id?: number
+          target_activity_id?: number | null
+          target_month?: string | null
+          target_type?: string | null
           tenant_id?: string
           type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "credit_movements_related_movement_id_fkey"
+            columns: ["related_movement_id"]
+            isOneToOne: false
+            referencedRelation: "credit_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_movements_source_payment_id_fkey"
+            columns: ["source_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "credit_movements_student_id_fkey"
             columns: ["student_id"]
@@ -308,7 +349,117 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "credit_movements_target_activity_id_fkey"
+            columns: ["target_activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "credit_movements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_applications: {
+        Row: {
+          amount: number
+          applied_movement_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          reversal_reason: string | null
+          reversed_amount: number
+          reversed_at: string | null
+          reversed_by: string | null
+          source_credit_movement_id: string
+          source_payment_id: number | null
+          status: string
+          student_id: number
+          target_activity_id: number | null
+          target_month: string | null
+          target_type: string
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          applied_movement_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reversal_reason?: string | null
+          reversed_amount?: number
+          reversed_at?: string | null
+          reversed_by?: string | null
+          source_credit_movement_id: string
+          source_payment_id?: number | null
+          status?: string
+          student_id: number
+          target_activity_id?: number | null
+          target_month?: string | null
+          target_type: string
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          applied_movement_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reversal_reason?: string | null
+          reversed_amount?: number
+          reversed_at?: string | null
+          reversed_by?: string | null
+          source_credit_movement_id?: string
+          source_payment_id?: number | null
+          status?: string
+          student_id?: number
+          target_activity_id?: number | null
+          target_month?: string | null
+          target_type?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_applications_applied_movement_id_fkey"
+            columns: ["applied_movement_id"]
+            isOneToOne: false
+            referencedRelation: "credit_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_applications_source_credit_movement_id_fkey"
+            columns: ["source_credit_movement_id"]
+            isOneToOne: false
+            referencedRelation: "credit_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_applications_source_payment_id_fkey"
+            columns: ["source_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_applications_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_applications_target_activity_id_fkey"
+            columns: ["target_activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_applications_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -728,8 +879,14 @@ export type Database = {
           created_by: string | null
           folio: number
           id: number
+          last_redirected_at: string | null
+          last_redirected_by: string | null
           month_period: string | null
           payment_date: string
+          redirect_locked: boolean
+          redirect_notes: string | null
+          redirect_status: string
+          redirected_amount: number
           student_id: number | null
           student_name: string | null
           tenant_id: string
@@ -742,8 +899,14 @@ export type Database = {
           created_by?: string | null
           folio: number
           id?: number
+          last_redirected_at?: string | null
+          last_redirected_by?: string | null
           month_period?: string | null
           payment_date?: string
+          redirect_locked?: boolean
+          redirect_notes?: string | null
+          redirect_status?: string
+          redirected_amount?: number
           student_id?: number | null
           student_name?: string | null
           tenant_id: string
@@ -756,8 +919,14 @@ export type Database = {
           created_by?: string | null
           folio?: number
           id?: number
+          last_redirected_at?: string | null
+          last_redirected_by?: string | null
           month_period?: string | null
           payment_date?: string
+          redirect_locked?: boolean
+          redirect_notes?: string | null
+          redirect_status?: string
+          redirected_amount?: number
           student_id?: number | null
           student_name?: string | null
           tenant_id?: string

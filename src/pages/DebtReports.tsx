@@ -13,6 +13,7 @@ import firmaImage from "@/assets/firma-directiva.png";
 import { StudentCombobox } from "@/components/StudentCombobox";
 import { parseDateFromDB } from "@/lib/dateUtils";
 import { useTenant } from "@/contexts/TenantContext";
+import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount, sameId } from "@/lib/creditAccounting";
 
 interface Student {
   id: number | string;
@@ -58,7 +59,6 @@ export default function DebtReports() {
   const [previewMonthlyDebts, setPreviewMonthlyDebts] = useState<MonthlyDebt[]>([]);
   const [previewActivityDebts, setPreviewActivityDebts] = useState<ActivityDebt[]>([]);
   const [showPreview, setShowPreview] = useState(false);
-  const sameId = (a: unknown, b: unknown) => String(a) === String(b);
   const monthlyFee = Number((currentTenant?.settings as any)?.monthly_fee) > 0
     ? Number((currentTenant?.settings as any)?.monthly_fee)
     : 3000;
@@ -94,7 +94,6 @@ export default function DebtReports() {
   };
 
   const calculateMonthlyDebts = async (): Promise<MonthlyDebt[]> => {
-    // 1. Get Students FIRST (filtered by Tenant)
     const studentsDataResult = await supabase
       .from("students")
       .select("id, first_name, last_name, enrollment_date")
@@ -104,41 +103,24 @@ export default function DebtReports() {
     const studentsData = studentsDataResult.data || [];
     const studentIds = studentsData.map(s => s.id).filter(id => id !== null && id !== undefined);
 
-    // 2. Get Payments & Credits (filtered by Student IDs)
-    const [paymentsResult, creditMovementsResult] = await Promise.all([
+    const [paymentsResult, applicationsResult] = await Promise.all([
       studentIds.length > 0
         ? supabase.from("payments")
-            .select("student_id, concept, amount, activity_id")
+            .select("student_id, concept, amount, activity_id, redirected_amount, month_period")
             .eq("tenant_id", currentTenant?.id)
             .in("student_id", studentIds as any)
             .then(res => res, err => ({ data: [], error: err }))
         : Promise.resolve({ data: [], error: null }),
       studentIds.length > 0
-        ? supabase.from("credit_movements")
-            .select("student_id, amount, type")
+        ? supabase.from("credit_applications")
+            .select("student_id, amount, reversed_amount, target_type, target_month")
             .eq("tenant_id", currentTenant?.id)
-            .eq("type", "payment_redirect")
             .in("student_id", studentIds as any)
             .then(res => res, err => ({ data: [], error: err }))
         : Promise.resolve({ data: [], error: null })
     ]);
 
-    const months = ["MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-
-    // Determine max month based on period filter
-    const currentMonth = new Date().getMonth(); // 0-11
-    const currentYear = new Date().getFullYear();
-    const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const currentMonthName = monthNames[currentMonth];
-
-    let maxMonthIndex = months.length;
-    if (monthlyPeriod === "current") {
-      maxMonthIndex = months.findIndex(m => m === currentMonthName) + 1;
-      if (maxMonthIndex <= 0) maxMonthIndex = months.length;
-    }
-
     const debts: MonthlyDebt[] = [];
-    const credits: any[] = []; // Removed creditsResult usage due to schema issues
 
     const studentsToProcess = scope === "individual" && selectedStudent
       ? students.filter(s => String(s.id) === selectedStudent)
@@ -149,69 +131,20 @@ export default function DebtReports() {
       const studentData = studentsData.find(s => sameId(s.id, student.id));
       if (!studentData) return;
 
-      const enrollmentDate = parseDateFromDB(studentData.enrollment_date);
-      const enrollmentMonth = enrollmentDate.getMonth(); // 0-11
-      const enrollmentYear = enrollmentDate.getFullYear();
+      const monthItems = calculateMonthlyDebtItems({
+        enrollmentDate: studentData.enrollment_date,
+        monthlyFee,
+        payments: (paymentsResult.data || []).filter(p => sameId(p.student_id, student.id)),
+        applications: (applicationsResult.data || []).filter(a => sameId(a.student_id, student.id)),
+        period: monthlyPeriod,
+      });
 
-      // Determinar desde qué mes debe pagar este estudiante
-      const startMonth = 2; // Marzo = index 2
-      let firstPayableMonthIndex = startMonth;
-
-      if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
-        firstPayableMonthIndex = enrollmentMonth;
-      }
-
-      let monthsStudentShouldPay = 0;
-      if (enrollmentYear < currentYear) {
-        monthsStudentShouldPay = Math.min(maxMonthIndex, months.length);
-      } else if (enrollmentYear === currentYear) {
-        monthsStudentShouldPay = Math.max(0, Math.min(maxMonthIndex, months.length) - (firstPayableMonthIndex - startMonth));
-      } else {
-        monthsStudentShouldPay = 0;
-      }
-
-      if (isNaN(monthsStudentShouldPay)) monthsStudentShouldPay = 0;
-      const expectedTotal = monthsStudentShouldPay * monthlyFee;
-
-      // Obtener todos los pagos de cuotas de este estudiante
-      const studentPayments = paymentsResult.data?.filter(p =>
-        sameId(p.student_id, student.id) &&
-        p.concept?.toUpperCase().includes("CUOTA")
-      ) || [];
-
-      // Sum ALL payments for monthly fees (regardless of month_period)
-      let totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-
-      // Add payment redirections (negative credit movements that represent covered monthly fees)
-      const studentRedirections = creditMovementsResult.data?.filter(cm =>
-        sameId(cm.student_id, student.id) && cm.amount < 0
-      ) || [];
-      const redirectionAmount = studentRedirections.reduce((sum, cm) => sum + Math.abs(Number(cm.amount)), 0);
-      totalPaid += redirectionAmount;
-      let totalOwed = Math.max(0, expectedTotal - totalPaid);
-
-      // Aplicar crédito del estudiante a la deuda
-      const studentCredit = credits.find(c => c.student_id === student.id);
-      const creditAmount = studentCredit ? Number(studentCredit.amount) : 0;
-
-      // Restar el crédito de la deuda de cuotas mensuales
-      const debtAfterCredit = Math.max(0, totalOwed - creditAmount);
-
-      // Solo agregar al reporte si aún debe después de aplicar crédito
-      if (debtAfterCredit > 0) {
-        // Calculate how many months are completely unpaid
-        const monthsOwedCount = Math.ceil(debtAfterCredit / monthlyFee);
-
-        // Get the months this student should pay (from their enrollment month to max month)
-        const studentMonths = months.slice(firstPayableMonthIndex - startMonth, Math.min(maxMonthIndex, months.length));
-
-        // Get the last N months from the student's payable months
-        const owedMonths = studentMonths.slice(-monthsOwedCount);
-
+      const totalOwed = monthItems.reduce((sum, item) => sum + item.due, 0);
+      if (totalOwed > 0) {
         debts.push({
           student_name: student.name,
-          total_owed: debtAfterCredit,
-          months_owed: owedMonths
+          total_owed: totalOwed,
+          months_owed: monthItems.filter(item => item.due > 0).map(item => item.month),
         });
       }
     });
@@ -219,17 +152,13 @@ export default function DebtReports() {
     return debts;
   };
 
-  const calculateActivityDebts = async (monthlyCreditsUsed: Map<string, number>): Promise<ActivityDebt[]> => {
-    // 1. Get Student IDs from existing `students` state (already filtered by tenant)
-    // or we could rely on `activities` being tenant-scoped. 
-    // But for payments/credits we need student IDs.
+  const calculateActivityDebts = async (): Promise<ActivityDebt[]> => {
     const studentIds = students.map(s => s.id).filter(id => id !== null && id !== undefined);
 
-    // 2. Fetch data filtered by student IDs
-    const [paymentsResult, exclusionsResult] = await Promise.all([
+    const [paymentsResult, exclusionsResult, applicationsResult] = await Promise.all([
       studentIds.length > 0
         ? supabase.from("payments")
-            .select("student_id, concept, amount, activity_id")
+            .select("student_id, concept, amount, activity_id, redirected_amount")
             .eq("tenant_id", currentTenant?.id)
             .in("student_id", studentIds as any)
             .then(res => res, err => ({ data: [], error: err }))
@@ -238,12 +167,20 @@ export default function DebtReports() {
         .select("student_id, activity_id")
         .eq("tenant_id", currentTenant?.id)
         .in("student_id", studentIds as any)
-        .then(res => res, err => ({ data: [], error: err }))
+        .then(res => res, err => ({ data: [], error: err })),
+      studentIds.length > 0
+        ? supabase.from("credit_applications")
+            .select("student_id, amount, reversed_amount, target_type, target_activity_id")
+            .eq("tenant_id", currentTenant?.id)
+            .eq("target_type", "activity")
+            .in("student_id", studentIds as any)
+            .then(res => res, err => ({ data: [], error: err }))
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     const payments = paymentsResult.data || [];
     const exclusions = exclusionsResult.data || [];
-    const credits: any[] = []; // student_credits removed
+    const applications = applicationsResult.data || [];
     const debts: ActivityDebt[] = [];
 
     const exclusionMap = new Set(
@@ -255,12 +192,6 @@ export default function DebtReports() {
       : students;
 
     studentsToProcess.forEach(student => {
-      // Obtener crédito disponible después de aplicar a cuotas mensuales
-      const studentCredit = credits.find(c => c.student_id === student.id);
-      const totalCredit = studentCredit ? Number(studentCredit.amount) : 0;
-      const creditUsedOnMonthly = monthlyCreditsUsed.get(String(student.id)) || 0;
-      let remainingCredit = Math.max(0, totalCredit - creditUsedOnMonthly);
-
       activities.forEach(activity => {
         const key = `${student.id}-${activity.id}`;
         const isExcluded = exclusionMap.has(key);
@@ -272,21 +203,19 @@ export default function DebtReports() {
 
         if (!isExcluded && !wasNotEnrolled) {
           const activityPayments = payments.filter(p =>
-            sameId(p.student_id, student.id) &&
-            p.concept?.toUpperCase().includes(activity.name.toUpperCase())
+            sameId(p.student_id, student.id) && (
+              sameId(p.activity_id, activity.id) ||
+              p.concept?.toUpperCase().includes(activity.name.toUpperCase())
+            )
           );
 
-          const totalPaid = activityPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-          let amountOwed = activity.amount - totalPaid;
+          const totalPaid = activityPayments.reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
+          const appliedCredit = getAppliedCreditForActivity(
+            applications.filter(app => sameId(app.student_id, student.id)),
+            activity.id,
+          );
+          const amountOwed = Math.max(0, activity.amount - totalPaid - appliedCredit);
 
-          // Aplicar crédito restante a esta actividad si hay deuda
-          if (amountOwed > 0 && remainingCredit > 0) {
-            const creditToApply = Math.min(amountOwed, remainingCredit);
-            amountOwed -= creditToApply;
-            remainingCredit -= creditToApply;
-          }
-
-          // Solo agregar si aún debe después de aplicar crédito
           if (amountOwed > 0) {
             debts.push({
               student_name: student.name,
@@ -309,9 +238,6 @@ export default function DebtReports() {
     try {
       setLoading(true);
 
-      // Mapa para rastrear cuánto crédito se usó en cuotas mensuales por estudiante
-      const monthlyCreditsUsed = await calculateMonthlyCreditsUsed();
-
       if (reportType === "monthly" || reportType === "both") {
         const monthlyDebts = await calculateMonthlyDebts();
         setPreviewMonthlyDebts(monthlyDebts);
@@ -320,7 +246,7 @@ export default function DebtReports() {
       }
 
       if (reportType === "activities" || reportType === "both") {
-        const activityDebts = await calculateActivityDebts(monthlyCreditsUsed);
+        const activityDebts = await calculateActivityDebts();
         setPreviewActivityDebts(activityDebts);
       } else {
         setPreviewActivityDebts([]);
@@ -334,84 +260,6 @@ export default function DebtReports() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateMonthlyCreditsUsed = async (): Promise<Map<string, number>> => {
-    const [paymentsResult, studentsDataResult, creditsResult, creditMovementsResult] = await Promise.all([
-      supabase.from("payments").select("student_id, concept, amount").eq("tenant_id", currentTenant?.id),
-      supabase.from("students").select("id, first_name, last_name, enrollment_date").eq("tenant_id", currentTenant?.id),
-      supabase.from("student_credits").select("student_id, amount"),
-      supabase.from("credit_movements").select("student_id, amount, type").eq("tenant_id", currentTenant?.id).eq("type", "payment_redirect")
-    ]);
-
-    const months = ["MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const currentMonthName = monthNames[currentMonth];
-
-    let maxMonthIndex = months.length;
-    if (monthlyPeriod === "current") {
-      maxMonthIndex = months.findIndex(m => m === currentMonthName) + 1;
-      if (maxMonthIndex <= 0) maxMonthIndex = months.length;
-    }
-
-    const monthlyCreditsUsed = new Map<string, number>();
-    const credits = creditsResult.data || [];
-
-    const studentsToProcess = scope === "individual" && selectedStudent
-      ? students.filter(s => String(s.id) === selectedStudent)
-      : students;
-
-    studentsToProcess.forEach(student => {
-      const studentData = studentsDataResult.data?.find(s => sameId(s.id, student.id));
-      if (!studentData) return;
-
-      const enrollmentDate = parseDateFromDB(studentData.enrollment_date);
-      const enrollmentMonth = enrollmentDate.getMonth();
-      const enrollmentYear = enrollmentDate.getFullYear();
-
-      const startMonth = 2;
-      let firstPayableMonthIndex = startMonth;
-
-      if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
-        firstPayableMonthIndex = enrollmentMonth;
-      }
-
-      let monthsStudentShouldPay = 0;
-      if (enrollmentYear < currentYear) {
-        monthsStudentShouldPay = Math.min(maxMonthIndex, months.length);
-      } else if (enrollmentYear === currentYear) {
-        monthsStudentShouldPay = Math.max(0, Math.min(maxMonthIndex, months.length) - (firstPayableMonthIndex - startMonth));
-      } else {
-        monthsStudentShouldPay = 0;
-      }
-
-      const expectedTotal = monthsStudentShouldPay * monthlyFee;
-
-      const studentPayments = paymentsResult.data?.filter(p =>
-        sameId(p.student_id, student.id) &&
-        p.concept?.toUpperCase().includes("CUOTA")
-      ) || [];
-
-      let totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-
-      // Add payment redirections
-      const studentRedirections = creditMovementsResult.data?.filter(cm =>
-        sameId(cm.student_id, student.id) && cm.amount < 0
-      ) || [];
-      const redirectionAmount = studentRedirections.reduce((sum, cm) => sum + Math.abs(Number(cm.amount)), 0);
-      totalPaid += redirectionAmount;
-      const totalOwed = Math.max(0, expectedTotal - totalPaid);
-
-      const studentCredit = credits.find(c => sameId(c.student_id, student.id));
-      const creditAmount = studentCredit ? Number(studentCredit.amount) : 0;
-
-      const creditUsedHere = Math.min(totalOwed, creditAmount);
-      monthlyCreditsUsed.set(String(student.id), creditUsedHere);
-    });
-
-    return monthlyCreditsUsed;
   };
 
   const generatePDF = async () => {

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil, Save, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { calculateMonthlyDebtItems } from "@/lib/creditAccounting";
 
 interface MonthlyFeeStatus {
   student_id: number | null;
@@ -116,36 +117,19 @@ export default function MonthlyFees() {
       const calculatedTotalRequired = feeAmount * TOTAL_MONTHS;
 
       // Get all students
-      const [studentsResult, paymentsResult, creditMovementsResult] = await Promise.all([
-        supabase.from("students").select("id, first_name, last_name").eq("tenant_id", currentTenant.id).order("last_name"),
-        supabase.from("payments").select("student_id, amount").eq("tenant_id", currentTenant.id).or('concept.ilike.Cuota%,concept.ilike.CUOTA%'),
-        supabase.from("credit_movements").select("student_id, amount, type").eq("tenant_id", currentTenant.id).eq("type", "payment_redirect")
+      const [studentsResult, paymentsResult, applicationsResult] = await Promise.all([
+        supabase.from("students").select("id, first_name, last_name, enrollment_date").eq("tenant_id", currentTenant.id).order("last_name"),
+        supabase.from("payments").select("student_id, amount, concept, redirected_amount, month_period").eq("tenant_id", currentTenant.id),
+        supabase.from("credit_applications").select("student_id, amount, reversed_amount, target_type, target_month").eq("tenant_id", currentTenant.id).eq("target_type", "monthly_fee")
       ]);
 
       if (studentsResult.error) throw studentsResult.error;
       if (paymentsResult.error) throw paymentsResult.error;
+      if (applicationsResult.error) throw applicationsResult.error;
 
       const students = studentsResult.data || [];
       const payments = paymentsResult.data || [];
-      const creditMovements = creditMovementsResult.data || [];
-
-      // Group payments by student (by ID for accuracy)
-      const paymentsByStudentId = new Map<number, number>();
-
-      payments?.forEach((payment) => {
-        if (payment.student_id) {
-          const current = paymentsByStudentId.get(payment.student_id) || 0;
-          paymentsByStudentId.set(payment.student_id, current + Number(payment.amount));
-        }
-      });
-
-      // Add credit redirections (negative amounts = applied to monthly fees)
-      creditMovements?.forEach((cm) => {
-        if (cm.amount < 0) {
-          const current = paymentsByStudentId.get(cm.student_id) || 0;
-          paymentsByStudentId.set(cm.student_id, current + Math.abs(Number(cm.amount)));
-        }
-      });
+      const applications = applicationsResult.data || [];
 
       // Build fee status for each student
       const statuses: MonthlyFeeStatus[] = [];
@@ -154,8 +138,18 @@ export default function MonthlyFees() {
       let totalBalanceSum = 0;
 
       students?.forEach((student) => {
-        const paid = paymentsByStudentId.get(student.id) || 0;
-        const balance = calculatedTotalRequired - paid;
+        const studentPayments = payments.filter((payment) => payment.student_id === student.id);
+        const studentApplications = applications.filter((application) => application.student_id === student.id);
+        const monthItems = calculateMonthlyDebtItems({
+          enrollmentDate: student.enrollment_date,
+          monthlyFee: feeAmount,
+          payments: studentPayments,
+          applications: studentApplications,
+          year: new Date().getFullYear(),
+          period: "year",
+        });
+        const balance = monthItems.reduce((sum, item) => sum + item.due, 0);
+        const paid = Math.max(0, calculatedTotalRequired - balance);
         const percentagePaid = (paid / calculatedTotalRequired) * 100;
 
         const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Sin Nombre';

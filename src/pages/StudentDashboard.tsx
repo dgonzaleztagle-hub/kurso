@@ -12,6 +12,7 @@ import logoImage from "@/assets/logo-colegio.png";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatDateForDisplay, parseDateFromDB } from "@/lib/dateUtils";
+import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount } from "@/lib/creditAccounting";
 
 interface DebtDetail {
   monthlyDebt: number;
@@ -76,21 +77,18 @@ export default function StudentDashboard() {
     try {
       if (!studentId) return;
 
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-
-      const [studentResult, paymentsResult, exclusionsResult, creditResult, creditMovementsResult] = await Promise.all([
+      const [studentResult, paymentsResult, exclusionsResult, creditResult, applicationsResult] = await Promise.all([
         supabase.from("students").select("first_name, last_name, enrollment_date, tenant_id").eq("id", studentId).single(),
         supabase.from("payments").select("*").eq("student_id", studentId).order("payment_date", { ascending: false }),
         supabase.from("activity_exclusions").select("activity_id").eq("student_id", studentId),
         supabase.from("student_credits").select("amount").eq("student_id", studentId).single(),
-        supabase.from("credit_movements").select("amount, type").eq("student_id", studentId).eq("type", "payment_redirect"),
+        supabase.from("credit_applications").select("amount, reversed_amount, target_type, target_month, target_activity_id").eq("student_id", studentId),
       ]);
 
       if (studentResult.error) throw studentResult.error;
       if (paymentsResult.error) throw paymentsResult.error;
       if (creditResult.error && creditResult.error.code !== "PGRST116") throw creditResult.error;
-      if (creditMovementsResult.error) throw creditMovementsResult.error;
+      if (applicationsResult.error) throw applicationsResult.error;
 
       const tenantId = studentResult.data.tenant_id;
       if (!tenantId) {
@@ -145,34 +143,21 @@ export default function StudentDashboard() {
 
       setActivityDonations(donationsMap);
 
-      const totalPaidAmount = paymentsResult.data.reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalPaidAmount = paymentsResult.data.reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
       setTotalPaid(totalPaidAmount);
 
       // Calcular deudas
       const MONTHLY_FEE = 3000;
-      const startMonth = 2; // Marzo
       const enrollmentDate = parseDateFromDB(studentResult.data.enrollment_date);
-      const enrollmentMonth = enrollmentDate.getMonth();
-      const enrollmentYear = enrollmentDate.getFullYear();
+      const monthlyItems = calculateMonthlyDebtItems({
+        enrollmentDate: studentResult.data.enrollment_date,
+        monthlyFee: MONTHLY_FEE,
+        payments: paymentsResult.data || [],
+        applications: applicationsResult.data || [],
+        period: "current",
+      });
 
-      let firstPaymentMonth = startMonth;
-      if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
-        firstPaymentMonth = enrollmentMonth;
-      }
-
-      const monthsToPay = Math.max(0, currentMonth - firstPaymentMonth + 1);
-      const expectedMonthlyFees = monthsToPay * MONTHLY_FEE;
-
-      // Sumar redirecciones de pago (montos negativos representan cuotas cubiertas)
-      const redirectedAmount = (creditMovementsResult.data || [])
-        .filter(cm => cm.amount < 0)
-        .reduce((sum, cm) => sum + Math.abs(Number(cm.amount)), 0);
-
-      const paidMonthlyFees = paymentsResult.data
-        .filter(p => p.concept?.toLowerCase().includes('cuota'))
-        .reduce((sum, p) => sum + Number(p.amount), 0) + redirectedAmount;
-
-      const monthlyDebt = Math.max(0, expectedMonthlyFees - paidMonthlyFees);
+      const monthlyDebt = monthlyItems.reduce((sum, item) => sum + item.due, 0);
 
       // Calcular deudas de actividades
       const exclusionsSet = new Set(exclusionsResult.data?.map(e => e.activity_id) || []);
@@ -198,7 +183,7 @@ export default function StudentDashboard() {
           return conceptNormalized.includes(activityNameNormalized);
         });
 
-        const totalPaid = relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+        const totalPaid = relatedPayments.reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
         activityPayments.set(activity.id, totalPaid);
 
         // Debug: mostrar qué se encontró para esta actividad
@@ -227,7 +212,8 @@ export default function StudentDashboard() {
 
         const paid = activityPayments.get(activity.id) || 0;
         const expectedAmount = Number(activity.amount);
-        const owed = Math.max(0, expectedAmount - paid);
+        const appliedCredit = getAppliedCreditForActivity(applicationsResult.data || [], activity.id);
+        const owed = Math.max(0, expectedAmount - paid - appliedCredit);
 
         // Debug: mostrar todas las actividades evaluadas
         console.log(`Evaluando "${activity.name}": Esperado $${expectedAmount}, Pagado $${paid}, Adeudado $${owed}`);

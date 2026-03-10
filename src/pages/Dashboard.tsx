@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { MassNotificationDialog } from "@/components/MassNotificationDialog";
 import { NotificationManagementDialog } from "@/components/NotificationManagementDialog";
 import { parseDateFromDB } from "@/lib/dateUtils";
+import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount } from "@/lib/creditAccounting";
 
 interface DebtDetail {
   studentId: number;
@@ -74,10 +75,10 @@ export default function Dashboard() {
       const studentIds = studentsData.map(s => s.id);
 
       // 2. Fetch Dependent Data (Student Scope)
-      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, creditMovementsResult] = await Promise.all([
+      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, applicationsResult] = await Promise.all([
         // Payments: Filter by student_id
         (studentIds.length > 0
-          ? supabase.from("payments").select("amount, student_id, concept, activity_id").in("student_id", studentIds)
+          ? supabase.from("payments").select("amount, student_id, concept, activity_id, redirected_amount, month_period").in("student_id", studentIds)
           : { data: [], error: null }) as unknown as Promise<any>,
 
         supabase.from("expenses").select("amount").eq("tenant_id", currentTenant.id) as unknown as Promise<any>,
@@ -88,7 +89,7 @@ export default function Dashboard() {
 
         // Monthly Payments: Filter by student_id + date
         (studentIds.length > 0
-          ? supabase.from("payments").select("amount").gte("payment_date", firstDayOfMonth).in("student_id", studentIds)
+          ? supabase.from("payments").select("amount, redirected_amount").gte("payment_date", firstDayOfMonth).in("student_id", studentIds)
           : { data: [], error: null }) as unknown as Promise<any>,
 
         // Activities: Tenant Scope (Correct)
@@ -99,9 +100,9 @@ export default function Dashboard() {
           ? supabase.from("activity_exclusions").select("student_id, activity_id").in("student_id", studentIds)
           : { data: [], error: null }) as unknown as Promise<any>,
 
-        // Credit Movements: Student Scope
+        // Credit applications: Student Scope
         (studentIds.length > 0
-          ? supabase.from("credit_movements").select("student_id, amount, type").eq("type", "payment_redirect").in("student_id", studentIds)
+          ? supabase.from("credit_applications").select("student_id, amount, reversed_amount, target_type, target_month, target_activity_id").in("student_id", studentIds)
           : { data: [], error: null }) as unknown as Promise<any>,
       ]);
 
@@ -115,16 +116,14 @@ export default function Dashboard() {
         name: `${s.first_name} ${s.last_name}`.trim()
       }));
 
-      const totalIncome = (paymentsResult.data as any[]).reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      const totalIncome = (paymentsResult.data as any[]).reduce((sum: number, p: any) => sum + getNetPaymentAmount(p), 0);
       const totalExpenses = (expensesResult.data as any[]).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-      const monthlyIncome = (monthlyPaymentsResult.data as any[])?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0;
+      const monthlyIncome = (monthlyPaymentsResult.data as any[])?.reduce((sum: number, p: any) => sum + getNetPaymentAmount(p), 0) || 0;
 
       // Calcular deuda total y detalles
       let totalDebt = 0;
       const details: DebtDetail[] = [];
-      const MONTHLY_FEE = 3000;
       const currentMonthIndex = new Date().getMonth();
-      const startMonth = 2;
 
       const exclusionsMap = new Map<number, Set<number>>();
       exclusionsResult.data?.forEach(exc => {
@@ -151,46 +150,22 @@ export default function Dashboard() {
           .forEach((p: any) => {
             const key = `${p.student_id}_${activity.id}`;
             const current = activityPayments.get(key) || 0;
-            activityPayments.set(key, current + Number(p.amount));
+            activityPayments.set(key, current + getNetPaymentAmount(p));
           });
       }
 
       // Calcular deudas por estudiante
       for (const student of students) {
         const enrollmentDate = parseDateFromDB(student.enrollment_date);
-        const enrollmentMonth = enrollmentDate.getMonth();
-        const enrollmentYear = enrollmentDate.getFullYear();
+        const monthlyItems = calculateMonthlyDebtItems({
+          enrollmentDate: student.enrollment_date,
+          monthlyFee: Number((currentTenant.settings as any)?.monthly_fee) > 0 ? Number((currentTenant.settings as any)?.monthly_fee) : 3000,
+          payments: (paymentsResult.data || []).filter((p: any) => p.student_id === student.id),
+          applications: (applicationsResult.data || []).filter((app: any) => app.student_id === student.id),
+          period: "current",
+        });
 
-        let firstPaymentMonth = startMonth;
-        if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
-          firstPaymentMonth = enrollmentMonth;
-        }
-
-        let monthsToPay = 0;
-        if (currentYear > enrollmentYear) {
-          // Assume full year debt if we are past enrollment year?
-          // Following logic from StudentProfile:
-          monthsToPay = Math.max(0, currentMonthIndex - startMonth + 1);
-        } else if (currentYear === enrollmentYear) {
-          monthsToPay = Math.max(0, currentMonthIndex - firstPaymentMonth + 1);
-        } else {
-          // Future enrollment
-          monthsToPay = 0;
-        }
-
-        if (isNaN(monthsToPay)) monthsToPay = 0;
-        const expectedMonthlyFees = monthsToPay * MONTHLY_FEE;
-
-        // Sumar redirecciones de pago (montos negativos representan cuotas cubiertas)
-        const redirectedAmount = (creditMovementsResult.data || [])
-          .filter(cm => cm.student_id === student.id && cm.amount < 0)
-          .reduce((sum, cm) => sum + Math.abs(Number(cm.amount)), 0);
-
-        const paidMonthlyFees = paymentsResult.data
-          .filter(p => p.student_id === student.id && p.concept?.toLowerCase().includes('cuota'))
-          .reduce((sum, p) => sum + Number(p.amount), 0) + redirectedAmount;
-
-        const monthlyDebt = Math.max(0, expectedMonthlyFees - paidMonthlyFees);
+        const monthlyDebt = monthlyItems.reduce((sum, item) => sum + item.due, 0);
 
         // Calcular deudas de actividades
         const activityDebts: { name: string; amount: number }[] = [];
@@ -205,7 +180,11 @@ export default function Dashboard() {
 
           const key = `${student.id}_${activity.id}`;
           const paid = activityPayments.get(key) || 0;
-          const owed = Math.max(0, Number(activity.amount) - paid);
+          const appliedCredit = getAppliedCreditForActivity(
+            (applicationsResult.data || []).filter((app: any) => app.student_id === student.id),
+            activity.id,
+          );
+          const owed = Math.max(0, Number(activity.amount) - paid - appliedCredit);
 
           if (owed > 0) {
             activityDebts.push({ name: activity.name, amount: owed });

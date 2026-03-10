@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { formatDateForDB, parseDateFromDB } from "@/lib/dateUtils";
 import { useTenant } from "@/contexts/TenantContext";
+import { calculateMonthlyDebtItems, getNetPaymentAmount } from "@/lib/creditAccounting";
 
 type MovementType = "ingreso" | "egreso" | null;
 type IncomeType = "actividad" | "cuota_mensual" | "otros" | null;
@@ -175,34 +176,22 @@ export default function Movements() {
         firstPayableMonth = enrollmentMonth;
       }
 
-      // Obtener pagos de cuotas, movimientos aplicados a cuotas y crédito disponible
       const { data: previousPayments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount')
+        .select('amount, redirected_amount, concept, month_period')
         .eq('tenant_id', currentTenant.id)
-        .eq('student_id', normalizedStudentId as any)
-        .ilike('concept', 'Cuota%');
+        .eq('student_id', normalizedStudentId as any);
 
       if (paymentsError) throw paymentsError;
 
-      let creditMovements: Array<{ amount: number | string | null }> = [];
-      const creditQuery = await supabase
-        .from('credit_movements')
-        .select('amount')
+      const { data: creditApplications, error: applicationsError } = await supabase
+        .from('credit_applications')
+        .select('amount, reversed_amount, target_type, target_month')
         .eq('tenant_id', currentTenant.id)
         .eq('student_id', normalizedStudentId as any)
-        .eq('type', 'payment_redirect')
-        .lt('amount', 0);
+        .eq('target_type', 'monthly_fee');
 
-      if (creditQuery.error) {
-        const msg = String(creditQuery.error.message || '');
-        // Compatibilidad: algunos tenants quedaron con credit_movements.student_id UUID legacy.
-        if (!(isNumericId && msg.toLowerCase().includes('invalid input syntax for type uuid'))) {
-          throw creditQuery.error;
-        }
-      } else {
-        creditMovements = (creditQuery.data || []) as Array<{ amount: number | string | null }>;
-      }
+      if (applicationsError) throw applicationsError;
 
       const { data: studentCreditData, error: studentCreditError } = await supabase
         .from('student_credits')
@@ -215,38 +204,27 @@ export default function Movements() {
         throw studentCreditError;
       }
 
-      const toSafeNumber = (value: unknown) => {
-        const n = Number(value);
-        return Number.isFinite(n) ? n : 0;
-      };
-
-      // Calcular total pagado
-      const totalPreviousPaid = (previousPayments || []).reduce((sum, p) => sum + toSafeNumber(p.amount), 0);
-      const totalCreditRedirects = (creditMovements || []).reduce((sum, m) => sum + Math.abs(toSafeNumber(m.amount)), 0);
-      const availableCredit = Math.max(0, toSafeNumber(studentCreditData?.amount));
-      const totalCoverage = totalPreviousPaid + totalCreditRedirects + availableCredit;
-      const monthsAlreadyPaid = Math.floor(totalCoverage / MONTHLY_FEE);
-      const partialCarry = totalCoverage - (monthsAlreadyPaid * MONTHLY_FEE);
-
-      // Calcular meses pendientes con abono parcial aplicado al próximo mes
-      const payableMonths: string[] = [];
-      for (let i = firstPayableMonth; i <= 11; i++) {
-        payableMonths.push(monthNames[i]);
-      }
-
-      const pendingMonthNames = payableMonths.slice(monthsAlreadyPaid);
-      const pending: PendingMonthDebt[] = [];
-
-      pendingMonthNames.forEach((month, index) => {
-        if (index === 0 && partialCarry > 0) {
-          const amountDue = Math.max(0, MONTHLY_FEE - partialCarry);
-          if (amountDue > 0) {
-            pending.push({ month, amount: amountDue });
-          }
-        } else {
-          pending.push({ month, amount: MONTHLY_FEE });
-        }
+      const monthlyDebtItems = calculateMonthlyDebtItems({
+        enrollmentDate: studentData.enrollment_date,
+        monthlyFee: MONTHLY_FEE,
+        payments: (previousPayments || []).map((payment) => ({
+          ...payment,
+          redirected_amount: payment.redirected_amount,
+        })),
+        applications: (creditApplications || []).map((application) => ({
+          ...application,
+          target_type: application.target_type,
+        })),
+        year: currentYear,
+        period: "year",
       });
+
+      const pending = monthlyDebtItems
+        .filter((item) => item.due > 0)
+        .map<PendingMonthDebt>((item) => ({
+          month: item.month,
+          amount: item.due,
+        }));
 
       setPendingMonths(pending);
       setSelectedMonths([]);

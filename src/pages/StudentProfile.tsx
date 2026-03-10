@@ -12,6 +12,7 @@ import { formatDateForDisplay, parseDateFromDB } from "@/lib/dateUtils";
 import logoImage from "@/assets/logo-colegio.png";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount } from "@/lib/creditAccounting";
 
 interface Student {
   id: number;
@@ -118,10 +119,8 @@ export default function StudentProfile() {
 
     try {
       setLoading(true);
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
 
-      const [studentResult, paymentsResult, activitiesResult, exclusionsResult, scheduledActivitiesResult, notificationsResult, creditResult, creditMovementsResult] = await Promise.all([
+      const [studentResult, paymentsResult, activitiesResult, exclusionsResult, scheduledActivitiesResult, notificationsResult, creditResult, applicationsResult] = await Promise.all([
         supabase.from("students").select("first_name, last_name, enrollment_date").eq("id", selectedStudentId).single() as unknown as Promise<any>,
         supabase.from("payments").select("*").eq("student_id", selectedStudentId).order("payment_date", { ascending: false }) as unknown as Promise<any>,
         supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", currentTenant?.id) as unknown as Promise<any>,
@@ -129,7 +128,7 @@ export default function StudentProfile() {
         supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").eq("tenant_id", currentTenant?.id).order("scheduled_date", { ascending: false }) as unknown as Promise<any>,
         supabase.from("dashboard_notifications").select("id, message, created_at").eq("is_active", true).order("created_at", { ascending: false }).limit(5) as unknown as Promise<any>,
         supabase.from("student_credits").select("amount").eq("student_id", selectedStudentId).maybeSingle() as unknown as Promise<any>,
-        supabase.from("credit_movements").select("amount, type").eq("student_id", selectedStudentId).eq("type", "payment_redirect") as unknown as Promise<any>,
+        supabase.from("credit_applications").select("amount, reversed_amount, target_type, target_month, target_activity_id").eq("student_id", selectedStudentId) as unknown as Promise<any>,
       ]);
 
       if (studentResult.error) throw studentResult.error;
@@ -169,7 +168,7 @@ export default function StudentProfile() {
       }
       setActivityDonations(donationsMap);
 
-      const totalPaidAmount = paymentsResult.data.reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalPaidAmount = paymentsResult.data.reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
       setTotalPaid(totalPaidAmount);
 
       // Calcular deudas de cuotas mensuales
@@ -179,50 +178,16 @@ export default function StudentProfile() {
       if (isNaN(monthlyFeeRaw)) monthlyFeeRaw = 3000;
       const MONTHLY_FEE = monthlyFeeRaw;
 
-      const startMonth = 2; // Marzo
       const enrollmentDate = parseDateFromDB(studentResult.data.enrollment_date);
-      const enrollmentMonth = enrollmentDate.getMonth();
-      const enrollmentYear = enrollmentDate.getFullYear();
+      const monthlyItems = calculateMonthlyDebtItems({
+        enrollmentDate: studentResult.data.enrollment_date,
+        monthlyFee: MONTHLY_FEE,
+        payments: paymentsResult.data || [],
+        applications: applicationsResult.data || [],
+        period: "current",
+      });
 
-      let firstPaymentMonth = startMonth;
-      if (enrollmentYear === currentYear && enrollmentMonth > startMonth) {
-        firstPaymentMonth = enrollmentMonth;
-      }
-
-      let monthsToPay = 0;
-      if (currentYear > enrollmentYear) {
-        // Past years or current active year logic
-        monthsToPay = Math.max(0, currentMonth - firstPaymentMonth + 1) + 12 * (currentYear - enrollmentYear);
-        // Simplifying for single-year logic:
-        // If we are significantly ahead, assume full debt?
-        // For now, let's keep it scoped to current year logic:
-        monthsToPay = Math.max(0, 11 - startMonth + 1); // Full year debt?
-        // Let's refine:
-        // If enrollment was 2026, and we are 2027 => Full 2026 debt + 2027 debt. 
-        // But "monthsToPay" usually means "THIS YEAR's months".
-        // Let's follow the original intent which was "months up to NOW".
-        // If currentYear > enrollmentYear, we owe ALL months of this year (up to now).
-        monthsToPay = Math.max(0, currentMonth - startMonth + 1);
-      } else if (currentYear === enrollmentYear) {
-        monthsToPay = Math.max(0, currentMonth - firstPaymentMonth + 1);
-      } else {
-        // currentYear < enrollmentYear (Future)
-        monthsToPay = 0;
-      }
-
-      const expectedMonthlyFees = monthsToPay * MONTHLY_FEE;
-
-      let paidMonthlyFees = paymentsResult.data
-        .filter(p => p.concept?.toLowerCase().includes('cuota'))
-        .reduce((sum, p) => sum + Number(p.amount), 0);
-
-      // Add payment redirections (negative amounts = applied to monthly fees)
-      const redirectionAmount = (creditMovementsResult.data || [])
-        .filter(cm => cm.amount < 0)
-        .reduce((sum, cm) => sum + Math.abs(Number(cm.amount)), 0);
-      paidMonthlyFees += redirectionAmount;
-
-      const monthlyDebt = Math.max(0, expectedMonthlyFees - paidMonthlyFees);
+      const monthlyDebt = monthlyItems.reduce((sum, item) => sum + item.due, 0);
 
       // Calcular deudas de actividades
       const exclusionsSet = new Set(exclusionsResult.data?.map(e => e.activity_id) || []);
@@ -242,7 +207,7 @@ export default function StudentProfile() {
           return conceptNormalized.includes(activityNameNormalized);
         });
 
-        const totalPaidForActivity = relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+        const totalPaidForActivity = relatedPayments.reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
         activityPayments.set(activity.id, totalPaidForActivity);
       }
 
@@ -259,7 +224,8 @@ export default function StudentProfile() {
 
         const paid = activityPayments.get(activity.id) || 0;
         const expectedAmount = Number(activity.amount);
-        const owed = Math.max(0, expectedAmount - paid);
+        const appliedCredit = getAppliedCreditForActivity(applicationsResult.data || [], activity.id);
+        const owed = Math.max(0, expectedAmount - paid - appliedCredit);
 
         if (owed > 0) {
           activityDebts.push({ name: activity.name, amount: owed });

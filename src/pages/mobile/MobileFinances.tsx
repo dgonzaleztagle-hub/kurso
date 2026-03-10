@@ -7,6 +7,7 @@ import { ArrowUpRight, ArrowDownLeft, Banknote, ShoppingCart, Loader2 } from "lu
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { parseDateFromDB } from "@/lib/dateUtils";
+import { calculateMonthlyDebtItems, getNetPaymentAmount } from "@/lib/creditAccounting";
 
 interface Movement {
     id: number;
@@ -78,7 +79,7 @@ export default function MobileFinances() {
                 id: p.id,
                 type: 'INCOME',
                 category: 'Ingreso',
-                amount: p.amount,
+                amount: getNetPaymentAmount(p),
                 description: p.concept,
                 date: p.payment_date
             }));
@@ -120,7 +121,7 @@ export default function MobileFinances() {
                 allExpenses = data || [];
             }
 
-            const totalInc = (allPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+            const totalInc = (allPayments || []).reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
             const totalExp = (allExpenses || []).reduce((sum, e) => sum + Number(e.amount), 0);
 
             setIncome(totalInc);
@@ -147,38 +148,22 @@ export default function MobileFinances() {
                         : startMonth;
 
                     const payableMonthsCount = Math.max(0, 12 - firstPayableMonth);
-                    const expected = payableMonthsCount * monthlyFee;
-
-                    const paidMonthly = (allPayments || [])
-                        .filter((p: any) => String(p.concept || "").toLowerCase().startsWith("cuota"))
-                        .reduce((sum, p: any) => sum + Number(p.amount || 0), 0);
-
-                    let redirectedToFees = 0;
-                    const redirectsResult = await supabase
-                        .from("credit_movements")
-                        .select("amount")
+                    const applicationsResult = await supabase
+                        .from("credit_applications")
+                        .select("amount, reversed_amount, target_type, target_month")
                         .eq("tenant_id", currentTenant?.id)
                         .eq("student_id", normalizedStudentId as any)
-                        .eq("type", "payment_redirect")
-                        .lt("amount", 0);
+                        .eq("target_type", "monthly_fee");
 
-                    if (!redirectsResult.error) {
-                        redirectedToFees = (redirectsResult.data || []).reduce((sum, r: any) => sum + Math.abs(Number(r.amount || 0)), 0);
-                    }
+                    const monthItems = calculateMonthlyDebtItems({
+                        enrollmentDate: studentData.enrollment_date,
+                        monthlyFee,
+                        payments: allPayments || [],
+                        applications: applicationsResult.data || [],
+                        period: "year",
+                    });
 
-                    let availableCredit = 0;
-                    const studentCreditResult = await supabase
-                        .from("student_credits")
-                        .select("amount")
-                        .eq("tenant_id", currentTenant?.id)
-                        .eq("student_id", normalizedStudentId as any)
-                        .maybeSingle();
-
-                    if (!studentCreditResult.error) {
-                        availableCredit = Math.max(0, Number(studentCreditResult.data?.amount || 0));
-                    }
-
-                    setMonthlyDebt(Math.max(0, expected - paidMonthly - redirectedToFees - availableCredit));
+                    setMonthlyDebt(monthItems.reduce((sum, item) => sum + item.due, 0));
                 } else {
                     setMonthlyDebt(0);
                 }
