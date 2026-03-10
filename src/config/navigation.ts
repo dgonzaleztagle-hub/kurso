@@ -124,6 +124,6 @@ export const mainNavigation: NavCategory[] = [
 ];
 
 export const studentNavigation: NavItem[] = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Portal de Pagos", href: "/payment-portal", icon: CreditCard },
+    { name: "Dashboard", href: "/mobile/board", icon: LayoutDashboard },
+    { name: "Portal de Pagos", href: "/mobile/payment-portal", icon: CreditCard },
 ];

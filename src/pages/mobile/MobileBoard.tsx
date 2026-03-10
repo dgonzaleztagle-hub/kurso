@@ -97,7 +97,7 @@ export default function MobileBoard() {
 
       <Card className="rounded-2xl border-0 shadow-sm">
         <CardContent className="pt-6">
-          <Button onClick={() => navigate("/payment-portal")} className="w-full h-11">
+          <Button onClick={() => navigate("/mobile/payment-portal")} className="w-full h-11">
             <CreditCard className="mr-2 h-4 w-4" />
             Informar Nuevo Pago
           </Button>

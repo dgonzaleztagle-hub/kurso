@@ -57,7 +57,6 @@ import OnboardingWizard from "./pages/onboarding/OnboardingWizard";
 import { AdminLayout } from "./layouts/AdminLayout";
 
 import { MobileLayout } from "./components/layouts/MobileLayout";
-import MobileHome from "./pages/mobile/MobileHome";
 import MobileFinances from "./pages/mobile/MobileFinances";
 import MobileAgenda from "./pages/mobile/MobileAgenda";
 import MobileActas from "./pages/mobile/MobileActas";
@@ -236,7 +235,7 @@ function AppRoutes() {
       } />
       <Route path="/payment-portal" element={
         <ProtectedRoute allowedRoles={['alumnos']}>
-          <Layout><PaymentPortal /></Layout>
+          <Navigate to="/mobile/payment-portal" replace />
         </ProtectedRoute>
       } />
       <Route path="/payment-notifications" element={
@@ -282,6 +281,7 @@ function AppRoutes() {
         <Route path="agenda" element={<MobileAgenda />} />
         <Route path="actas" element={<MobileActas />} />
         <Route path="profile" element={<MobileProfile />} />
+        <Route path="payment-portal" element={<PaymentPortal />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />
