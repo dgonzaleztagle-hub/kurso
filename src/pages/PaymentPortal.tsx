@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { paymentNotificationSchema } from '@/lib/validationSchemas';
 import { Loader2, CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { calculateMonthlyDebtItems } from '@/lib/creditAccounting';
+import { fetchStudentDashboardData } from '@/hooks/useStudentDashboardData';
 
 const CHILEAN_BANKS = [
   'Banco de Chile',
@@ -128,155 +128,29 @@ export default function PaymentPortal() {
     }
   };
 
-  const loadDebts = async (
-    studentId: string,
-    enrollmentDate?: string,
-    tenantId?: string,
-    monthlyFeeAmount?: number,
-  ) => {
-    const debtsData: DebtItem[] = [];
+  const loadDebts = async (studentId: string) => {
+    const snapshot = await fetchStudentDashboardData(studentId);
 
-    // Calcular deuda de cuotas mensuales
-    const monthlyFeeDebts = await calculateMonthlyFeeDebt(studentId, enrollmentDate, tenantId, monthlyFeeAmount);
-    debtsData.push(...monthlyFeeDebts);
-
-    // Calcular deudas de actividades
-    const activityDebts = await calculateActivityDebts(studentId);
-    debtsData.push(...activityDebts);
+    const debtsData: DebtItem[] = [
+      ...snapshot.monthlyDebtItems
+        .filter((item) => item.due > 0)
+        .map((item) => ({
+          type: 'monthly_fee' as const,
+          id: item.key,
+          month_key: item.key,
+          name: `Cuota ${item.label}`,
+          amount: item.due,
+          months: [item.month],
+        })),
+      ...snapshot.activityDebtItems.map((item) => ({
+        type: 'activity' as const,
+        id: String(item.id),
+        name: item.name,
+        amount: item.amount,
+      })),
+    ];
 
     setDebts(debtsData);
-  };
-
-  const calculateMonthlyFeeDebt = async (
-    studentId: string,
-    enrollmentDate?: string,
-    tenantId?: string,
-    monthlyFeeAmount?: number,
-  ) => {
-    if (!enrollmentDate || !tenantId) return [] as DebtItem[];
-
-    const configuredFee = Number(monthlyFeeAmount);
-    const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
-
-    const [{ data: payments }, { data: applications }] = await Promise.all([
-      supabase
-        .from('payments')
-        .select('amount, redirected_amount, concept, month_period')
-        .eq('tenant_id', tenantId)
-        .eq('student_id', studentId),
-      supabase
-        .from('credit_applications')
-        .select('amount, reversed_amount, target_type, target_month')
-        .eq('tenant_id', tenantId)
-        .eq('student_id', studentId)
-        .eq('target_type', 'monthly_fee'),
-    ]);
-
-    return calculateMonthlyDebtItems({
-      enrollmentDate,
-      monthlyFee,
-      payments: payments || [],
-      applications: applications || [],
-      period: 'year',
-    })
-      .filter((item) => item.due > 0)
-      .map((item) => ({
-        type: 'monthly_fee' as const,
-        id: item.key,
-        month_key: item.key,
-        name: `Cuota ${item.label}`,
-        amount: item.due,
-        months: [item.month],
-      }));
-  };
-
-  const calculateActivityDebts = async (studentId: string) => {
-    const { data: activities } = await supabase
-      .from('activities')
-      .select('*')
-      .order('activity_date', { ascending: true });
-
-    if (!activities) return [];
-
-    const { data: student } = await supabase
-      .from('students')
-      .select('enrollment_date')
-      .eq('id', studentId)
-      .single();
-
-    if (!student) return [];
-
-    const enrollmentDate = parseDateFromDB(student.enrollment_date);
-
-    const { data: exclusions } = await supabase
-      .from('activity_exclusions')
-      .select('activity_id')
-      .eq('student_id', studentId);
-
-    const excludedActivityIds = new Set(exclusions?.map(e => e.activity_id) || []);
-
-    // Obtener todos los pagos del estudiante para verificar actividades pagadas
-    const { data: allPayments } = await supabase
-      .from('payments')
-      .select('activity_id, amount, concept')
-      .eq('student_id', studentId);
-
-    const paidActivities = new Map<string, number>();
-    
-    for (const activity of activities) {
-      // Sumar todos los pagos relacionados con esta actividad
-      const relatedPayments = allPayments?.filter(p => {
-        // Primero verificar si está vinculado directamente por activity_id
-        if (p.activity_id !== null && p.activity_id === activity.id) {
-          return true;
-        }
-        
-        // Si no tiene activity_id, verificar por concepto
-        // Normalizar ambos strings para comparación
-        const activityNameNormalized = activity.name.toUpperCase().trim().replace(/\s+/g, ' ');
-        const conceptNormalized = (p.concept || '').toUpperCase().trim().replace(/\s+/g, ' ');
-        
-        // El concepto debe contener el nombre completo de la actividad
-        return conceptNormalized.includes(activityNameNormalized);
-      }) || [];
-      
-      const totalPaid = relatedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      paidActivities.set(String(activity.id), totalPaid);
-    }
-
-    const debts: DebtItem[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (const activity of activities) {
-      // Solo considerar actividades con fecha
-      if (!activity.activity_date) continue;
-      
-      const activityDate = new Date(activity.activity_date);
-      
-      // Solo considerar actividades que ya pasaron
-      if (activityDate > today) continue;
-      
-      // Excluir si el alumno está excluido de esta actividad
-      if (excludedActivityIds.has(activity.id)) continue;
-      
-      // Excluir si el alumno se matriculó después de la actividad
-      if (enrollmentDate > activityDate) continue;
-
-      const paid = paidActivities.get(String(activity.id)) || 0;
-      const owed = Number(activity.amount) - paid;
-
-      if (owed > 0) {
-        debts.push({
-          type: 'activity',
-          id: String(activity.id),
-          name: activity.name,
-          amount: owed,
-        });
-      }
-    }
-
-    return debts;
   };
 
   const loadPaymentHistory = async (studentId: number) => {
@@ -290,13 +164,24 @@ export default function PaymentPortal() {
   };
 
   const loadNotifications = async () => {
-    const { data } = await supabase
+    const primaryQuery = await supabase
       .from('payment_notifications')
       .select('*')
       .eq('user_id', user?.id)
       .order('created_at', { ascending: false });
 
-    setNotifications(data || []);
+    if (!primaryQuery.error) {
+      setNotifications(primaryQuery.data || []);
+      return;
+    }
+
+    const fallbackQuery = await supabase
+      .from('payment_notifications')
+      .select('*')
+      .eq('submitted_by', user?.id)
+      .order('created_at', { ascending: false });
+
+    setNotifications(fallbackQuery.data || []);
   };
 
   const toggleDebtSelection = (debtKey: string) => {
@@ -498,10 +383,37 @@ export default function PaymentPortal() {
 
       console.log('Insert data:', insertData);
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('payment_notifications')
         .insert(insertData)
         .select();
+
+      const missingColumnError = String(error?.message || '').toLowerCase();
+      if (error && (
+        missingColumnError.includes("could not find the 'bank' column") ||
+        missingColumnError.includes("column payment_notifications.user_id does not exist") ||
+        missingColumnError.includes("column payment_notifications.payer_name does not exist") ||
+        missingColumnError.includes("column payment_notifications.payment_details does not exist") ||
+        missingColumnError.includes("column payment_notifications.reference does not exist")
+      )) {
+        const legacyInsertData = {
+          tenant_id: student.tenant_id,
+          student_id: student.id,
+          amount: paymentAmount,
+          payment_date: format(paymentDate, 'yyyy-MM-dd'),
+          status: 'pending',
+          submitted_by: user!.id,
+          voucher_url: null,
+        };
+
+        const legacyResult = await supabase
+          .from('payment_notifications')
+          .insert(legacyInsertData)
+          .select();
+
+        data = legacyResult.data;
+        error = legacyResult.error;
+      }
 
       if (error) {
         console.error('=== DATABASE ERROR ===');
@@ -539,9 +451,7 @@ export default function PaymentPortal() {
 
       // Reload data - important to reload debts so user can report another payment
       if (student) {
-        const configuredFee = Number((tenantSettings as any)?.monthly_fee);
-        const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
-        await loadDebts(student.id, student.enrollment_date, student.tenant_id, monthlyFee);
+        await loadDebts(student.id);
         await loadPaymentHistory(student.id);
       }
       loadNotifications();
