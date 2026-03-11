@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown, Users, AlertCircle, Bell, Calendar, Send, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +29,22 @@ import { WelcomeGuide } from "@/components/onboarding/WelcomeGuide";
 
 import { useTenant } from "@/contexts/TenantContext";
 
+type StudentRow = Pick<Tables<"students">, "id" | "first_name" | "last_name" | "enrollment_date">;
+type StudentWithName = StudentRow & { name: string };
+type PaymentRow = Pick<Tables<"payments">, "amount" | "student_id" | "concept" | "activity_id" | "redirected_amount" | "month_period">;
+type MonthlyPaymentRow = Pick<Tables<"payments">, "amount" | "redirected_amount">;
+type ExpenseRow = Pick<Tables<"expenses">, "amount">;
+type NotificationRow = Pick<Tables<"payment_notifications">, "id">;
+type ReimbursementRow = Pick<Tables<"reimbursements">, "id" | "type">;
+type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "amount" | "activity_date">;
+type ExclusionRow = Pick<Tables<"activity_exclusions">, "student_id" | "activity_id">;
+type CreditApplicationRow = Pick<Tables<"credit_applications">, "student_id" | "amount" | "reversed_amount" | "target_type" | "target_month" | "target_activity_id">;
+type OpeningBalanceRow = { amount: number | null };
+type QueryResult<T> = Promise<{ data: T[] | null; error: PostgrestError | null }>;
+
+const emptyResult = <T,>(): Promise<{ data: T[]; error: null }> =>
+  Promise.resolve({ data: [], error: null });
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { appUser } = useAuth();
@@ -52,11 +70,173 @@ export default function Dashboard() {
   const [showMassNotification, setShowMassNotification] = useState(false);
   const [showManageNotifications, setShowManageNotifications] = useState(false);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadStats();
+  const loadStats = useCallback(async () => {
+    if (!currentTenant?.id) return;
+    try {
+      setLoading(true);
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const firstDayOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
+
+      const studentsResult = await supabase
+        .from("students")
+        .select("id, first_name, last_name, enrollment_date")
+        .eq("tenant_id", currentTenant.id);
+
+      if (studentsResult.error) throw studentsResult.error;
+      const studentsData = (studentsResult.data as StudentRow[] | null) || [];
+      const studentIds = studentsData.map((student) => student.id);
+
+      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, applicationsResult, openingBalancesResult] = await Promise.all([
+        studentIds.length > 0
+          ? (supabase.from("payments").select("amount, student_id, concept, activity_id, redirected_amount, month_period").in("student_id", studentIds) as QueryResult<PaymentRow>)
+          : emptyResult<PaymentRow>(),
+        supabase.from("expenses").select("amount").eq("tenant_id", currentTenant.id) as QueryResult<ExpenseRow>,
+        supabase.from("payment_notifications").select("id").eq("tenant_id", currentTenant.id).eq("status", "pending") as QueryResult<NotificationRow>,
+        supabase.from("reimbursements").select("id, type").eq("tenant_id", currentTenant.id).eq("status", "pending") as QueryResult<ReimbursementRow>,
+        studentIds.length > 0
+          ? (supabase.from("payments").select("amount, redirected_amount").gte("payment_date", firstDayOfMonth).in("student_id", studentIds) as QueryResult<MonthlyPaymentRow>)
+          : emptyResult<MonthlyPaymentRow>(),
+        supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", currentTenant.id) as QueryResult<ActivityRow>,
+        studentIds.length > 0
+          ? (supabase.from("activity_exclusions").select("student_id, activity_id").in("student_id", studentIds) as QueryResult<ExclusionRow>)
+          : emptyResult<ExclusionRow>(),
+        studentIds.length > 0
+          ? (supabase.from("credit_applications").select("student_id, amount, reversed_amount, target_type, target_month, target_activity_id").in("student_id", studentIds) as QueryResult<CreditApplicationRow>)
+          : emptyResult<CreditApplicationRow>(),
+        supabase
+          .from("tenant_opening_balances" as never)
+          .select("amount")
+          .eq("tenant_id", currentTenant.id)
+          .eq("status", "active") as QueryResult<OpeningBalanceRow>,
+      ]);
+
+      if (paymentsResult.error) throw paymentsResult.error;
+      if (expensesResult.error) throw expensesResult.error;
+      if (notificationsResult.error) throw notificationsResult.error;
+      if (reimbursementsResult.error) throw reimbursementsResult.error;
+      if (monthlyPaymentsResult.error) throw monthlyPaymentsResult.error;
+      if (activitiesResult.error) throw activitiesResult.error;
+      if (exclusionsResult.error) throw exclusionsResult.error;
+      if (applicationsResult.error) throw applicationsResult.error;
+      if (openingBalancesResult.error) throw openingBalancesResult.error;
+
+      const students: StudentWithName[] = studentsData.map((student) => ({
+        ...student,
+        name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
+      }));
+      const payments = paymentsResult.data || [];
+      const expenses = expensesResult.data || [];
+      const notifications = notificationsResult.data || [];
+      const reimbursements = reimbursementsResult.data || [];
+      const monthlyPayments = monthlyPaymentsResult.data || [];
+      const activities = activitiesResult.data || [];
+      const exclusions = exclusionsResult.data || [];
+      const applications = applicationsResult.data || [];
+      const openingBalances = openingBalancesResult.data || [];
+      const tenantMonthlyFee = Number(currentTenant.settings?.monthly_fee);
+      const monthlyFee = Number.isFinite(tenantMonthlyFee) && tenantMonthlyFee > 0 ? tenantMonthlyFee : 3000;
+
+      const totalIncome = payments.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
+      const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+      const openingBalance = openingBalances.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const monthlyIncome = monthlyPayments.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
+
+      let totalDebt = 0;
+      const details: DebtDetail[] = [];
+      const exclusionsMap = new Map<number, Set<number>>();
+      exclusions.forEach((exclusion) => {
+        if (!exclusionsMap.has(exclusion.student_id)) {
+          exclusionsMap.set(exclusion.student_id, new Set());
+        }
+        exclusionsMap.get(exclusion.student_id)?.add(exclusion.activity_id);
+      });
+
+      const activityPayments = new Map<string, number>();
+      for (const activity of activities) {
+        const activityNameUpper = activity.name.toUpperCase();
+
+        payments
+          .filter((payment) => {
+            const conceptUpper = (payment.concept || "").toUpperCase();
+            return conceptUpper.includes(activityNameUpper) ||
+              (payment.activity_id !== null && payment.activity_id === activity.id);
+          })
+          .forEach((payment) => {
+            const key = `${payment.student_id}_${activity.id}`;
+            const current = activityPayments.get(key) || 0;
+            activityPayments.set(key, current + getNetPaymentAmount(payment));
+          });
+      }
+
+      for (const student of students) {
+        const studentPayments = payments.filter((payment) => payment.student_id === student.id);
+        const studentApplications = applications.filter((application) => application.student_id === student.id);
+        const monthlyItems = calculateMonthlyDebtItems({
+          enrollmentDate: student.enrollment_date,
+          monthlyFee,
+          payments: studentPayments,
+          applications: studentApplications,
+          period: "current",
+        });
+
+        const monthlyDebt = monthlyItems.reduce((sum, item) => sum + item.due, 0);
+        const activityDebts: { name: string; amount: number }[] = [];
+        for (const activity of activities) {
+          if (!activity.activity_date) continue;
+          if (exclusionsMap.get(student.id)?.has(activity.id)) continue;
+
+          const key = `${student.id}_${activity.id}`;
+          const paid = activityPayments.get(key) || 0;
+          const appliedCredit = getAppliedCreditForActivity(studentApplications, activity.id);
+          const owed = Math.max(0, Number(activity.amount) - paid - appliedCredit);
+
+          if (owed > 0) {
+            activityDebts.push({ name: activity.name, amount: owed });
+          }
+        }
+
+        const studentTotalDebt = monthlyDebt + activityDebts.reduce((sum, debt) => sum + debt.amount, 0);
+        if (studentTotalDebt > 0) {
+          details.push({
+            studentId: student.id,
+            studentName: student.name,
+            monthlyDebt,
+            activityDebts,
+            totalDebt: studentTotalDebt,
+          });
+          totalDebt += studentTotalDebt;
+        }
+      }
+
+      setDebtDetails(details.sort((a, b) => b.totalDebt - a.totalDebt));
+      const pendingReimbursements = reimbursements.filter((item) => item.type === "reimbursement").length;
+      const pendingSupplierPayments = reimbursements.filter((item) => item.type === "supplier_payment").length;
+
+      setStats({
+        totalIncome,
+        totalExpenses,
+        balance: openingBalance + totalIncome - totalExpenses,
+        studentCount: students.length,
+        pendingNotifications: notifications.length,
+        pendingReimbursements,
+        pendingSupplierPayments,
+        monthlyIncome,
+        totalDebt,
+      });
+    } catch (error: unknown) {
+      console.error("Error loading stats:", error);
+      toast.error("Error al cargar las estadísticas");
+    } finally {
+      setLoading(false);
     }
   }, [currentTenant]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadStats();
+    }
+  }, [currentTenant?.id, loadStats]);
 
   useEffect(() => {
     if (!currentTenant?.id) return;
@@ -128,186 +308,7 @@ export default function Dashboard() {
 
       supabase.removeChannel(channel);
     };
-  }, [currentTenant?.id]);
-
-  const loadStats = async () => {
-    if (!currentTenant?.id) return;
-    try {
-      setLoading(true);
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      const firstDayOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
-
-      // 1. Fetch Students FIRST (Tenant Scope)
-      const studentsResult = await supabase
-        .from("students")
-        .select("id, first_name, last_name, enrollment_date")
-        .eq("tenant_id", currentTenant.id);
-
-      if (studentsResult.error) throw studentsResult.error;
-      const studentsData = studentsResult.data || [];
-      const studentIds = studentsData.map(s => s.id);
-
-      // 2. Fetch Dependent Data (Student Scope)
-      const [paymentsResult, expensesResult, notificationsResult, reimbursementsResult, monthlyPaymentsResult, activitiesResult, exclusionsResult, applicationsResult, openingBalancesResult] = await Promise.all([
-        // Payments: Filter by student_id
-        (studentIds.length > 0
-          ? supabase.from("payments").select("amount, student_id, concept, activity_id, redirected_amount, month_period").in("student_id", studentIds)
-          : { data: [], error: null }) as unknown as Promise<any>,
-
-        supabase.from("expenses").select("amount").eq("tenant_id", currentTenant.id) as unknown as Promise<any>,
-
-        supabase.from("payment_notifications").select("id").eq("tenant_id", currentTenant.id).eq("status", "pending") as unknown as Promise<any>,
-
-        supabase.from("reimbursements").select("id, type").eq("tenant_id", currentTenant.id).eq("status", "pending") as unknown as Promise<any>,
-
-        // Monthly Payments: Filter by student_id + date
-        (studentIds.length > 0
-          ? supabase.from("payments").select("amount, redirected_amount").gte("payment_date", firstDayOfMonth).in("student_id", studentIds)
-          : { data: [], error: null }) as unknown as Promise<any>,
-
-        // Activities: Tenant Scope (Correct)
-        supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", currentTenant.id) as unknown as Promise<any>,
-
-        // Exclusions: Student Scope
-        (studentIds.length > 0
-          ? supabase.from("activity_exclusions").select("student_id, activity_id").in("student_id", studentIds)
-          : { data: [], error: null }) as unknown as Promise<any>,
-
-        // Credit applications: Student Scope
-        (studentIds.length > 0
-          ? supabase.from("credit_applications").select("student_id, amount, reversed_amount, target_type, target_month, target_activity_id").in("student_id", studentIds)
-          : { data: [], error: null }) as unknown as Promise<any>,
-
-        supabase
-          .from("tenant_opening_balances" as any)
-          .select("amount")
-          .eq("tenant_id", currentTenant.id)
-          .eq("status", "active") as unknown as Promise<any>,
-      ]);
-
-      if (paymentsResult.error) throw paymentsResult.error;
-      if (expensesResult.error) throw expensesResult.error;
-      if (openingBalancesResult.error) throw openingBalancesResult.error;
-      // if (studentsResult.error) throw studentsResult.error; // Already handled above
-
-      // Map students to include full name
-      const students = studentsData.map(s => ({
-        ...s,
-        name: `${s.first_name} ${s.last_name}`.trim()
-      }));
-
-      const totalIncome = (paymentsResult.data as any[]).reduce((sum: number, p: any) => sum + getNetPaymentAmount(p), 0);
-      const totalExpenses = (expensesResult.data as any[]).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-      const openingBalance = (openingBalancesResult.data as any[]).reduce((sum: number, item: any) => sum + Number(item.amount), 0);
-      const monthlyIncome = (monthlyPaymentsResult.data as any[])?.reduce((sum: number, p: any) => sum + getNetPaymentAmount(p), 0) || 0;
-
-      // Calcular deuda total y detalles
-      let totalDebt = 0;
-      const details: DebtDetail[] = [];
-      const exclusionsMap = new Map<number, Set<number>>();
-      exclusionsResult.data?.forEach(exc => {
-        if (!exclusionsMap.has(exc.student_id)) {
-          exclusionsMap.set(exc.student_id, new Set());
-        }
-        exclusionsMap.get(exc.student_id)!.add(exc.activity_id);
-      });
-
-      // Mapear pagos de actividades - buscar por coincidencia de nombre/concepto
-      const activityPayments = new Map<string, number>();
-
-      // Para cada actividad, buscar pagos que contengan su nombre en el concepto
-      for (const activity of activitiesResult.data || []) {
-        const activityNameUpper = activity.name.toUpperCase();
-
-        (paymentsResult.data as any[])
-          .filter((p: any) => {
-            // Buscar si el concepto del pago contiene el nombre de la actividad
-            const conceptUpper = (p.concept || '').toUpperCase();
-            return conceptUpper.includes(activityNameUpper) ||
-              (p.activity_id !== null && p.activity_id === activity.id);
-          })
-          .forEach((p: any) => {
-            const key = `${p.student_id}_${activity.id}`;
-            const current = activityPayments.get(key) || 0;
-            activityPayments.set(key, current + getNetPaymentAmount(p));
-          });
-      }
-
-      // Calcular deudas por estudiante
-      for (const student of students) {
-        const enrollmentDate = parseDateFromDB(student.enrollment_date);
-        const monthlyItems = calculateMonthlyDebtItems({
-          enrollmentDate: student.enrollment_date,
-          monthlyFee: Number((currentTenant.settings as any)?.monthly_fee) > 0 ? Number((currentTenant.settings as any)?.monthly_fee) : 3000,
-          payments: (paymentsResult.data || []).filter((p: any) => p.student_id === student.id),
-          applications: (applicationsResult.data || []).filter((app: any) => app.student_id === student.id),
-          period: "current",
-        });
-
-        const monthlyDebt = monthlyItems.reduce((sum, item) => sum + item.due, 0);
-
-        // Calcular deudas de actividades
-        const activityDebts: { name: string; amount: number }[] = [];
-        for (const activity of activitiesResult.data || []) {
-          if (!activity.activity_date) continue;
-
-          const activityDate = new Date(activity.activity_date);
-          // if (activityDate > new Date()) continue; // Allow seeing future/rollover debts
-
-          if (exclusionsMap.get(student.id)?.has(activity.id)) continue;
-          // if (enrollmentDate > activityDate) continue; // Allow same-day enrollment/activity matches (common in migrations)
-
-          const key = `${student.id}_${activity.id}`;
-          const paid = activityPayments.get(key) || 0;
-          const appliedCredit = getAppliedCreditForActivity(
-            (applicationsResult.data || []).filter((app: any) => app.student_id === student.id),
-            activity.id,
-          );
-          const owed = Math.max(0, Number(activity.amount) - paid - appliedCredit);
-
-          if (owed > 0) {
-            activityDebts.push({ name: activity.name, amount: owed });
-          }
-        }
-
-        const studentTotalDebt = monthlyDebt + activityDebts.reduce((sum, d) => sum + d.amount, 0);
-
-        if (studentTotalDebt > 0) {
-          details.push({
-            studentId: student.id,
-            studentName: student.name,
-            monthlyDebt,
-            activityDebts,
-            totalDebt: studentTotalDebt,
-          });
-          totalDebt += studentTotalDebt;
-        }
-      }
-
-      setDebtDetails(details.sort((a, b) => b.totalDebt - a.totalDebt));
-      const reimbursements = reimbursementsResult.data || [];
-      const pendingReimbursements = reimbursements.filter(r => r.type === 'reimbursement').length;
-      const pendingSupplierPayments = reimbursements.filter(r => r.type === 'supplier_payment').length;
-
-      setStats({
-        totalIncome,
-        totalExpenses,
-        balance: openingBalance + totalIncome - totalExpenses,
-        studentCount: students.length,
-        pendingNotifications: notificationsResult.data?.length || 0,
-        pendingReimbursements,
-        pendingSupplierPayments,
-        monthlyIncome,
-        totalDebt,
-      });
-    } catch (error) {
-      console.error("Error loading stats:", error);
-      toast.error("Error al cargar las estadísticas");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [currentTenant?.id, loadStats]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CL", {

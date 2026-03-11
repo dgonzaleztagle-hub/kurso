@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -21,6 +23,22 @@ interface Student {
   enrollment_date: string;
 }
 
+interface NewStudentFormState {
+  first_name: string;
+  last_name: string;
+  rut: string;
+}
+
+interface CreateStudentAccountsResponse {
+  created?: number;
+  linked?: number;
+  failed?: number;
+  errors?: number;
+}
+
+type StudentRow = Pick<Tables<"students">, "id" | "first_name" | "last_name" | "enrollment_date" | "rut">;
+type StudentInsert = Tables<"students">["Insert"];
+
 export default function Students() {
   const { currentTenant } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
@@ -31,7 +49,7 @@ export default function Students() {
   // Create Student State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newStudent, setNewStudent] = useState({
+  const [newStudent, setNewStudent] = useState<NewStudentFormState>({
     first_name: "",
     last_name: "",
     rut: "",
@@ -42,12 +60,6 @@ export default function Students() {
   const [generatingAccounts, setGeneratingAccounts] = useState(false);
 
   useEffect(() => {
-    if (currentTenant) {
-      loadStudents();
-    }
-  }, [currentTenant]);
-
-  useEffect(() => {
     const filtered = students.filter((student) =>
       student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (student.rut && student.rut.includes(searchTerm))
@@ -55,14 +67,15 @@ export default function Students() {
     setFilteredStudents(filtered);
   }, [searchTerm, students]);
 
-  const getFriendlyStudentError = (error: any) => {
-    const message = String(error?.message || "").toLowerCase();
-    const details = String(error?.details || "").toLowerCase();
-    const hint = String(error?.hint || "").toLowerCase();
+  const getFriendlyStudentError = (error: unknown) => {
+    const typedError = error as Partial<PostgrestError> & { message?: string };
+    const message = String(typedError.message || "").toLowerCase();
+    const details = String(typedError.details || "").toLowerCase();
+    const hint = String(typedError.hint || "").toLowerCase();
     const combined = `${message} ${details} ${hint}`;
 
     if (
-      error?.code === "23505" ||
+      typedError.code === "23505" ||
       combined.includes("students_rut_unique_idx") ||
       combined.includes("duplicate key value") ||
       combined.includes("unique constraint") && combined.includes("rut")
@@ -70,10 +83,10 @@ export default function Students() {
       return "Ya existe un alumno con ese RUT. No se permiten duplicados.";
     }
 
-    return error?.message || "Error al agregar estudiante";
+    return typedError.message || "Error al agregar estudiante";
   };
 
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     if (!currentTenant) return;
     try {
       setLoading(true);
@@ -85,22 +98,28 @@ export default function Students() {
 
       if (error) throw error;
 
-      const mappedStudents = (data || []).map(s => ({
-        id: s.id,
-        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre',
-        rut: s.rut,
-        enrollment_date: s.enrollment_date
+      const mappedStudents = ((data as StudentRow[] | null) || []).map((student) => ({
+        id: student.id,
+        name: `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Sin Nombre',
+        rut: student.rut,
+        enrollment_date: student.enrollment_date
       }));
 
       setStudents(mappedStudents);
       setFilteredStudents(mappedStudents);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading students:", error);
       toast.error("Error al cargar estudiantes");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant]);
+
+  useEffect(() => {
+    if (currentTenant) {
+      void loadStudents();
+    }
+  }, [currentTenant, loadStudents]);
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,15 +161,18 @@ export default function Students() {
       }
 
       // 1. Create Student
-      const { data: studentData, error: studentError } = await supabase.from("students").insert([
-        {
-          tenant_id: currentTenant.id,
-          first_name: newStudent.first_name.trim(),
-          last_name: newStudent.last_name.trim(),
-          rut: rutNormalized,
-          enrollment_date: new Date().toISOString().split('T')[0], // Default today/year start
-        },
-      ] as any).select().single();
+      const studentPayload: StudentInsert = {
+        tenant_id: currentTenant.id,
+        first_name: newStudent.first_name.trim(),
+        last_name: newStudent.last_name.trim(),
+        rut: rutNormalized,
+        enrollment_date: new Date().toISOString().split('T')[0],
+      };
+      const { data: studentData, error: studentError } = await supabase
+        .from("students")
+        .insert(studentPayload)
+        .select()
+        .single();
 
       if (studentError) throw studentError;
 
@@ -174,12 +196,12 @@ export default function Students() {
             },
           });
           if (fnError) throw fnError;
-          const failed = Number((accountResult as any)?.failed || 0);
+          const failed = Number((accountResult as CreateStudentAccountsResponse | null)?.failed || 0);
           if (failed > 0) {
             throw new Error("No se pudo crear la cuenta del alumno");
           }
           toast.success("Cuenta de acceso creada exitosamente");
-        } catch (accError) {
+        } catch (accError: unknown) {
           console.error("Error creating account:", accError);
           toast.error("Estudiante creado, pero falló la generación de cuenta.");
         }
@@ -187,9 +209,9 @@ export default function Students() {
 
       setDialogOpen(false);
       setNewStudent({ first_name: "", last_name: "", rut: "" });
-      loadStudents();
+      await loadStudents();
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       toast.error(getFriendlyStudentError(error));
     } finally {
@@ -217,12 +239,13 @@ export default function Students() {
 
       if (error) throw error;
 
-      const created = (data as any)?.created || 0;
-      const linked = (data as any)?.linked || 0;
-      const errors = (data as any)?.errors || 0;
+      const result = data as CreateStudentAccountsResponse | null;
+      const created = result?.created || 0;
+      const linked = result?.linked || 0;
+      const errors = result?.errors || 0;
       toast.success(`Proceso finalizado. Creadas: ${created}, vinculadas: ${linked}, errores: ${errors}.`);
-      loadStudents(); // Refresh to see changes if any status update visual exists
-    } catch (error: any) {
+      await loadStudents();
+    } catch (error: unknown) {
       console.error("Error generating accounts:", error);
       toast.error("Error al generar cuentas.");
     } finally {
