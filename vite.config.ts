@@ -3,12 +3,30 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
+import compression from "vite-plugin-compression";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    headers: {
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+    }
+  },
+  preview: {
+    headers: {
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
+    }
   },
   plugins: [
     react(),
@@ -115,6 +133,14 @@ export default defineConfig(({ mode }) => ({
           }
         ]
       }
+    }),
+    compression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+    }),
+    compression({
+      algorithm: 'gzip',
+      ext: '.gz',
     })
   ].filter(Boolean),
   resolve: {
@@ -123,4 +149,3 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
-// trigger rebuild

@@ -1,14 +1,31 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
+Allow: /auth
+Allow: /landing
+
+# AI Bots (AEO/GEO Optimization)
+User-agent: GPTBot
+Allow: /
+Allow: /landing
+
+User-agent: ChatGPT-User
+Allow: /
+Allow: /landing
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /landing
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /landing
+
+# Disallow private areas
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /mobile
+Disallow: /onboarding
+Disallow: /branding
+Disallow: /user-management
+
+Sitemap: https://kurso.app/sitemap.xml

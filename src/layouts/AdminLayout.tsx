@@ -7,11 +7,13 @@ import {
     LogOut,
     Menu,
     X,
-    Settings
+    Settings,
+    CreditCard
 } from "lucide-react";
 import { useState } from "react";
 import { resolveBranding } from "@/lib/branding";
 import { cn } from "@/lib/utils";
+import { HojaceroSignature } from "@/components/HojaceroSignature";
 
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -28,6 +30,7 @@ export const AdminLayout = () => {
         { title: "Dashboard", icon: LayoutDashboard, path: "/admin" },
         { title: "Organizaciones", icon: Building2, path: "/admin/organizations" },
         { title: "Usuarios Globales", icon: Users, path: "/admin/users" },
+        { title: "Billing SaaS", icon: CreditCard, path: "/admin/billing" },
     ];
 
     return (
@@ -94,6 +97,10 @@ export const AdminLayout = () => {
 
                 <main className="flex-1 p-6 overflow-auto">
                     <Outlet />
+                    <div className="mt-12 mb-6">
+                        <HojaceroSignature />
+                    </div>
+
                 </main>
             </div>
         </div>

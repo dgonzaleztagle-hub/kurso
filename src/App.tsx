@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { IndexSwitcher } from "./components/IndexSwitcher";
+import { HelmetProvider } from "react-helmet-async";
 
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
@@ -35,6 +36,14 @@ import ScheduledActivities from "./pages/ScheduledActivities";
 import SupplierPaymentRequest from "./pages/SupplierPaymentRequest";
 import PostManagement from "./pages/PostManagement";
 import TenantBranding from "./pages/TenantBranding";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
+import BillingSuccess from "./pages/BillingSuccess";
+import BillingPending from "./pages/BillingPending";
+import BillingFailure from "./pages/BillingFailure";
+import TesoreriaCurso from "./pages/servicios/TesoreriaCurso";
+import CentrosPadres from "./pages/servicios/CentrosPadres";
+import ImplementacionExitosa from "./pages/casos/ImplementacionExitosa";
 
 import CreditManagement from "./pages/CreditManagement";
 import CreditMovements from "./pages/CreditMovements";
@@ -54,6 +63,7 @@ import OrganizationDetail from "./pages/admin/OrganizationDetail";
 import CloseYear from "./pages/admin/CloseYear";
 import TenantsList from "./pages/admin/TenantsList";
 import UsersList from "./pages/admin/UsersList";
+import SaasBilling from "./pages/admin/SaasBilling";
 import OnboardingWizard from "./pages/onboarding/OnboardingWizard";
 import { AdminLayout } from "./layouts/AdminLayout";
 
@@ -86,6 +96,7 @@ function AppRoutes() {
           <Route path="/admin/organizations/:id" element={<OrganizationDetail />} />
           <Route path="/admin/tenants" element={<TenantsList />} />
           <Route path="/admin/users" element={<UsersList />} />
+          <Route path="/admin/billing" element={<SaasBilling />} />
         </Route>
       </Route>
 
@@ -99,6 +110,14 @@ function AppRoutes() {
       } />
 
       <Route path="/solicitud-pago-proveedor" element={<SupplierPaymentRequest />} />
+      <Route path="/blog" element={<Blog />} />
+      <Route path="/blog/:slug" element={<BlogPost />} />
+      <Route path="/pago-exitoso" element={<BillingSuccess />} />
+      <Route path="/pago-pendiente" element={<BillingPending />} />
+      <Route path="/pago-fallido" element={<BillingFailure />} />
+      <Route path="/servicios/tesoreria-de-curso" element={<TesoreriaCurso />} />
+      <Route path="/servicios/gestion-centros-de-padres" element={<CentrosPadres />} />
+      <Route path="/casos/transparencia-total-colegio-chile" element={<ImplementacionExitosa />} />
       <Route path="/formulario/:id" element={<PublicForm />} />
       <Route path="/donaciones/:activityId" element={
         <ProtectedRoute allowedRoles={['alumnos']}>
@@ -297,21 +316,23 @@ function AppRoutes() {
 
 
 const App = () => (
-  <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <TenantProvider>
-              <AppRoutes />
-            </TenantProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
+  <HelmetProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <TenantProvider>
+                <AppRoutes />
+              </TenantProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  </HelmetProvider>
 );
 
 export default App;

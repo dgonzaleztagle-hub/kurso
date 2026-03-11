@@ -35,6 +35,25 @@ Deno.serve(async (req) => {
             }
         }
 
+        // 1.5 Move expired active plans to past_due
+        const { data: expiredActivePlans, error: activeError } = await supabaseClient
+            .from('tenants')
+            .select('id, name')
+            .eq('subscription_status', 'active')
+            .lt('valid_until', new Date().toISOString().slice(0, 10))
+
+        if (activeError) throw activeError
+
+        if (expiredActivePlans?.length > 0) {
+            console.log(`Moving ${expiredActivePlans.length} tenants to Past Due`)
+            for (const tenant of expiredActivePlans) {
+                await supabaseClient
+                    .from('tenants')
+                    .update({ subscription_status: 'past_due' })
+                    .eq('id', tenant.id)
+            }
+        }
+
         // 2. Wipeout Tenants in Grace Period > 3 days
         // "trial_ends_at" was when trial ended. Grace period is 3 days AFTER trial_ends_at.
         const threeDaysAgo = new Date()
@@ -70,6 +89,7 @@ Deno.serve(async (req) => {
             JSON.stringify({
                 message: 'Subscription check completed',
                 moved_to_grace: expiredTrials?.length || 0,
+                moved_to_past_due: expiredActivePlans?.length || 0,
                 wiped_out: wipeCandidates?.length || 0
             }),
             {

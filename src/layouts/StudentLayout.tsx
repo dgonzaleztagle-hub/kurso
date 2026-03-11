@@ -8,6 +8,8 @@ import { resolveBranding } from "@/lib/branding";
 import { School, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { studentNavigation } from "@/config/navigation";
+import { HojaceroSignature } from "@/components/HojaceroSignature";
+
 
 interface StudentLayoutProps {
     children: ReactNode;
@@ -108,8 +110,11 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
                 {children}
             </main>
 
-            <footer className="border-t py-4 px-3 md:px-4 flex flex-col items-center justify-center gap-2 text-center text-xs md:text-sm text-muted-foreground">
-                <p><strong>{branding.appName}</strong>{branding.institutionName ? ` · ${branding.institutionName}` : ""}</p>
+            <footer className="border-t border-white/5 py-12 px-3 md:px-4 flex flex-col items-center justify-center gap-4 text-center">
+                <HojaceroSignature />
+                <p className="text-[10px] text-muted-foreground/40 mt-4">
+                    <strong>{branding.appName}</strong>{branding.institutionName ? ` · ${branding.institutionName}` : ""}
+                </p>
             </footer>
         </div>
     );

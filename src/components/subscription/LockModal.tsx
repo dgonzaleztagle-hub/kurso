@@ -1,54 +1,86 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { MessageSquare } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { CreditCard, MessageSquare, ShieldCheck } from "lucide-react";
+import { useMercadoPago } from "@/hooks/useMercadoPago";
+import { useTenant } from "@/contexts/TenantContext";
+import { getTenantBillingState } from "@/lib/saasBilling";
+import { MercadoPagoBadge } from "./MercadoPagoBadge";
 
 interface LockModalProps {
-    isOpen: boolean
-    isGracePeriod: boolean
+  isOpen: boolean;
+  isGracePeriod: boolean;
 }
 
 export function LockModal({ isOpen, isGracePeriod }: LockModalProps) {
-    // Prevent closing by clicking outside or escape (force user to interact)
-    const handleInteractOutside = (e: Event) => {
-        e.preventDefault()
-    }
+  const { startCheckout, loading } = useMercadoPago();
+  const { currentTenant } = useTenant();
+  const state = getTenantBillingState(currentTenant);
 
-    return (
-        <Dialog open={isOpen}>
-            <DialogContent
-                className="sm:max-w-md [&>button]:hidden" // Hide close button
-                onInteractOutside={handleInteractOutside}
-                onEscapeKeyDown={handleInteractOutside}
+  const handleInteractOutside = (e: Event) => {
+    e.preventDefault();
+  };
+
+  return (
+    <Dialog open={isOpen}>
+      <DialogContent
+        className="sm:max-w-lg overflow-hidden border-0 p-0 [&>button]:hidden"
+        onInteractOutside={handleInteractOutside}
+        onEscapeKeyDown={handleInteractOutside}
+      >
+        <div className="bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6">
+          <DialogHeader className="space-y-4">
+            <div className="mx-auto">
+              <MercadoPagoBadge />
+            </div>
+            <DialogTitle className="text-center text-2xl font-bold text-slate-900">
+              Tu acceso está pausado
+            </DialogTitle>
+            <DialogDescription className="text-center text-base text-slate-600">
+              Conserva la oferta de entrada de Kurso: 7 dias gratis, primer mes a $5.000 y luego $9.900 por renovacion manual.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-5 rounded-2xl border border-sky-200 bg-white/90 p-4 shadow-sm">
+            <div className="text-center">
+              <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">Oferta activa</p>
+              <p className="mt-2 text-3xl font-black text-slate-900">{state.offer.label}</p>
+              <p className="mt-1 text-sm text-slate-500">{state.offer.renewalCopy}</p>
+            </div>
+          </div>
+
+          {isGracePeriod && (
+            <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-center text-sm font-medium text-orange-800">
+              Tienes 3 dias de gracia antes del bloqueo definitivo del periodo actual.
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
+            <span className="inline-flex items-center justify-center gap-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              Pago protegido y activacion automatica al confirmar
+            </span>
+            <span className="text-center">Sin cobros automaticos. Renovas mes a mes cuando quieras.</span>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3">
+            <Button
+              className="h-12 bg-[#009EE3] text-base font-semibold hover:bg-[#0088C7]"
+              onClick={() => void startCheckout()}
+              disabled={loading}
             >
-                <DialogHeader>
-                    <DialogTitle className="text-xl font-bold text-center text-red-600">
-                        ¡Periodo de prueba terminado!
-                    </DialogTitle>
-                    <DialogDescription className="text-center pt-2 text-base">
-                        Esperamos que hayas disfrutado de la experiencia.
-                        Para continuar gestionando tu curso sin interrupciones, contáctanos para activar tu plan.
-                    </DialogDescription>
-                </DialogHeader>
-
-                {isGracePeriod && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 my-2 text-orange-800 text-sm text-center font-medium">
-                        ⚠️ Tienes 3 días de gracia antes de que tu información sea eliminada permanentemente.
-                    </div>
-                )}
-
-                <div className="flex flex-col gap-3 mt-4">
-                    <Button
-                        className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold h-12 text-lg"
-                        onClick={() => window.open("https://wa.me/56972739105", "_blank")}
-                    >
-                        <MessageSquare className="mr-2 h-5 w-5" />
-                        Contactar por WhatsApp
-                    </Button>
-                    <p className="text-xs text-center text-muted-foreground mt-2">
-                        Tu información está segura mientras regularizas tu cuenta.
-                    </p>
-                </div>
-            </DialogContent>
-        </Dialog>
-    )
+              <CreditCard className="mr-2 h-5 w-5" />
+              {loading ? "Redirigiendo..." : `Pagar con Mercado Pago · ${state.offer.label}`}
+            </Button>
+            <Button
+              className="h-12 bg-[#25D366] text-base font-semibold text-white hover:bg-[#128C7E]"
+              onClick={() => window.open("https://wa.me/56972739105", "_blank")}
+            >
+              <MessageSquare className="mr-2 h-5 w-5" />
+              Hablar por WhatsApp
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }

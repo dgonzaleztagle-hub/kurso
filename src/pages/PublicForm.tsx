@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { FieldPreview } from '@/components/form-builder/FieldPreview';
 import { resolveBranding } from '@/lib/branding';
 import { Form, FormField, FieldOption, ScaleConfig, MatrixConfig, FieldType } from '@/types/forms';
+import { Helmet } from 'react-helmet-async';
 
 export default function PublicForm() {
   const { id } = useParams();
@@ -31,16 +32,6 @@ export default function PublicForm() {
       loadForm();
     }
   }, [id, user, studentId, authLoading]);
-
-  // Update document title dynamically
-  useEffect(() => {
-    if (form) {
-      document.title = `${form.title} - ${branding.appName}`;
-    }
-    return () => {
-      document.title = branding.appName;
-    };
-  }, [form, branding.appName]);
 
   const loadForm = async () => {
     if (!id) return;
@@ -296,6 +287,10 @@ export default function PublicForm() {
   if (!form) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <Helmet>
+          <title>Formulario no disponible | {branding.appName}</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
         <Card className="max-w-md w-full mx-4">
           <CardContent className="pt-6 text-center">
             <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
@@ -312,6 +307,10 @@ export default function PublicForm() {
   if (hasExistingResponse) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <Helmet>
+          <title>Respuesta Duplicada | {branding.appName}</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
         <Card className="max-w-md w-full mx-4">
           <CardContent className="pt-6 text-center">
             <CheckCircle className="h-12 w-12 mx-auto text-primary mb-4" />
@@ -328,6 +327,10 @@ export default function PublicForm() {
   if (submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <Helmet>
+          <title>Éxito - {form.title} | {branding.appName}</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
         <Card className="max-w-md w-full mx-4">
           <CardContent className="pt-6 text-center">
             <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
@@ -354,6 +357,11 @@ export default function PublicForm() {
 
   return (
     <div className="min-h-screen bg-muted/30 py-8 px-4">
+      <Helmet>
+        <title>{form.title} | {branding.appName}</title>
+        <meta name="description" content={form.description || `Completa el formulario oficial de ${branding.appName} de forma segura.`} />
+        <link rel="canonical" href={`https://kurso.app/formulario/${id}`} />
+      </Helmet>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center">
           {branding.logoUrl ? (

@@ -4,6 +4,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { MainLayout } from "@/layouts/MainLayout";
 import { StudentLayout } from "@/layouts/StudentLayout";
 import { LockModal } from "./subscription/LockModal";
+import { getTenantBillingState } from "@/lib/saasBilling";
 
 interface LayoutProps {
   children: ReactNode;
@@ -20,20 +21,7 @@ export const Layout = ({ children }: LayoutProps) => {
       return;
     }
 
-    const { subscription_status, trial_ends_at } = currentTenant;
-
-    // Check Status
-    const isGrace = subscription_status === 'grace_period';
-    const isLockedStatus = subscription_status === 'locked';
-
-    // Check Date (if trial)
-    let isExpiredTrial = false;
-    if (subscription_status === 'trial' && trial_ends_at) {
-      const daysRemaining = Math.ceil((new Date(trial_ends_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-      if (daysRemaining < 0) {
-        isExpiredTrial = true;
-      }
-    }
+    const billingState = getTenantBillingState(currentTenant);
 
     // SuperAdmin Override (Global Admins typically bypass, but here we test the flow)
     // If Global Role is 'master', we might want to bypass lock to help user?
@@ -42,7 +30,7 @@ export const Layout = ({ children }: LayoutProps) => {
     if (globalRole === 'master') {
       setIsLocked(false);
     } else {
-      setIsLocked(isGrace || isLockedStatus || isExpiredTrial);
+      setIsLocked(billingState.isBlocked);
     }
 
   }, [currentTenant, globalRole]);

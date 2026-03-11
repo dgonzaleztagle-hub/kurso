@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { getCommercialStatusLabel } from "@/lib/saasBilling";
 
 export default function TenantsList() {
     const [tenants, setTenants] = useState<any[]>([]);
@@ -76,16 +77,17 @@ export default function TenantsList() {
                             <TableHead>Colegio (Organización)</TableHead>
                             <TableHead>Responsable (Dueño)</TableHead>
                             <TableHead>Estado</TableHead>
+                            <TableHead>Estado comercial</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center py-8">Cargando...</TableCell>
+                                <TableCell colSpan={5} className="text-center py-8">Cargando...</TableCell>
                             </TableRow>
                         ) : filteredTenants.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center py-8">No se encontraron cursos.</TableCell>
+                                <TableCell colSpan={5} className="text-center py-8">No se encontraron cursos.</TableCell>
                             </TableRow>
                         ) : (
                             filteredTenants.map((tenant) => (
@@ -113,6 +115,11 @@ export default function TenantsList() {
                                             : 'bg-yellow-100 text-yellow-800'
                                             }`}>
                                             {tenant.subscription_status}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+                                            {getCommercialStatusLabel(tenant) || "-"}
                                         </span>
                                     </TableCell>
                                 </TableRow>

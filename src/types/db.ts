@@ -30,12 +30,48 @@ export interface Tenant {
     subscription_status: SubscriptionStatus;
     trial_ends_at: string | null;
     valid_until: string | null;
+    billing_plan_code?: string | null;
+    last_saas_payment_at?: string | null;
+    saas_paid_cycle_count?: number;
     settings: Record<string, any>;
     status?: 'active' | 'archived' | 'pending_setup';
     fiscal_year?: number;
     previous_tenant_id?: string | null;
     next_tenant_id?: string | null;
     created_at: string;
+}
+
+export interface SaasPlan {
+    code: string;
+    name: string;
+    description: string | null;
+    amount: number;
+    currency: string;
+    billing_days: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface SaasPaymentLog {
+    id: string;
+    payment_id: string;
+    tenant_id: string;
+    plan_code: string | null;
+    pricing_stage: string | null;
+    external_reference: string | null;
+    status: string;
+    status_detail: string | null;
+    amount: number | null;
+    expected_amount: number | null;
+    currency: string | null;
+    payment_method: string | null;
+    payer_email: string | null;
+    requires_manual_review: boolean;
+    raw_data: Record<string, any>;
+    webhook_payload: Record<string, any> | null;
+    applied_at: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
 export interface TenantMember {

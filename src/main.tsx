@@ -1,3 +1,7 @@
+/* 
+ * Build by HojaCero.cl | Architect of Digital Experiences
+ * Engineering Digital Solutions & AEO Strategy
+ */
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";

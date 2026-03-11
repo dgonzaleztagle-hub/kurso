@@ -10,6 +10,9 @@ import { Eye, EyeOff, KeyRound, ArrowLeft, Mail, School } from "lucide-react";
 import { resolveBranding } from "@/lib/branding";
 import { validateRut, generateRutEmail } from "@/lib/rutUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { Helmet } from "react-helmet-async";
+import { MercadoPagoBadge } from "@/components/subscription/MercadoPagoBadge";
+import { SAAS_PRICING, formatCurrencyCLP } from "@/lib/saasBilling";
 
 type ViewMode = "login" | "reset-password" | "signup";
 
@@ -25,6 +28,14 @@ export default function Auth() {
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const getPageTitle = () => {
+    switch (viewMode) {
+      case 'signup': return `Registro - ${branding.appName}`;
+      case 'reset-password': return `Recuperar Acceso - ${branding.appName}`;
+      default: return `Ingresar - ${branding.appName}`;
+    }
+  };
 
   const getFriendlyAuthError = (rawError: any) => {
     const msg = String(rawError?.message || rawError || "").toLowerCase();
@@ -170,6 +181,10 @@ export default function Auth() {
   if (viewMode === "reset-password") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10 p-4">
+        <Helmet>
+          <title>{getPageTitle()}</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-4">
             <div className="flex justify-center">
@@ -227,6 +242,11 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10 p-4">
+      <Helmet>
+        <title>{getPageTitle()}</title>
+        <meta name="description" content={`Accede a tu panel de Kurso para gestionar las finanzas de tu curso de forma segura y transparente.`} />
+        <link rel="canonical" href="https://kurso.app/auth" />
+      </Helmet>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
           <div className="flex justify-center">
@@ -242,11 +262,35 @@ export default function Auth() {
               <CardTitle className="text-2xl">{branding.appName}</CardTitle>
             </div>
             <CardDescription>
-              {viewMode === 'signup' ? 'Crea tu cuenta para comenzar' : branding.authDescription}
+              {viewMode === 'signup' ? 'Crea tu cuenta y activa 7 dias gratis. Luego, primer mes a $5.000 y desde el segundo $9.900.' : branding.authDescription}
             </CardDescription>
           </div>
         </CardHeader>
         <CardContent>
+          {viewMode === "signup" && (
+            <div className="mb-5 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <MercadoPagoBadge compact />
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                  Renovacion manual
+                </span>
+              </div>
+              <div className="grid gap-2 text-sm text-slate-700">
+                <div className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2">
+                  <span>7 dias de prueba</span>
+                  <strong>Gratis</strong>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2">
+                  <span>Primer mes</span>
+                  <strong>{formatCurrencyCLP(SAAS_PRICING.introAmount)}</strong>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2">
+                  <span>Desde el segundo mes</span>
+                  <strong>{formatCurrencyCLP(SAAS_PRICING.standardAmount)}</strong>
+                </div>
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico o RUT</Label>

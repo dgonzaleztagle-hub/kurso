@@ -1,4 +1,6 @@
 import { ReactNode } from "react";
+import { HojaceroSignature } from "@/components/HojaceroSignature";
+
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,8 @@ import {
 import { mainNavigation } from "@/config/navigation";
 import { resolveBranding } from "@/lib/branding";
 import { hasRoleAccess } from "@/lib/roles";
+import { SaasBillingBanner } from "@/components/subscription/SaasBillingBanner";
+import { getCommercialStatusLabel } from "@/lib/saasBilling";
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -28,6 +32,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     // Extract College Name from Settings
     const institutionName = currentTenant?.settings?.institution_name || null;
     const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
+    const commercialStatus = getCommercialStatusLabel(currentTenant);
 
     // Use Tenant Role if available, otherwise global (for SuperAdmin/Legacy)
     // If not in a tenant context (e.g. creating one), fallback might be needed
@@ -108,6 +113,11 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                                         </span>
                                     );
                                 })()
+                            )}
+                            {commercialStatus && currentTenant?.subscription_status !== "trial" && (
+                                <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-700">
+                                    {commercialStatus}
+                                </span>
                             )}
                         </div>
                     </div>
@@ -204,11 +214,15 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
             </nav>
 
             <main className="flex-1 container py-4 md:py-6">
+                <SaasBillingBanner compact />
                 {children}
             </main>
 
-            <footer className="border-t py-4 px-4 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-                <p><strong>{branding.appName}</strong>{branding.institutionName ? ` · ${branding.institutionName}` : ""}</p>
+            <footer className="border-t border-white/5 py-12 px-4 flex flex-col items-center justify-center gap-2 text-center">
+                <HojaceroSignature />
+                <p className="text-[10px] text-muted-foreground/40 mt-4">
+                    © {new Date().getFullYear()} {branding.appName}. Todos los derechos reservados.
+                </p>
             </footer>
         </div>
     );

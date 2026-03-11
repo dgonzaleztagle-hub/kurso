@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Users, LayoutDashboard, Database, ArrowLeft } from "lucide-react";
+import { Building2, Users, LayoutDashboard, Database, ArrowLeft, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,18 +9,20 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function AdminDashboard() {
     const navigate = useNavigate();
     const { signOut } = useAuth();
-    const [stats, setStats] = useState({ orgs: 0, tenants: 0, users: 0 });
+    const [stats, setStats] = useState({ orgs: 0, tenants: 0, users: 0, billingLogs: 0 });
 
     useEffect(() => {
         const fetchStats = async () => {
             const { count: orgsCount } = await supabase.from('organizations').select('*', { count: 'exact', head: true });
             const { count: tenantsCount } = await supabase.from('tenants').select('*', { count: 'exact', head: true });
             const { count: usersCount } = await supabase.from('app_users').select('*', { count: 'exact', head: true });
+            const { count: billingLogsCount } = await supabase.from('saas_payment_logs').select('*', { count: 'exact', head: true });
 
             setStats({
                 orgs: orgsCount || 0,
                 tenants: tenantsCount || 0,
-                users: usersCount || 0
+                users: usersCount || 0,
+                billingLogs: billingLogsCount || 0,
             });
         };
         fetchStats();
@@ -48,7 +50,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-4">
                     <Card
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => navigate("/admin/organizations")}
@@ -88,6 +90,19 @@ export default function AdminDashboard() {
                             <p className="text-xs text-muted-foreground">Usuarios en plataforma</p>
                         </CardContent>
                     </Card>
+                    <Card
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate("/admin/billing")}
+                    >
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Billing SaaS</CardTitle>
+                            <CreditCard className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.billingLogs}</div>
+                            <p className="text-xs text-muted-foreground">Transacciones auditadas</p>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Actions Grid */}
@@ -117,6 +132,20 @@ export default function AdminDashboard() {
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
                                 Ver y administrar usuarios de toda la plataforma.
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate("/admin/billing")}>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <CreditCard className="h-5 w-5 text-amber-500" />
+                                Billing SaaS
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">
+                                Revisar transacciones, estados y recaudación de Mercado Pago.
                             </p>
                         </CardContent>
                     </Card>

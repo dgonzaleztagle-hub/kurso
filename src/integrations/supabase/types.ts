@@ -1066,6 +1066,120 @@ export type Database = {
           },
         ]
       }
+      saas_payment_logs: {
+        Row: {
+          amount: number | null
+          applied_at: string | null
+          created_at: string
+          currency: string | null
+          expected_amount: number | null
+          external_reference: string | null
+          id: string
+          payer_email: string | null
+          payment_id: string
+          payment_method: string | null
+          plan_code: string | null
+          pricing_stage: string | null
+          raw_data: Json
+          requires_manual_review: boolean
+          status: string
+          status_detail: string | null
+          tenant_id: string
+          updated_at: string
+          webhook_payload: Json | null
+        }
+        Insert: {
+          amount?: number | null
+          applied_at?: string | null
+          created_at?: string
+          currency?: string | null
+          expected_amount?: number | null
+          external_reference?: string | null
+          id?: string
+          payer_email?: string | null
+          payment_id: string
+          payment_method?: string | null
+          plan_code?: string | null
+          pricing_stage?: string | null
+          raw_data?: Json
+          requires_manual_review?: boolean
+          status: string
+          status_detail?: string | null
+          tenant_id: string
+          updated_at?: string
+          webhook_payload?: Json | null
+        }
+        Update: {
+          amount?: number | null
+          applied_at?: string | null
+          created_at?: string
+          currency?: string | null
+          expected_amount?: number | null
+          external_reference?: string | null
+          id?: string
+          payer_email?: string | null
+          payment_id?: string
+          payment_method?: string | null
+          plan_code?: string | null
+          pricing_stage?: string | null
+          raw_data?: Json
+          requires_manual_review?: boolean
+          status?: string
+          status_detail?: string | null
+          tenant_id?: string
+          updated_at?: string
+          webhook_payload?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_payment_logs_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "saas_payment_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_plans: {
+        Row: {
+          amount: number
+          billing_days: number
+          code: string
+          created_at: string
+          currency: string
+          description: string | null
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          amount: number
+          billing_days?: number
+          code: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          amount?: number
+          billing_days?: number
+          code?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       scheduled_activities: {
         Row: {
           activity_id: number | null
@@ -1250,9 +1364,11 @@ export type Database = {
       }
       tenants: {
         Row: {
+          billing_plan_code: string | null
           created_at: string | null
           fiscal_year: number | null
           id: string
+          last_saas_payment_at: string | null
           name: string
           next_tenant_id: string | null
           organization_id: string | null
@@ -1260,6 +1376,7 @@ export type Database = {
           previous_tenant_id: string | null
           settings: Json | null
           slug: string | null
+          saas_paid_cycle_count: number
           status: string | null
           subscription_status:
             | Database["public"]["Enums"]["subscription_status"]
@@ -1269,14 +1386,17 @@ export type Database = {
           valid_until: string | null
         }
         Insert: {
+          billing_plan_code?: string | null
           created_at?: string | null
           fiscal_year?: number | null
           id?: string
+          last_saas_payment_at?: string | null
           name: string
           next_tenant_id?: string | null
           organization_id?: string | null
           owner_id?: string | null
           previous_tenant_id?: string | null
+          saas_paid_cycle_count?: number
           settings?: Json | null
           slug?: string | null
           status?: string | null
@@ -1288,14 +1408,17 @@ export type Database = {
           valid_until?: string | null
         }
         Update: {
+          billing_plan_code?: string | null
           created_at?: string | null
           fiscal_year?: number | null
           id?: string
+          last_saas_payment_at?: string | null
           name?: string
           next_tenant_id?: string | null
           organization_id?: string | null
           owner_id?: string | null
           previous_tenant_id?: string | null
+          saas_paid_cycle_count?: number
           settings?: Json | null
           slug?: string | null
           status?: string | null
@@ -1307,6 +1430,13 @@ export type Database = {
           valid_until?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tenants_billing_plan_code_fkey"
+            columns: ["billing_plan_code"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["code"]
+          },
           {
             foreignKeyName: "tenants_next_tenant_id_fkey"
             columns: ["next_tenant_id"]
@@ -1422,6 +1552,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_saas_payment_log: {
+        Args: { target_payment_id: string }
+        Returns: {
+          applied: boolean
+          paid_cycle_count: number
+          valid_until: string
+        }[]
+      }
       archive_tenant: { Args: { target_tenant_id: string }; Returns: undefined }
       auth_has_tenant_role: {
         Args: { p_roles: string[]; p_tenant_id: string }
