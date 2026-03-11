@@ -164,14 +164,8 @@ export default function UserManagement() {
       }
 
       const resolvedUserName = (adminUserName || adminName).trim();
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('create-admin-user', {
+        body: {
           email: adminEmail,
           password: adminPassword,
           name: adminName,
@@ -179,20 +173,11 @@ export default function UserManagement() {
           position: adminPosition,
           phone: adminPhone || null,
           tenantId: currentTenant.id
-        })
+        }
       });
 
-      let result: any = {};
-      const rawBody = await response.text();
-      try {
-        result = rawBody ? JSON.parse(rawBody) : {};
-      } catch {
-        result = { error: rawBody || "Respuesta inválida del servidor" };
-      }
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al crear usuario admin');
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success(`Admin ${resolvedUserName} creado exitosamente`);
       setShowCreateAdmin(false);
