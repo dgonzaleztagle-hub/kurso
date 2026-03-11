@@ -122,42 +122,12 @@ export default function PaymentNotifications() {
 
     setSelectedNotification(notification);
     setProcessing(true);
+    const insertedPaymentIds: string[] = [];
 
     try {
       if (!currentTenant?.id) {
         throw new Error('No se pudo detectar el curso activo');
       }
-      // Actualizar estado de la notificación
-      let { error: updateError } = await supabase
-        .from('payment_notifications')
-        .update({
-          status: 'approved',
-          processed_by: user!.id,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', notification.id);
-
-      const updateErrorMessage = String(updateError?.message || '').toLowerCase();
-      if (
-        updateError &&
-        (
-          updateErrorMessage.includes('processed_by') ||
-          updateErrorMessage.includes('processed_at')
-        )
-      ) {
-        const legacyUpdate = await supabase
-          .from('payment_notifications')
-          .update({
-            status: 'approved',
-          })
-          .eq('id', notification.id);
-
-        updateError = legacyUpdate.error;
-      }
-
-      if (updateError) throw updateError;
-
-      // Registrar los pagos en la tabla payments
       const paymentDetails = notification.payment_details || null;
       let selectedDebts = paymentDetails?.selected_debts || [];
       const studentFullName = getStudentName(notification);
@@ -208,17 +178,22 @@ export default function PaymentNotifications() {
       for (const debt of activityDebts) {
         console.log('Processing debt:', debt.type, debt.name, 'Amount:', debt.paid_amount);
 
-        const { error: insertError } = await supabase.from('payments').insert({
-          folio: currentFolio++,
-          tenant_id: currentTenant.id,
-          payment_date: notification.payment_date,
-          student_id: notification.student_id,
-          student_name: studentFullName,
-          activity_id: debt.id,
-          concept: debt.name,
-          amount: debt.paid_amount,
-        });
+        const { data: insertedPayment, error: insertError } = await supabase
+          .from('payments')
+          .insert({
+            folio: currentFolio++,
+            tenant_id: currentTenant.id,
+            payment_date: notification.payment_date,
+            student_id: notification.student_id,
+            student_name: studentFullName,
+            activity_id: debt.id,
+            concept: debt.name,
+            amount: debt.paid_amount,
+          })
+          .select('id')
+          .single();
         if (insertError) throw insertError;
+        insertedPaymentIds.push(String(insertedPayment.id));
       }
 
       if (monthlyFeeDebts.length > 0) {
@@ -240,18 +215,52 @@ export default function PaymentNotifications() {
           0,
         );
 
-        const { error: insertError } = await supabase.from('payments').insert({
-          folio: currentFolio++,
-          tenant_id: currentTenant.id,
-          payment_date: notification.payment_date,
-          student_id: notification.student_id,
-          student_name: studentFullName,
-          concept: monthlyMetadata.concept,
-          month_period: monthlyMetadata.monthPeriod,
-          amount: totalMonthlyAmount,
-        });
+        const { data: insertedPayment, error: insertError } = await supabase
+          .from('payments')
+          .insert({
+            folio: currentFolio++,
+            tenant_id: currentTenant.id,
+            payment_date: notification.payment_date,
+            student_id: notification.student_id,
+            student_name: studentFullName,
+            concept: monthlyMetadata.concept,
+            month_period: monthlyMetadata.monthPeriod,
+            amount: totalMonthlyAmount,
+          })
+          .select('id')
+          .single();
         if (insertError) throw insertError;
+        insertedPaymentIds.push(String(insertedPayment.id));
       }
+
+      let { error: updateError } = await supabase
+        .from('payment_notifications')
+        .update({
+          status: 'approved',
+          processed_by: user!.id,
+          processed_at: new Date().toISOString(),
+        })
+        .eq('id', notification.id);
+
+      const updateErrorMessage = String(updateError?.message || '').toLowerCase();
+      if (
+        updateError &&
+        (
+          updateErrorMessage.includes('processed_by') ||
+          updateErrorMessage.includes('processed_at')
+        )
+      ) {
+        const legacyUpdate = await supabase
+          .from('payment_notifications')
+          .update({
+            status: 'approved',
+          })
+          .eq('id', notification.id);
+
+        updateError = legacyUpdate.error;
+      }
+
+      if (updateError) throw updateError;
 
       toast({
         title: 'Pago aprobado',
@@ -262,10 +271,12 @@ export default function PaymentNotifications() {
       setShowDetailsDialog(false);
     } catch (error) {
       console.error('Error approving payment:', error);
-      await supabase
-        .from('payment_notifications')
-        .update({ status: 'pending' })
-        .eq('id', notification.id);
+      if (insertedPaymentIds.length > 0) {
+        await supabase
+          .from('payments')
+          .delete()
+          .in('id', insertedPaymentIds);
+      }
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Error al aprobar el pago',

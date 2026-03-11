@@ -28,12 +28,14 @@ interface Activity {
 }
 
 interface MonthlyDebt {
+  student_id: number | string;
   student_name: string;
   total_owed: number;
   months_owed: string[];
 }
 
 interface ActivityDebt {
+  student_id: number | string;
   student_name: string;
   activity_id: number;
   activity_name: string;
@@ -41,6 +43,8 @@ interface ActivityDebt {
 }
 
 interface StudentDebtCertificate {
+  studentId: number | string;
+  studentName: string;
   monthly: number;
   months: string[];
   activities: Array<{ id: number; name: string; amount: number }>;
@@ -152,6 +156,7 @@ export default function DebtReports() {
       }
 
       return [{
+        student_id: student.id,
         student_name: student.name,
         total_owed: totalOwed,
         months_owed: monthItems.filter((item) => item.due > 0).map((item) => item.month),
@@ -227,6 +232,7 @@ export default function DebtReports() {
         }
 
         return [{
+          student_id: student.id,
           student_name: student.name,
           activity_id: activity.id,
           activity_name: activity.name,
@@ -249,7 +255,9 @@ export default function DebtReports() {
     const studentsWithDebt = new Map<string, StudentDebtCertificate>();
 
     monthlyDebts.forEach((debt) => {
-      studentsWithDebt.set(debt.student_name, {
+      studentsWithDebt.set(String(debt.student_id), {
+        studentId: debt.student_id,
+        studentName: debt.student_name,
         monthly: debt.total_owed,
         months: debt.months_owed,
         activities: [],
@@ -257,7 +265,9 @@ export default function DebtReports() {
     });
 
     activityDebts.forEach((debt) => {
-      const existing = studentsWithDebt.get(debt.student_name) || {
+      const existing = studentsWithDebt.get(String(debt.student_id)) || {
+        studentId: debt.student_id,
+        studentName: debt.student_name,
         monthly: 0,
         months: [],
         activities: [],
@@ -269,7 +279,7 @@ export default function DebtReports() {
         amount: debt.amount_owed,
       });
 
-      studentsWithDebt.set(debt.student_name, existing);
+      studentsWithDebt.set(String(debt.student_id), existing);
     });
 
     return studentsWithDebt;
@@ -439,7 +449,7 @@ export default function DebtReports() {
     const logoImg = await loadImageElement(pdfBranding.logoUrl);
     let isFirstPage = true;
 
-    for (const [studentName, debts] of studentsWithDebt.entries()) {
+    for (const [, debts] of studentsWithDebt.entries()) {
       if (!isFirstPage) {
         doc.addPage();
       }
@@ -466,7 +476,7 @@ export default function DebtReports() {
       doc.setFont("helvetica", "bold");
       doc.text("APODERADO DE:", margin, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(studentName, margin + 40, yPos);
+      doc.text(debts.studentName, margin + 40, yPos);
 
       yPos += 14;
       doc.setFont("helvetica", "bold");

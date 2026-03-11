@@ -116,11 +116,10 @@ export default function FormResponses() {
     if (!id) return;
 
     try {
-      const [formRes, fieldsRes, responsesRes, studentsRes] = await Promise.all([
+      const [formRes, fieldsRes, responsesRes] = await Promise.all([
         supabase.from('forms').select('*').eq('id', id).single(),
         supabase.from('form_fields').select('*').eq('form_id', id).order('order_index'),
         supabase.from('form_responses').select('*').eq('form_id', id).order('submitted_at', { ascending: false }),
-        supabase.from('students').select('id, first_name, last_name')
       ]);
 
       if (formRes.error) throw formRes.error;
@@ -139,6 +138,11 @@ export default function FormResponses() {
         ...r,
         response_data: r.response_data as unknown as Record<string, any>
       })));
+
+      const tenantId = (formRes.data as any)?.tenant_id || currentTenant?.id;
+      const studentsRes = tenantId
+        ? await supabase.from('students').select('id, first_name, last_name').eq('tenant_id', tenantId)
+        : { data: [], error: null };
 
       if (!studentsRes.error && studentsRes.data) {
         const studentMap: Record<number, string> = {};
