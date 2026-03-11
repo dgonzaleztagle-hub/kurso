@@ -216,7 +216,7 @@ export default function PaymentNotifications() {
             concept: debt.name,
             amount: debt.paid_amount, // Usar el monto realmente pagado
           });
-          if (insertError) console.error('Error inserting activity payment:', insertError);
+          if (insertError) throw insertError;
         } else if (debt.type === 'monthly_fee') {
           let remainingMonthlyAmount = Number(debt.paid_amount) || 0;
           const monthTargets: string[] = Array.isArray(debt.months)
@@ -240,7 +240,7 @@ export default function PaymentNotifications() {
               month_period: month,
               amount: amountForMonth,
             });
-            if (insertError) console.error('Error inserting monthly fee payment:', insertError);
+            if (insertError) throw insertError;
             remainingMonthlyAmount -= amountForMonth;
           }
 
@@ -254,7 +254,7 @@ export default function PaymentNotifications() {
               concept: 'Cuota Mensual',
               amount: remainingMonthlyAmount,
             });
-            if (insertError) console.error('Error inserting monthly fee payment:', insertError);
+            if (insertError) throw insertError;
           }
         }
       }
@@ -268,9 +268,13 @@ export default function PaymentNotifications() {
       setShowDetailsDialog(false);
     } catch (error) {
       console.error('Error approving payment:', error);
+      await supabase
+        .from('payment_notifications')
+        .update({ status: 'pending' })
+        .eq('id', notification.id);
       toast({
         title: 'Error',
-        description: 'Error al aprobar el pago',
+        description: error instanceof Error ? error.message : 'Error al aprobar el pago',
         variant: 'destructive',
       });
     } finally {

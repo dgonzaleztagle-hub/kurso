@@ -94,9 +94,13 @@ export default function MonthlyFees() {
       const { data: updatedTenant, error } = await supabase
         .from('tenants')
         .update({ settings: updatedSettings })
-        .eq('id', currentTenant.id);
+        .eq('id', currentTenant.id)
+        .select('settings');
 
       if (error) throw error;
+      if (!updatedTenant || (Array.isArray(updatedTenant) && updatedTenant.length === 0)) {
+        throw new Error("La cuota no se pudo persistir en la base de datos");
+      }
 
       toast.success("Monto de cuota actualizado");
       const persistedFee = Number(((updatedTenant as any)?.[0]?.settings || updatedSettings).monthly_fee);
