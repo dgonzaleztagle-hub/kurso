@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Tenant } from '@/types/db';
+import type { Enums } from '@/integrations/supabase/types';
 import { useAuth } from './AuthContext';
 
 interface TenantContextType {
@@ -14,6 +15,12 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+type TenantMemberRole = Enums<"app_role"> | null;
+type TenantMembershipRow = {
+    role: TenantMemberRole;
+    tenant: Tenant | null;
+};
+
 export const TenantProvider = ({ children }: { children: ReactNode }) => {
     // Dependencia de appUser para saber si es superadmin
     const { user, appUser, loading: authLoading } = useAuth();
@@ -22,23 +29,35 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [roleInCurrentTenant, setRoleInCurrentTenant] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Wait for auth to settle, then load tenants even if app_users row is missing.
-        if (user && !authLoading) {
-            fetchTenants();
-        } else if (!user) {
-            // If no user, reset text context and stop loading immediately
-            setCurrentTenant(null);
-            setAvailableTenants([]);
-            setLoading(false);
+    const determineRole = useCallback(async (tenant: Tenant, userId: string) => {
+        if (appUser?.is_superadmin) {
+            setRoleInCurrentTenant('owner');
+            return;
         }
-    }, [user, authLoading, appUser?.is_superadmin]);
 
-    const fetchTenants = async (preferredTenantId?: string, attempt = 0) => {
+        if (tenant.owner_id === userId) {
+            setRoleInCurrentTenant('owner');
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('tenant_members')
+            .select('role')
+            .eq('tenant_id', tenant.id)
+            .eq('user_id', userId)
+            .single();
+
+        if (error) {
+            console.warn('Could not resolve tenant role from tenant_members, using safe fallback:', error);
+        }
+
+        setRoleInCurrentTenant(data?.role ?? null);
+    }, [appUser?.is_superadmin]);
+
+    const fetchTenants = useCallback(async (preferredTenantId?: string, attempt = 0) => {
         try {
             setLoading(true);
 
-            // SUPERADMIN BYPASS: Evita errores 406 y carga todo
             if (appUser?.is_superadmin) {
                 const { data: allTenants, error } = await supabase
                     .from('tenants')
@@ -47,24 +66,24 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
                 if (error) throw error;
 
-                setAvailableTenants(allTenants as Tenant[]);
+                const typedTenants = (allTenants as Tenant[] | null) ?? [];
+                setAvailableTenants(typedTenants);
 
-                if (allTenants && allTenants.length > 0) {
+                if (typedTenants.length > 0) {
                     const lastTenantId = localStorage.getItem('kurso_last_tenant');
                     const target =
-                        allTenants.find((t: any) => t.id === preferredTenantId) ||
-                        allTenants.find((t: any) => t.id === currentTenant?.id) ||
-                        allTenants.find((t: any) => t.id === lastTenantId) ||
-                        allTenants[0];
-                    setCurrentTenant(target as Tenant);
+                        typedTenants.find((tenant) => tenant.id === preferredTenantId) ||
+                        typedTenants.find((tenant) => tenant.id === currentTenant?.id) ||
+                        typedTenants.find((tenant) => tenant.id === lastTenantId) ||
+                        typedTenants[0];
+                    setCurrentTenant(target);
                     localStorage.setItem('kurso_last_tenant', target.id);
-                    setRoleInCurrentTenant('owner'); // SuperAdmin es GOD
+                    setRoleInCurrentTenant('owner');
                 }
                 setLoading(false);
                 return;
             }
 
-            // 1. Obtener membresías (Para usuarios normales)
             const { data: memberships, error: memberError } = await supabase
                 .from('tenant_members')
                 .select(`
@@ -83,7 +102,10 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             status,
             fiscal_year,
             previous_tenant_id,
-            next_tenant_id
+            next_tenant_id,
+            organization_id,
+            slug,
+            created_at
           )
                 `)
                 .eq('user_id', user?.id)
@@ -92,7 +114,6 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
                 console.warn('Tenant memberships unavailable, falling back to owner tenants:', memberError);
             }
 
-            // 2. Obtener tenants donde soy dueño (si no tengo membresía explícita aún)
             const { data: ownedTenants, error: ownerError } = await supabase
                 .from('tenants')
                 .select('*')
@@ -100,12 +121,14 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
             if (ownerError) throw ownerError;
 
-            // Unificar listas
-            const tenantsFromMembership = memberError ? [] : memberships?.map((m: any) => m.tenant) || [];
-            const allTenants = [...tenantsFromMembership, ...(ownedTenants || [])];
+            const tenantsFromMembership = memberError
+                ? []
+                : ((memberships as TenantMembershipRow[] | null) ?? [])
+                    .map((membership) => membership.tenant)
+                    .filter((tenant): tenant is Tenant => tenant !== null);
+            const allTenants = [...tenantsFromMembership, ...((ownedTenants as Tenant[] | null) ?? [])];
 
-            // Eliminar duplicados por ID
-            let uniqueTenants = Array.from(new Map(allTenants.map((item: any) => [item.id, item])).values()) as Tenant[];
+            let uniqueTenants = Array.from(new Map(allTenants.map((tenant) => [tenant.id, tenant])).values()) as Tenant[];
 
             if (preferredTenantId && !uniqueTenants.some((tenant) => tenant.id === preferredTenantId)) {
                 const { data: preferredTenant, error: preferredTenantError } = await supabase
@@ -121,11 +144,10 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
             setAvailableTenants(uniqueTenants);
 
-            // 3. Seleccionar o Actualizar tenant
             if (uniqueTenants.length > 0) {
                 const lastTenantId = localStorage.getItem('kurso_last_tenant');
                 const activeTenantId = preferredTenantId || currentTenant?.id || lastTenantId;
-                let target = uniqueTenants.find(t => t.id === activeTenantId) || uniqueTenants[0];
+                let target = uniqueTenants.find((tenant) => tenant.id === activeTenantId) || uniqueTenants[0];
 
                 if (target?.id) {
                     const { data: freshTenant, error: freshTenantError } = await supabase
@@ -155,46 +177,24 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
                 setCurrentTenant(null);
                 setRoleInCurrentTenant(null);
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Error fetching tenants:', error);
         } finally {
             setLoading(false);
         }
-    };
+    }, [appUser?.is_superadmin, currentTenant?.id, determineRole, user]);
 
-    const determineRole = async (tenant: Tenant, userId: string) => {
-        // SuperAdmin siempre es owner
-        if (appUser?.is_superadmin) {
-            setRoleInCurrentTenant('owner');
-            return;
+    useEffect(() => {
+        // Wait for auth to settle, then load tenants even if app_users row is missing.
+        if (user && !authLoading) {
+            void fetchTenants();
+        } else if (!user) {
+            // If no user, reset text context and stop loading immediately
+            setCurrentTenant(null);
+            setAvailableTenants([]);
+            setLoading(false);
         }
-
-        // Si soy el owner en la tabla tenants
-        if (tenant.owner_id === userId) {
-            setRoleInCurrentTenant('owner');
-            return;
-        }
-
-        // Si no, buscar en members
-        const { data, error } = await supabase
-            .from('tenant_members')
-            .select('role')
-            .eq('tenant_id', tenant.id)
-            .eq('user_id', userId)
-            .single();
-
-        if (error) {
-            console.warn('Could not resolve tenant role from tenant_members, using safe fallback:', error);
-        }
-
-        if (data) {
-            setRoleInCurrentTenant(data.role);
-        } else {
-            // Avoid forcing student role when membership lookup fails.
-            // Let auth/global role handle the fallback instead.
-            setRoleInCurrentTenant(null);
-        }
-    };
+    }, [appUser?.is_superadmin, authLoading, fetchTenants, user]);
 
     const switchTenant = async (tenantId: string) => {
         const target = availableTenants.find(t => t.id === tenantId);
@@ -212,9 +212,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             const target = availableTenants.find(t => t.id === lastTenantId) || availableTenants[0];
             setCurrentTenant(target);
             localStorage.setItem('kurso_last_tenant', target.id);
-            if (user) determineRole(target, user.id);
+            if (user) {
+                void determineRole(target, user.id);
+            }
         }
-    }, [availableTenants, loading, currentTenant, user]);
+    }, [availableTenants, currentTenant, determineRole, loading, user]);
 
 
     return (

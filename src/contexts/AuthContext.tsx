@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser } from '@/types/db';
 
@@ -8,16 +8,26 @@ type AppModule = 'dashboard' | 'students' | 'income' | 'expenses' | 'debt_report
 // Importante: El rol ya no es global, sino por Tenant. Pero mantenemos userRole para compatibilidad temp con Layout
 // En el futuro, Layout debe leer useTenant()
 type LegacyRole = 'master' | 'admin' | 'alumnos' | 'owner' | 'member' | 'student';
+type AuthErrorLike = AuthError | Error;
+type SignInResult = { error: AuthErrorLike | null };
+type SignUpResult = {
+  data: {
+    user: User | null;
+    session: Session | null;
+  } | null;
+  error: AuthErrorLike | null;
+};
+type UpdateProfileResult = { error: AuthErrorLike | string | null };
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   appUser: AppUser | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, meta?: any, redirectTo?: string) => Promise<{ data: any; error: any }>;
+  signIn: (email: string, password: string) => Promise<SignInResult>;
+  signUp: (email: string, password: string, meta?: Record<string, unknown>, redirectTo?: string) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
-  updateProfile: (updates: Partial<AppUser>) => Promise<{ error: any }>;
+  updateProfile: (updates: Partial<AppUser>) => Promise<UpdateProfileResult>;
 
   // Legacy support props (to be deprecated later)
   userRole: LegacyRole | null; // Mapear role del tenant actual aqui
@@ -30,6 +40,14 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const normalizeAuthError = (error: unknown): AuthErrorLike => {
+  if (error instanceof AuthError || error instanceof Error) {
+    return error;
+  }
+
+  return new Error(String(error));
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -44,17 +62,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchAppUser(session.user.id);
+      if (session?.user) {
+        void fetchAppUser(session.user.id);
+      }
       else setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchAppUser(session.user.id);
+      if (session?.user) {
+        void fetchAppUser(session.user.id);
+      }
       else {
         setAppUser(null);
         setFirstLogin(false);
@@ -79,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (appError && appError.code !== 'PGRST116') {
         console.error('Error fetching app user:', appError);
       }
-      setAppUser(appData as AppUser);
+      setAppUser((appData as AppUser | null) ?? null);
 
       const { data: studentLink, error: studentLinkError } = await supabase
         .from('user_students')
@@ -105,7 +127,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error fetching user role:', roleError);
       }
 
-      const roleData = roleRows?.[0];
+      const roleData = roleRows?.[0] ?? null;
 
       if (roleData) {
         // Normalize role
@@ -119,7 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setFirstLogin(false);
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Auth fetch error:', error);
     } finally {
       setLoading(false);
@@ -127,19 +149,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const refreshUserData = async () => {
-    if (user) await fetchAppUser(user.id);
+    if (user) {
+      await fetchAppUser(user.id);
+    }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error };
-    } catch (error: any) {
-      return { error };
+    } catch (error: unknown) {
+      return { error: normalizeAuthError(error) };
     }
   };
 
-  const signUp = async (email: string, password: string, meta?: any, redirectTo?: string) => {
+  const signUp = async (email: string, password: string, meta?: Record<string, unknown>, redirectTo?: string) => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -149,9 +173,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           ...(redirectTo ? { emailRedirectTo: redirectTo } : {})
         }
       });
-      return { data, error };
-    } catch (error: any) {
-      return { data: null, error };
+      return {
+        data: {
+          user: data.user,
+          session: data.session,
+        },
+        error,
+      };
+    } catch (error: unknown) {
+      return { data: null, error: normalizeAuthError(error) };
     }
   };
 
@@ -186,9 +216,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Update local state
       setAppUser(prev => prev ? { ...prev, ...updates } : null);
       return { error: null };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error updating profile:", error);
-      return { error };
+      return { error: normalizeAuthError(error) };
     }
   };
 

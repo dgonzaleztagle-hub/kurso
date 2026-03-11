@@ -1,3 +1,5 @@
+import type { Json } from "@/integrations/supabase/types";
+
 export type FieldType = 
   | 'short_text'
   | 'long_text'
@@ -67,7 +69,7 @@ export interface FormResponse {
   user_id?: string;
   student_id?: string;
   submitted_at: string;
-  response_data: Record<string, any>;
+  response_data: Record<string, Json | undefined>;
 }
 
 export const FIELD_TYPE_LABELS: Record<FieldType, string> = {

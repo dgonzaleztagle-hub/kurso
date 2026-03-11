@@ -1,6 +1,9 @@
+import type { Json } from "@/integrations/supabase/types";
+
 export type AppRole = 'owner' | 'admin' | 'member' | 'student';
 export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled' | 'grace_period' | 'locked';
 export type PlanType = 'basic' | 'institutional';
+export type TenantSettings = Record<string, Json | undefined>;
 
 export interface AppUser {
     id: string;
@@ -33,7 +36,7 @@ export interface Tenant {
     billing_plan_code?: string | null;
     last_saas_payment_at?: string | null;
     saas_paid_cycle_count?: number;
-    settings: Record<string, any>;
+    settings: TenantSettings | null;
     status?: 'active' | 'archived' | 'pending_setup';
     fiscal_year?: number;
     previous_tenant_id?: string | null;
@@ -67,8 +70,8 @@ export interface SaasPaymentLog {
     payment_method: string | null;
     payer_email: string | null;
     requires_manual_review: boolean;
-    raw_data: Record<string, any>;
-    webhook_payload: Record<string, any> | null;
+    raw_data: Record<string, Json | undefined>;
+    webhook_payload: Record<string, Json | undefined> | null;
     applied_at: string | null;
     created_at: string;
     updated_at: string;

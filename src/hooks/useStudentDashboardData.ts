@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount, type MonthDebtItem } from "@/lib/creditAccounting";
 import { parseDateFromDB } from "@/lib/dateUtils";
 import { groupPaymentsForDisplay } from "@/lib/paymentGrouping";
@@ -60,6 +61,17 @@ type StudentDashboardDataState = {
   loading: boolean;
 };
 
+type PaymentRow = Tables<"payments">;
+type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "amount" | "activity_date">;
+type ScheduledActivityRow = Pick<Tables<"scheduled_activities">, "id" | "name" | "scheduled_date" | "completed">;
+type NotificationRow = Pick<Tables<"dashboard_notifications">, "id" | "message" | "created_at">;
+type StudentCreditRow = Pick<Tables<"student_credits">, "amount">;
+type CreditApplicationRow = Pick<Tables<"credit_applications">, "amount" | "reversed_amount" | "target_type" | "target_month" | "target_activity_id">;
+type StudentRow = Pick<Tables<"students">, "first_name" | "last_name" | "enrollment_date" | "tenant_id">;
+type ActivityExclusionRow = Pick<Tables<"activity_exclusions">, "activity_id">;
+type ActivityDonationRow = Pick<Tables<"activity_donations">, "id" | "name" | "amount" | "unit" | "donated_at">;
+type TenantSettingsRow = Pick<Tables<"tenants">, "settings">;
+
 const initialState: StudentDashboardDataState = {
   studentName: "",
   debtDetail: null,
@@ -114,7 +126,7 @@ export async function fetchStudentDashboardDataForPeriod(
   if (notificationsResult.error) throw notificationsResult.error;
 
   const fullName = `${studentResult.data.first_name || ""} ${studentResult.data.last_name || ""}`.trim() || "Sin Nombre";
-  const scheduledActivities = (scheduledActivitiesResult.data || [])
+  const scheduledActivities = ((scheduledActivitiesResult.data as ScheduledActivityRow[] | null) || [])
     .filter((activity) => Boolean(activity.id) && Boolean(activity.name) && Boolean(activity.scheduled_date));
 
   const activeActivitiesMap = new Map<string, StudentDashboardScheduledActivity>();
@@ -132,7 +144,7 @@ export async function fetchStudentDashboardDataForPeriod(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  for (const activity of activitiesResult.data || []) {
+  for (const activity of ((activitiesResult.data as ActivityRow[] | null) || [])) {
     if (!activity.activity_date) continue;
 
     const activityDate = new Date(activity.activity_date);
@@ -169,13 +181,13 @@ export async function fetchStudentDashboardDataForPeriod(
 
     if (donationsError) throw donationsError;
 
-    donationsMap[nextAct.id] = (nextActDonations || []).map((donation) => ({
+    donationsMap[nextAct.id] = (((nextActDonations as ActivityDonationRow[] | null) || []).map((donation) => ({
       ...donation,
       scheduled_activity: { name: nextAct.name },
-    }));
+    })));
   }
 
-  const paymentHistory = groupPaymentsForDisplay((paymentsResult.data || []) as any[]).map((payment) => ({
+  const paymentHistory = groupPaymentsForDisplay(((paymentsResult.data as PaymentRow[] | null) || [])).map((payment) => ({
     id: Number(payment.folioStart),
     payment_date: payment.paymentDate,
     amount: payment.amount,
@@ -185,25 +197,30 @@ export async function fetchStudentDashboardDataForPeriod(
   })) as StudentDashboardPaymentHistory[];
   const totalPaid = paymentHistory.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
 
-  const configuredFee = Number((tenantResult.data?.settings as any)?.monthly_fee);
+  const tenantSettings = ((tenantResult.data as TenantSettingsRow | null)?.settings ?? null);
+  const configuredFee = Number(
+    tenantSettings && typeof tenantSettings === "object" && !Array.isArray(tenantSettings)
+      ? tenantSettings.monthly_fee
+      : null,
+  );
   const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
   const enrollmentDate = parseDateFromDB(studentResult.data.enrollment_date);
   const monthlyDebtItems = calculateMonthlyDebtItems({
     enrollmentDate: studentResult.data.enrollment_date,
     monthlyFee,
     payments: paymentHistory,
-    applications: applicationsResult.data || [],
+    applications: (applicationsResult.data as CreditApplicationRow[] | null) || [],
     period,
   });
 
   const monthlyDebt = monthlyDebtItems.reduce((sum, item) => sum + item.due, 0);
-  const exclusionsSet = new Set(exclusionsResult.data?.map((item) => item.activity_id) || []);
+  const exclusionsSet = new Set((((exclusionsResult.data as ActivityExclusionRow[] | null) || []).map((item) => item.activity_id)));
   const activityDebts: { name: string; amount: number }[] = [];
   const activityDebtItems: Array<{ id: number; name: string; amount: number }> = [];
   const activityPayments = new Map<number, number>();
 
-  for (const activity of activitiesResult.data || []) {
-    const relatedPayments = paymentHistory.filter((payment: any) => {
+  for (const activity of ((activitiesResult.data as ActivityRow[] | null) || [])) {
+    const relatedPayments = paymentHistory.filter((payment) => {
       if (payment.activity_id !== null && payment.activity_id === activity.id) {
         return true;
       }
@@ -219,7 +236,7 @@ export async function fetchStudentDashboardDataForPeriod(
     );
   }
 
-  for (const activity of activitiesResult.data || []) {
+  for (const activity of ((activitiesResult.data as ActivityRow[] | null) || [])) {
     if (!activity.activity_date) continue;
 
     const activityDate = new Date(activity.activity_date);
@@ -230,7 +247,7 @@ export async function fetchStudentDashboardDataForPeriod(
 
     const paid = activityPayments.get(activity.id) || 0;
     const expectedAmount = Number(activity.amount);
-    const appliedCredit = getAppliedCreditForActivity(applicationsResult.data || [], activity.id);
+    const appliedCredit = getAppliedCreditForActivity((applicationsResult.data as CreditApplicationRow[] | null) || [], activity.id);
     const owed = Math.max(0, expectedAmount - paid - appliedCredit);
 
     if (owed > 0) {
@@ -250,11 +267,11 @@ export async function fetchStudentDashboardDataForPeriod(
     activityDebtItems,
     paymentHistory,
     activities: scheduledActivities,
-    notifications: (notificationsResult.data || []) as StudentDashboardNotification[],
+    notifications: ((notificationsResult.data as NotificationRow[] | null) || []) as StudentDashboardNotification[],
     upcomingActivities: activeActivities,
     activityDonations: donationsMap,
     totalPaid,
-    creditBalance: creditResult.data?.amount || 0,
+    creditBalance: ((creditResult.data as StudentCreditRow | null)?.amount) || 0,
   };
 }
 
