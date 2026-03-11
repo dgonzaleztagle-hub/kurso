@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { FieldPreview } from '@/components/form-builder/FieldPreview';
 import { resolveBranding } from '@/lib/branding';
@@ -22,20 +23,13 @@ export default function PublicForm() {
   const [hasExistingResponse, setHasExistingResponse] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
   const [fields, setFields] = useState<FormField[]>([]);
-  const [values, setValues] = useState<Record<string, any>>({});
+  const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [brandingSettings, setBrandingSettings] = useState<Record<string, unknown> | null>(null);
   const [brandingTenantName, setBrandingTenantName] = useState<string | null>(null);
   const branding = resolveBranding(brandingSettings, brandingTenantName);
 
-  // Wait for auth to fully load before checking form
-  useEffect(() => {
-    if (!authLoading) {
-      loadForm();
-    }
-  }, [id, user, studentId, authLoading]);
-
-  const loadForm = async () => {
+  const loadForm = useCallback(async () => {
     if (!id) return;
     
     try {
@@ -88,13 +82,26 @@ export default function PublicForm() {
       
       setForm(formData);
 
-      const { data: brandingData, error: brandingError } = await supabase.functions.invoke("public-branding", {
-        body: { formId: id },
-      });
+      if (formData.requires_login && user && formData.tenant_id) {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from("tenants")
+          .select("name, settings")
+          .eq("id", formData.tenant_id)
+          .maybeSingle();
 
-      if (!brandingError && brandingData?.success) {
-        setBrandingSettings((brandingData.settings as Record<string, unknown>) || {});
-        setBrandingTenantName(typeof brandingData.tenantName === "string" ? brandingData.tenantName : null);
+        if (!tenantError && tenantData) {
+          setBrandingSettings((tenantData.settings as Record<string, unknown>) || {});
+          setBrandingTenantName(typeof tenantData.name === "string" ? tenantData.name : null);
+        }
+      } else {
+        const { data: brandingData, error: brandingError } = await supabase.functions.invoke("public-branding", {
+          body: { formId: id },
+        });
+
+        if (!brandingError && brandingData?.success) {
+          setBrandingSettings((brandingData.settings as Record<string, unknown>) || {});
+          setBrandingTenantName(typeof brandingData.tenantName === "string" ? brandingData.tenantName : null);
+        }
       }
       
       const { data: fieldsData, error: fieldsError } = await supabase
@@ -117,7 +124,14 @@ export default function PublicForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate, studentId, user]);
+
+  // Wait for auth to fully load before checking form
+  useEffect(() => {
+    if (!authLoading) {
+      void loadForm();
+    }
+  }, [authLoading, loadForm]);
 
   const shouldShowField = (field: FormField): boolean => {
     if (!field.conditional_logic?.enabled) return true;
@@ -135,7 +149,7 @@ export default function PublicForm() {
     }
     
     // Normalize values for comparison based on field type
-    const normalizeValue = (val: any, conditionValue: string): boolean => {
+    const normalizeValue = (val: unknown, conditionValue: string): boolean => {
       // Handle checkbox (boolean) comparisons
       if (sourceField?.field_type === 'checkbox') {
         const boolValue = val === true || val === 'true';
@@ -254,7 +268,7 @@ export default function PublicForm() {
         }
       }
       
-      const responseData: Record<string, any> = {};
+      const responseData: Record<string, unknown> = {};
       
       for (const field of fields.filter(shouldShowField)) {
         let value = values[field.id];
@@ -273,8 +287,8 @@ export default function PublicForm() {
           tenant_id: form.tenant_id,
           user_id: user?.id || null,
           student_id: studentId || null,
-          response_data: responseData
-        } as any);
+          response_data: responseData as Json
+        });
         
       if (error) throw error;
       

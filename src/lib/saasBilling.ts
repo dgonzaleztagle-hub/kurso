@@ -51,8 +51,8 @@ export const getSaasCheckoutOffer = (tenant?: Tenant | null) => {
       stage,
       amount: SAAS_PRICING.introAmount,
       currency: SAAS_PRICING.currency,
-      label: "Primer mes a $5.000",
-      summary: `7 días gratis, luego ${formatCurrencyCLP(SAAS_PRICING.introAmount)} el primer mes.`,
+      label: "Activa tu curso por $5.000",
+      summary: `Tienes 7 días gratis. Después, activas tu curso por ${formatCurrencyCLP(SAAS_PRICING.introAmount)} el primer mes.`,
       renewalCopy: `Desde la siguiente renovación pagarás ${formatCurrencyCLP(SAAS_PRICING.standardAmount)} al mes.`,
     };
   }

@@ -4,7 +4,7 @@ import { useTheme } from "next-themes";
 import { Moon, Sun, ArrowRight, CheckCircle2, Building2, GraduationCap, Users, HelpCircle, ShieldCheck, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveBranding } from "@/lib/branding";
-import { useState, useEffect } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { MercadoPagoBadge } from "@/components/subscription/MercadoPagoBadge";
 import { SAAS_PRICING, formatCurrencyCLP } from "@/lib/saasBilling";
@@ -222,7 +222,7 @@ const Landing = () => {
                                 <PricingStep
                                     eyebrow="Paso 2"
                                     title={formatCurrencyCLP(SAAS_PRICING.introAmount)}
-                                    description="Primer mes post-trial para activar tu tenant."
+                                    description="Después de tu prueba, activas tu curso por $5.000 el primer mes."
                                     highlight
                                 />
                                 <PricingStep
@@ -376,7 +376,7 @@ const Landing = () => {
     );
 };
 
-const FeatureCard = ({ icon, title, description }: { icon: any, title: string, description: string }) => (
+const FeatureCard = ({ icon, title, description }: { icon: ReactNode, title: string, description: string }) => (
     <motion.div
         whileHover={{ y: -5 }}
         className="p-8 rounded-2xl bg-card border shadow-sm hover:shadow-md transition-all space-y-4"
@@ -439,7 +439,7 @@ const ImageCarousel = () => {
         }, 5000);
 
         return () => clearInterval(timer);
-    }, []);
+    }, [images.length]);
 
     return (
         <div className="relative w-full h-[300px] md:h-[500px] bg-background overflow-hidden">

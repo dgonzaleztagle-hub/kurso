@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { BankCombobox } from "@/components/BankCombobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import { Upload } from "lucide-react";
 
 export default function SupplierPaymentRequest() {
+  const navigate = useNavigate();
   const signedToken = new URLSearchParams(window.location.search).get("token");
   const [loading, setLoading] = useState(false);
   const [brandingSettings, setBrandingSettings] = useState<Record<string, unknown> | null>(null);
@@ -92,7 +94,7 @@ export default function SupplierPaymentRequest() {
         return;
       }
 
-      const encodedFiles = [];
+      const encodedFiles: Array<{ name: string; type: string; dataUrl: string }> = [];
       for (const file of files) {
         const dataUrl = await fileToDataUrl(file);
         encodedFiles.push({

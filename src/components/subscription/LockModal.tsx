@@ -36,7 +36,7 @@ export function LockModal({ isOpen, isGracePeriod }: LockModalProps) {
               Tu acceso está pausado
             </DialogTitle>
             <DialogDescription className="text-center text-base text-slate-600">
-              Conserva la oferta de entrada de Kurso: 7 dias gratis, primer mes a $5.000 y luego $9.900 por renovacion manual.
+              Conserva la oferta de entrada de Kurso: 7 dias gratis, luego activas tu curso por $5.000 el primer mes y después sigues con $9.900 por renovacion manual.
             </DialogDescription>
           </DialogHeader>
 

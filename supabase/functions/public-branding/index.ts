@@ -6,6 +6,33 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const PUBLIC_BRANDING_KEYS = [
+  "institution_name",
+  "app_name",
+  "brand_name",
+  "logo_url",
+  "brand_logo_url",
+  "icon_url",
+  "brand_icon_url",
+  "legal_name",
+  "supplier_portal_subtitle",
+  "public_form_footer",
+] as const;
+
+const pickPublicBrandingSettings = (settings: unknown): Record<string, unknown> => {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    return {};
+  }
+
+  const source = settings as Record<string, unknown>;
+  return PUBLIC_BRANDING_KEYS.reduce<Record<string, unknown>>((acc, key) => {
+    if (source[key] !== undefined && source[key] !== null) {
+      acc[key] = source[key];
+    }
+    return acc;
+  }, {});
+};
+
 function base64UrlDecode(input: string): string {
   const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4 || 4)) % 4);
@@ -46,13 +73,21 @@ serve(async (req) => {
     if (formId) {
       const { data: formRow, error: formError } = await supabaseAdmin
         .from("forms")
-        .select("tenant_id")
+        .select("tenant_id, is_active, requires_login, closes_at")
         .eq("id", formId)
         .maybeSingle();
 
       if (formError || !formRow?.tenant_id) {
         return new Response(JSON.stringify({ error: "Formulario no encontrado" }), {
           status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const isClosed = Boolean(formRow.closes_at) && new Date(String(formRow.closes_at)).getTime() < Date.now();
+      if (!formRow.is_active || formRow.requires_login || isClosed) {
+        return new Response(JSON.stringify({ error: "Formulario no disponible para branding publico" }), {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -116,12 +151,13 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       tenantName: tenantRow.name,
-      settings: tenantRow.settings ?? {},
+      settings: pickPublicBrandingSettings(tenantRow.settings),
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message || "Error desconocido" }), {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error desconocido";
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

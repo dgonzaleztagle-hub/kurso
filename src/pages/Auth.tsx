@@ -37,7 +37,7 @@ export default function Auth() {
     }
   };
 
-  const getFriendlyAuthError = (rawError: any) => {
+  const getFriendlyAuthError = (rawError: unknown) => {
     const msg = String(rawError?.message || rawError || "").toLowerCase();
 
     if (
@@ -170,7 +170,7 @@ export default function Auth() {
         duration: 5000,
       });
       setViewMode("login");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending reset email:", error);
       toast.error(getFriendlyAuthError(error));
     } finally {
@@ -258,7 +258,7 @@ export default function Auth() {
               <CardTitle className="text-2xl">{branding.appName}</CardTitle>
             </div>
             <CardDescription>
-              {viewMode === 'signup' ? 'Crea tu cuenta y activa 7 dias gratis. Luego, primer mes a $5.000 y desde el segundo $9.900.' : branding.authDescription}
+              {viewMode === 'signup' ? 'Crea tu cuenta, usa 7 dias gratis y después activa tu curso por $5.000 el primer mes. Luego pagas $9.900.' : branding.authDescription}
             </CardDescription>
           </div>
         </CardHeader>
