@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { fetchStudentDashboardDataForPeriod } from '@/hooks/useStudentDashboardData';
 
 interface PaymentNotification {
   id: string;
@@ -126,7 +127,7 @@ export default function PaymentNotifications() {
         throw new Error('No se pudo detectar el curso activo');
       }
       // Actualizar estado de la notificación
-      const { error: updateError } = await supabase
+      let { error: updateError } = await supabase
         .from('payment_notifications')
         .update({
           status: 'approved',
@@ -135,12 +136,29 @@ export default function PaymentNotifications() {
         })
         .eq('id', notification.id);
 
+      const updateErrorMessage = String(updateError?.message || '').toLowerCase();
+      if (
+        updateError &&
+        (
+          updateErrorMessage.includes('processed_by') ||
+          updateErrorMessage.includes('processed_at')
+        )
+      ) {
+        const legacyUpdate = await supabase
+          .from('payment_notifications')
+          .update({
+            status: 'approved',
+          })
+          .eq('id', notification.id);
+
+        updateError = legacyUpdate.error;
+      }
+
       if (updateError) throw updateError;
 
       // Registrar los pagos en la tabla payments
-      const paymentDetails = notification.payment_details;
-      const selectedDebts = paymentDetails.selected_debts || [];
-      const remainder = paymentDetails.remainder_to_monthly_fees || 0;
+      const paymentDetails = notification.payment_details || null;
+      let selectedDebts = paymentDetails?.selected_debts || [];
       const studentFullName = getStudentName(notification);
 
       console.log('=== APPROVAL DEBUG ===');
@@ -155,6 +173,32 @@ export default function PaymentNotifications() {
       const configuredFee = Number((currentTenant.settings as any)?.monthly_fee);
       const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
       const normalizeMonthName = (value: string) => String(value).trim().toUpperCase().split(' ')[0];
+
+      // Legacy notifications don't store payment_details. In that case we allocate
+      // the payment to the oldest pending monthly fees first, which is the safest
+      // default to keep debt state coherent.
+      if (selectedDebts.length === 0) {
+        const snapshot = await fetchStudentDashboardDataForPeriod(notification.student_id, 'year');
+        let remainingLegacyAmount = Number(notification.amount) || 0;
+
+        selectedDebts = snapshot.monthlyDebtItems
+          .filter((item) => item.due > 0)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .flatMap((item) => {
+            if (remainingLegacyAmount <= 0) return [];
+            const paidAmount = Math.min(remainingLegacyAmount, item.due);
+            remainingLegacyAmount -= paidAmount;
+            return [{
+              type: 'monthly_fee',
+              id: item.key,
+              name: `Cuota ${item.label}`,
+              amount: item.due,
+              paid_amount: paidAmount,
+              target_month: item.key,
+              months: [item.month],
+            }];
+          });
+      }
 
       // Registrar pagos según la distribución
       for (const debt of selectedDebts) {
@@ -262,7 +306,7 @@ export default function PaymentNotifications() {
     setProcessing(true);
 
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('payment_notifications')
         .update({
           status: 'rejected',
@@ -271,6 +315,25 @@ export default function PaymentNotifications() {
           processed_at: new Date().toISOString(),
         })
         .eq('id', selectedNotification!.id);
+
+      const rejectErrorMessage = String(error?.message || '').toLowerCase();
+      if (
+        error &&
+        (
+          rejectErrorMessage.includes('processed_by') ||
+          rejectErrorMessage.includes('processed_at') ||
+          rejectErrorMessage.includes('rejection_reason')
+        )
+      ) {
+        const legacyReject = await supabase
+          .from('payment_notifications')
+          .update({
+            status: 'rejected',
+          })
+          .eq('id', selectedNotification!.id);
+
+        error = legacyReject.error;
+      }
 
       if (error) throw error;
 
