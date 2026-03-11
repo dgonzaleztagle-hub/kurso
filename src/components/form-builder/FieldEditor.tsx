@@ -10,6 +10,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormField, FieldOption, ScaleConfig, MatrixConfig, FIELD_TYPE_LABELS } from '@/types/forms';
 
+type ConditionalOperator = NonNullable<FormField['conditional_logic']>['operator'];
+
 interface FieldEditorProps {
   field: FormField;
   allFields: FormField[];
@@ -391,7 +393,7 @@ export function FieldEditor({ field, allFields, onUpdate, onDelete, onMoveUp, on
                         
                         <Select
                           value={field.conditional_logic.operator}
-                          onValueChange={(operator: any) => updateField({
+                          onValueChange={(operator: ConditionalOperator) => updateField({
                             conditional_logic: { ...field.conditional_logic!, operator }
                           })}
                         >

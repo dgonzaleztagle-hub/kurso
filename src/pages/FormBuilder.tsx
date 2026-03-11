@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Save, Eye, ArrowLeft, Share2, Settings, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,16 @@ import { FieldPreview } from '@/components/form-builder/FieldPreview';
 import { FormField, FieldType, Form, FieldOption, ScaleConfig, MatrixConfig } from '@/types/forms';
 import { Layout } from '@/components/Layout';
 
+type PreviewValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | Record<string, string>
+  | File
+  | null
+  | undefined;
+
 export default function FormBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -36,7 +46,7 @@ export default function FormBuilder() {
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [fieldTypeSheetOpen, setFieldTypeSheetOpen] = useState(false);
-  const [previewValues, setPreviewValues] = useState<Record<string, any>>({});
+  const [previewValues, setPreviewValues] = useState<Record<string, PreviewValue>>({});
   
   const [form, setForm] = useState<Partial<Form>>({
     title: '',
@@ -60,13 +70,7 @@ export default function FormBuilder() {
     setFields(newFields);
   };
 
-  useEffect(() => {
-    if (isEditing) {
-      loadForm();
-    }
-  }, [id]);
-
-  const loadForm = async () => {
+  const loadForm = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
@@ -98,7 +102,13 @@ export default function FormBuilder() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (isEditing) {
+      void loadForm();
+    }
+  }, [isEditing, loadForm]);
 
   const addField = (type: FieldType) => {
     const defaultOptions = () => {

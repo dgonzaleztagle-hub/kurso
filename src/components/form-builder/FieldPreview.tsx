@@ -12,10 +12,20 @@ import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { FormField, FieldOption, ScaleConfig, MatrixConfig } from '@/types/forms';
 
+type PreviewValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | Record<string, string>
+  | File
+  | null
+  | undefined;
+
 interface FieldPreviewProps {
   field: FormField;
-  value: any;
-  onChange: (value: any) => void;
+  value: PreviewValue;
+  onChange: (value: PreviewValue) => void;
   error?: string;
 }
 

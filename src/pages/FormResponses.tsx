@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Trash2, Eye, BarChart3, Users, FileDown, UserX, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
+import { Json } from '@/integrations/supabase/types';
 import { Form, FormField, FormResponse, FieldOption, ScaleConfig, MatrixConfig, FieldType } from '@/types/forms';
 import { Layout } from '@/components/Layout';
 import { generatePendingFormReport } from '@/lib/receiptGenerator';
@@ -27,6 +28,11 @@ interface FormExclusion {
   reason: string | null;
 }
 
+type ResponseData = Record<string, Json | undefined>;
+type FormWithTenant = Form & { tenant_id?: string | null };
+type StudentOption = { id: string | number; name: string };
+type PostgrestErrorWithCode = { code?: string; message?: string };
+
 export default function FormResponses() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -38,19 +44,14 @@ export default function FormResponses() {
   const [fields, setFields] = useState<FormField[]>([]);
   const [responses, setResponses] = useState<FormResponse[]>([]);
   const [students, setStudents] = useState<Record<string, string>>({});
-  const [allStudents, setAllStudents] = useState<Array<{ id: string | number; name: string }>>([]);
+  const [allStudents, setAllStudents] = useState<StudentOption[]>([]);
   const [selectedResponse, setSelectedResponse] = useState<FormResponse | null>(null);
   const [exclusions, setExclusions] = useState<FormExclusion[]>([]);
   const [exclusionsDialogOpen, setExclusionsDialogOpen] = useState(false);
   const [newExclusionStudentId, setNewExclusionStudentId] = useState<string>('');
   const [newExclusionReason, setNewExclusionReason] = useState('');
 
-  useEffect(() => {
-    loadData();
-    loadExclusions();
-  }, [id]);
-
-  const loadExclusions = async () => {
+  const loadExclusions = useCallback(async () => {
     if (!id) return;
     try {
       const { data, error } = await supabase
@@ -63,7 +64,7 @@ export default function FormResponses() {
     } catch (error) {
       console.error('Error loading exclusions:', error);
     }
-  };
+  }, [id]);
 
   const addExclusion = async () => {
     if (!id || !newExclusionStudentId) return;
@@ -85,8 +86,8 @@ export default function FormResponses() {
       setNewExclusionReason('');
       setExclusionsDialogOpen(true);
       toast.success('Exclusión agregada');
-    } catch (error: any) {
-      if (error.code === '23505') {
+    } catch (error: unknown) {
+      if ((error as PostgrestErrorWithCode).code === '23505') {
         toast.error('Este estudiante ya está excluido');
       } else {
         console.error('Error adding exclusion:', error);
@@ -112,7 +113,7 @@ export default function FormResponses() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return;
 
     try {
@@ -136,10 +137,10 @@ export default function FormResponses() {
       if (responsesRes.error) throw responsesRes.error;
       setResponses(responsesRes.data.map(r => ({
         ...r,
-        response_data: r.response_data as unknown as Record<string, any>
+        response_data: r.response_data as ResponseData
       })));
 
-      const tenantId = (formRes.data as any)?.tenant_id || currentTenant?.id;
+      const tenantId = (formRes.data as FormWithTenant | null)?.tenant_id || currentTenant?.id;
       const studentsRes = tenantId
         ? await supabase.from('students').select('id, first_name, last_name').eq('tenant_id', tenantId)
         : { data: [], error: null };
@@ -160,7 +161,12 @@ export default function FormResponses() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id, id]);
+
+  useEffect(() => {
+    void loadData();
+    void loadExclusions();
+  }, [loadData, loadExclusions]);
 
   const deleteResponse = async (responseId: string) => {
     try {
@@ -179,7 +185,7 @@ export default function FormResponses() {
     }
   };
 
-  const formatValue = (field: FormField | null, value: any): string => {
+  const formatValue = (field: FormField | null, value: Json | undefined): string => {
     if (value === undefined || value === null) return '-';
 
     // Si no hay campo (respuesta huérfana), mostrar el valor directamente
@@ -198,7 +204,7 @@ export default function FormResponses() {
       case 'multiple_choice': {
         const options = field.options as FieldOption[];
         const values = Array.isArray(value) ? value : [];
-        return values.map(v => options.find(o => o.id === v)?.label || v).join(', ');
+        return values.map(v => options.find(o => o.id === String(v))?.label || String(v)).join(', ');
       }
       case 'checkbox':
         return value ? 'Sí' : 'No';
@@ -212,7 +218,7 @@ export default function FormResponses() {
         return String(value);
       case 'matrix': {
         const config = field.options as MatrixConfig;
-        const matrixValue = value as Record<string, string>;
+        const matrixValue = (typeof value === 'object' && !Array.isArray(value) ? value : {}) as Record<string, string>;
         return config.rows.map(row => {
           const col = config.columns.find(c => c.id === matrixValue[row.id]);
           return `${row.label}: ${col?.label || '-'}`;
@@ -256,7 +262,7 @@ export default function FormResponses() {
 
   const exportToExcel = () => {
     const data = responses.map(response => {
-      const row: Record<string, any> = {
+      const row: Record<string, string> = {
         'Fecha': format(new Date(response.submitted_at), 'dd/MM/yyyy HH:mm', { locale: es }),
         'Estudiante': response.student_id ? students[String(response.student_id)] || '-' : '-'
       };
