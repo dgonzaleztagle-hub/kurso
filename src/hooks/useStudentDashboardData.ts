@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount, type MonthDebtItem } from "@/lib/creditAccounting";
 import { parseDateFromDB } from "@/lib/dateUtils";
+import { groupPaymentsForDisplay } from "@/lib/paymentGrouping";
 
 export interface StudentDashboardDebtDetail {
   monthlyDebt: number;
@@ -15,6 +16,8 @@ export interface StudentDashboardPaymentHistory {
   payment_date: string;
   amount: number;
   concept: string;
+  activity_id?: string | number | null;
+  month_period?: string | null;
 }
 
 export interface StudentDashboardScheduledActivity {
@@ -114,8 +117,7 @@ export async function fetchStudentDashboardDataForPeriod(
 
   const activeActivities = scheduledActivities
     .filter((act) => !act.completed)
-    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
-    .slice(0, 2);
+    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
 
   const donationsMap: { [activityId: string]: StudentDashboardDonation[] } = {};
 
@@ -135,7 +137,14 @@ export async function fetchStudentDashboardDataForPeriod(
     }));
   }
 
-  const paymentHistory = (paymentsResult.data || []) as StudentDashboardPaymentHistory[];
+  const paymentHistory = groupPaymentsForDisplay((paymentsResult.data || []) as any[]).map((payment) => ({
+    id: Number(payment.folioStart),
+    payment_date: payment.paymentDate,
+    amount: payment.amount,
+    concept: payment.concept,
+    activity_id: payment.rawPayments[0]?.activity_id ?? null,
+    month_period: payment.monthPeriod,
+  })) as StudentDashboardPaymentHistory[];
   const totalPaid = paymentHistory.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
 
   const configuredFee = Number((tenantResult.data?.settings as any)?.monthly_fee);

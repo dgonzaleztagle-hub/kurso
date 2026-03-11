@@ -159,7 +159,7 @@ export default function Expenses() {
         expenseDate: expense.expense_date,
         amount: expense.amount,
         concept: expense.concept
-      });
+      }, currentTenant);
       toast.success("Comprobante generado exitosamente");
     } catch (error) {
       console.error("Error generating receipt:", error);

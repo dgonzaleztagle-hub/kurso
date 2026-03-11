@@ -22,6 +22,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { fetchStudentDashboardDataForPeriod } from '@/hooks/useStudentDashboardData';
+import { buildMonthlyPaymentMetadata } from '@/lib/paymentGrouping';
 
 interface PaymentNotification {
   id: string;
@@ -200,63 +201,56 @@ export default function PaymentNotifications() {
           });
       }
 
+      const activityDebts = selectedDebts.filter((debt: any) => debt.type === 'activity');
+      const monthlyFeeDebts = selectedDebts.filter((debt: any) => debt.type === 'monthly_fee');
+
       // Registrar pagos según la distribución
-      for (const debt of selectedDebts) {
+      for (const debt of activityDebts) {
         console.log('Processing debt:', debt.type, debt.name, 'Amount:', debt.paid_amount);
 
-        if (debt.type === 'activity') {
-          // Registrar solo el monto pagado para actividades
-          const { error: insertError } = await supabase.from('payments').insert({
-            folio: currentFolio++,
-            tenant_id: currentTenant.id,
-            payment_date: notification.payment_date,
-            student_id: notification.student_id,
-            student_name: studentFullName,
-            activity_id: debt.id,
-            concept: debt.name,
-            amount: debt.paid_amount, // Usar el monto realmente pagado
-          });
-          if (insertError) throw insertError;
-        } else if (debt.type === 'monthly_fee') {
-          let remainingMonthlyAmount = Number(debt.paid_amount) || 0;
-          const monthTargets: string[] = Array.isArray(debt.months)
+        const { error: insertError } = await supabase.from('payments').insert({
+          folio: currentFolio++,
+          tenant_id: currentTenant.id,
+          payment_date: notification.payment_date,
+          student_id: notification.student_id,
+          student_name: studentFullName,
+          activity_id: debt.id,
+          concept: debt.name,
+          amount: debt.paid_amount,
+        });
+        if (insertError) throw insertError;
+      }
+
+      if (monthlyFeeDebts.length > 0) {
+        const monthTargets = monthlyFeeDebts.flatMap((debt: any) => {
+          const months = Array.isArray(debt.months)
             ? debt.months.map((month: string) => normalizeMonthName(month)).filter(Boolean)
             : [];
 
-          if (monthTargets.length === 0 && debt.target_month) {
-            monthTargets.push(normalizeMonthName(debt.target_month));
+          if (months.length > 0) {
+            return months;
           }
 
-          for (const month of monthTargets) {
-            if (remainingMonthlyAmount <= 0) break;
-            const amountForMonth = Math.min(remainingMonthlyAmount, monthlyFee);
-            const { error: insertError } = await supabase.from('payments').insert({
-              folio: currentFolio++,
-              tenant_id: currentTenant.id,
-              payment_date: notification.payment_date,
-              student_id: notification.student_id,
-              student_name: studentFullName,
-              concept: `Cuota ${month}`,
-              month_period: month,
-              amount: amountForMonth,
-            });
-            if (insertError) throw insertError;
-            remainingMonthlyAmount -= amountForMonth;
-          }
+          return debt.target_month ? [normalizeMonthName(debt.target_month)] : [];
+        });
 
-          if (remainingMonthlyAmount > 0) {
-            const { error: insertError } = await supabase.from('payments').insert({
-              folio: currentFolio++,
-              tenant_id: currentTenant.id,
-              payment_date: notification.payment_date,
-              student_id: notification.student_id,
-              student_name: studentFullName,
-              concept: 'Cuota Mensual',
-              amount: remainingMonthlyAmount,
-            });
-            if (insertError) throw insertError;
-          }
-        }
+        const monthlyMetadata = buildMonthlyPaymentMetadata(monthTargets);
+        const totalMonthlyAmount = monthlyFeeDebts.reduce(
+          (sum: number, debt: any) => sum + (Number(debt.paid_amount) || 0),
+          0,
+        );
+
+        const { error: insertError } = await supabase.from('payments').insert({
+          folio: currentFolio++,
+          tenant_id: currentTenant.id,
+          payment_date: notification.payment_date,
+          student_id: notification.student_id,
+          student_name: studentFullName,
+          concept: monthlyMetadata.concept,
+          month_period: monthlyMetadata.monthPeriod,
+          amount: totalMonthlyAmount,
+        });
+        if (insertError) throw insertError;
       }
 
       toast({

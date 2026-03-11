@@ -1,6 +1,11 @@
 import jsPDF from "jspdf";
 import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 
+type TenantLike = {
+  name?: string | null;
+  settings?: Record<string, unknown> | null;
+} | null | undefined;
+
 interface PaymentReceiptData {
   folio: number;
   studentId?: string | number | null;
@@ -36,9 +41,9 @@ interface TransferReceiptData {
   remainingCredit?: number;
 }
 
-export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
+export const generatePaymentReceipt = async (data: PaymentReceiptData, tenant?: TenantLike) => {
   const doc = new jsPDF();
-  const pdfBranding = getPdfBranding();
+  const pdfBranding = getPdfBranding(tenant);
   
   const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
@@ -106,11 +111,6 @@ export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
   doc.setFont("helvetica", "normal");
   doc.text(data.concept, 95, yPos);
 
-  // Contact info
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Cualquier duda puede contactarme por WhatsApp +569-54031472", 105, 195, { align: "center" });
-
   // Footer
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
@@ -122,9 +122,9 @@ export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
   doc.save(fileName);
 };
 
-export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
+export const generateExpenseReceipt = async (data: ExpenseReceiptData, tenant?: TenantLike) => {
   const doc = new jsPDF();
-  const pdfBranding = getPdfBranding();
+  const pdfBranding = getPdfBranding(tenant);
   
   const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
@@ -202,9 +202,9 @@ export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
   doc.save(fileName);
 };
 
-export const generateTransferReceipt = async (data: TransferReceiptData) => {
+export const generateTransferReceipt = async (data: TransferReceiptData, tenant?: TenantLike) => {
   const doc = new jsPDF();
-  const pdfBranding = getPdfBranding();
+  const pdfBranding = getPdfBranding(tenant);
   
   const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
@@ -313,11 +313,6 @@ export const generateTransferReceipt = async (data: TransferReceiptData) => {
   doc.text("Este comprobante certifica el traspaso interno de fondos.", 105, 210, { align: "center" });
   doc.text("No representa un ingreso o egreso bancario.", 105, 217, { align: "center" });
 
-  // Contact info
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Cualquier duda puede contactarme por WhatsApp +569-54031472", 105, 245, { align: "center" });
-
   // Footer
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
@@ -337,31 +332,35 @@ interface PendingFormReportData {
   respondedCount: number;
 }
 
-export const generatePendingFormReport = async (data: PendingFormReportData) => {
-  const doc = new jsPDF();
-  const pdfBranding = getPdfBranding();
-  
-  const logoImg = await loadImageElement(pdfBranding.logoUrl);
-
-  // Background color
+const paintPendingFormPage = async (
+  doc: jsPDF,
+  pdfBranding: ReturnType<typeof getPdfBranding>,
+  logoImg: HTMLImageElement | null,
+) => {
   doc.setFillColor(250, 252, 255);
   doc.rect(0, 0, 210, 297, 'F');
 
-  // Header - Logo
   if (logoImg) {
     doc.addImage(logoImg, 'PNG', 85, 15, 40, 40);
   }
 
-  // Title
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 58, 138);
   doc.text("INFORME DE RESPUESTAS PENDIENTES", 105, 65, { align: "center" });
 
-  // Form title
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
+};
+
+export const generatePendingFormReport = async (data: PendingFormReportData, tenant?: TenantLike) => {
+  const doc = new jsPDF();
+  const pdfBranding = getPdfBranding(tenant);
+  
+  const logoImg = await loadImageElement(pdfBranding.logoUrl);
+
+  await paintPendingFormPage(doc, pdfBranding, logoImg);
   doc.text(data.formTitle, 105, 73, { align: "center" });
 
   // Statistics box
@@ -409,16 +408,15 @@ export const generatePendingFormReport = async (data: PendingFormReportData) => 
     doc.setFont("helvetica", "normal");
     doc.setTextColor(51, 65, 85);
 
-    data.pendingStudents.forEach((student, i) => {
+    for (const [i, student] of data.pendingStudents.entries()) {
       if (yPos > 270) {
         doc.addPage();
-        doc.setFillColor(250, 252, 255);
-        doc.rect(0, 0, 210, 297, 'F');
+        await paintPendingFormPage(doc, pdfBranding, logoImg);
         yPos = 20;
       }
       doc.text(`${i + 1}. ${student.name}`, 25, yPos);
       yPos += 6;
-    });
+    }
   }
 
   // Excluded students list
@@ -427,8 +425,7 @@ export const generatePendingFormReport = async (data: PendingFormReportData) => 
     
     if (yPos > 250) {
       doc.addPage();
-      doc.setFillColor(250, 252, 255);
-      doc.rect(0, 0, 210, 297, 'F');
+      await paintPendingFormPage(doc, pdfBranding, logoImg);
       yPos = 20;
     }
 
@@ -442,17 +439,16 @@ export const generatePendingFormReport = async (data: PendingFormReportData) => 
     doc.setFont("helvetica", "normal");
     doc.setTextColor(71, 85, 105);
 
-    data.excludedStudents.forEach((student, i) => {
+    for (const [i, student] of data.excludedStudents.entries()) {
       if (yPos > 270) {
         doc.addPage();
-        doc.setFillColor(250, 252, 255);
-        doc.rect(0, 0, 210, 297, 'F');
+        await paintPendingFormPage(doc, pdfBranding, logoImg);
         yPos = 20;
       }
       const reasonText = student.reason ? ` - ${student.reason}` : '';
       doc.text(`${i + 1}. ${student.name}${reasonText}`, 25, yPos);
       yPos += 6;
-    });
+    }
   }
 
   // Footer with date

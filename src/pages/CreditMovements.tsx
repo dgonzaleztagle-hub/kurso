@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { parseDateFromDB, formatDateForDisplay, formatDateForDB } from "@/lib/dateUtils";
 import { generateTransferReceipt } from "@/lib/receiptGenerator";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface CreditMovement {
   id: string;
@@ -31,6 +32,7 @@ interface CreditMovement {
 
 export default function CreditMovements() {
   const { appUser } = useAuth();
+  const { currentTenant } = useTenant();
   const [movements, setMovements] = useState<CreditMovement[]>([]);
   const [filteredMovements, setFilteredMovements] = useState<CreditMovement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -196,16 +198,16 @@ export default function CreditMovements() {
       const isCredit = movement.amount > 0;
       const studentName = studentData ? `${studentData.first_name || ''} ${studentData.last_name || ''}`.trim() : `Estudiante ${movement.student_id}`;
 
-      await generateTransferReceipt({
-        studentId: movement.student_id,
-        studentName: studentName,
-        transferDate: movement.created_at.split('T')[0],
-        amount: Math.abs(movement.amount),
-        originalConcept: paymentData?.concept || movement.description || "Movimiento de crédito",
-        redirectType: isCredit ? 'credit' : 'debts',
-        details: details.length > 0 ? details : undefined,
-        remainingCredit: isCredit ? movement.amount : undefined,
-      });
+        await generateTransferReceipt({
+          studentId: movement.student_id,
+          studentName: studentName,
+          transferDate: movement.created_at.split('T')[0],
+          amount: Math.abs(movement.amount),
+          originalConcept: paymentData?.concept || movement.description || "Movimiento de crédito",
+          redirectType: isCredit ? 'credit' : 'debts',
+          details: details.length > 0 ? details : undefined,
+          remainingCredit: isCredit ? movement.amount : undefined,
+        }, currentTenant);
 
       toast.success("Certificado generado");
     } catch (error) {

@@ -11,6 +11,7 @@ import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { formatDateForDB, parseDateFromDB } from "@/lib/dateUtils";
 import { useTenant } from "@/contexts/TenantContext";
 import { calculateMonthlyDebtItems, getNetPaymentAmount } from "@/lib/creditAccounting";
+import { buildMonthlyPaymentMetadata } from "@/lib/paymentGrouping";
 
 type MovementType = "ingreso" | "egreso" | null;
 type IncomeType = "actividad" | "cuota_mensual" | "otros" | null;
@@ -261,14 +262,9 @@ export default function Movements() {
         if (incomeType === "actividad") {
           finalConcept = activities.find(a => a.id.toString() === selectedActivity)?.name || "";
         } else if (incomeType === "cuota_mensual") {
-          // Generar concepto basado en meses seleccionados
-          if (selectedMonths.length === 1) {
-            finalConcept = `Cuota ${selectedMonths[0]}`;
-            monthPeriod = selectedMonths[0];
-          } else if (selectedMonths.length > 1) {
-            finalConcept = `Cuota ${selectedMonths[0]}-${selectedMonths[selectedMonths.length - 1]}`;
-            monthPeriod = `${selectedMonths[0]}-${selectedMonths[selectedMonths.length - 1]}`;
-          }
+          const monthlyMetadata = buildMonthlyPaymentMetadata(selectedMonths);
+          finalConcept = monthlyMetadata.concept;
+          monthPeriod = monthlyMetadata.monthPeriod;
         } else {
           finalConcept = concept === "OTRO" ? customConcept : concept;
         }

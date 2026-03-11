@@ -35,6 +35,7 @@ export default function FormBuilder() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [fieldTypeSheetOpen, setFieldTypeSheetOpen] = useState(false);
   const [previewValues, setPreviewValues] = useState<Record<string, any>>({});
   
   const [form, setForm] = useState<Partial<Form>>({
@@ -407,7 +408,7 @@ export default function FormBuilder() {
               ))}
             </div>
 
-            <Sheet>
+            <Sheet open={fieldTypeSheetOpen} onOpenChange={setFieldTypeSheetOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" className="w-full">
                   <Plus className="h-4 w-4 mr-2" />
@@ -421,6 +422,7 @@ export default function FormBuilder() {
                 <div className="mt-4">
                   <FieldTypeSelector onSelect={(type) => {
                     addField(type);
+                    setFieldTypeSheetOpen(false);
                   }} />
                 </div>
               </SheetContent>

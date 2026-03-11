@@ -142,10 +142,9 @@ export default function StudentProfile() {
       setNotifications(notificationsResult.data || []);
       setCreditBalance(creditResult.data?.amount || 0);
 
-      // Obtener las dos actividades más próximas
       const futureActivities = (scheduledActivitiesResult.data || [])
-        .filter(activity => new Date(activity.scheduled_date) >= new Date())
-        .slice(0, 2);
+        .filter(activity => !activity.completed && new Date(activity.scheduled_date) >= new Date())
+        .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
       setUpcomingActivities(futureActivities);
 
       // Cargar donaciones para cada actividad próxima

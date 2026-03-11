@@ -1,24 +1,22 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import jsPDF from "jspdf";
+import { FileText } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTenant } from "@/contexts/TenantContext";
+import { parseDateFromDB } from "@/lib/dateUtils";
+import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
+import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount, sameId } from "@/lib/creditAccounting";
+import { StudentCombobox } from "@/components/StudentCombobox";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { toast } from "sonner";
-import { FileText } from "lucide-react";
-import jsPDF from "jspdf";
-import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
-import { StudentCombobox } from "@/components/StudentCombobox";
-import { parseDateFromDB } from "@/lib/dateUtils";
-import { useTenant } from "@/contexts/TenantContext";
-import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount, sameId } from "@/lib/creditAccounting";
 
 interface Student {
   id: number | string;
   name: string;
-  first_name?: string;
-  last_name?: string;
   enrollment_date: string;
 }
 
@@ -37,8 +35,15 @@ interface MonthlyDebt {
 
 interface ActivityDebt {
   student_name: string;
+  activity_id: number;
   activity_name: string;
   amount_owed: number;
+}
+
+interface StudentDebtCertificate {
+  monthly: number;
+  months: string[];
+  activities: Array<{ id: number; name: string; amount: number }>;
 }
 
 export default function DebtReports() {
@@ -46,187 +51,228 @@ export default function DebtReports() {
   const [students, setStudents] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
-
-  // Filtros
   const [reportType, setReportType] = useState<"monthly" | "activities" | "both">("monthly");
   const [scope, setScope] = useState<"general" | "individual">("general");
-  const [selectedStudent, setSelectedStudent] = useState<string>("");
+  const [selectedStudent, setSelectedStudent] = useState("");
+  const [selectedActivity, setSelectedActivity] = useState("all");
   const [monthlyDetailType, setMonthlyDetailType] = useState<"summary" | "detailed">("summary");
   const [monthlyPeriod, setMonthlyPeriod] = useState<"current" | "year">("current");
-
-  // Preview data
   const [previewMonthlyDebts, setPreviewMonthlyDebts] = useState<MonthlyDebt[]>([]);
   const [previewActivityDebts, setPreviewActivityDebts] = useState<ActivityDebt[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+
   const monthlyFee = Number((currentTenant?.settings as any)?.monthly_fee) > 0
     ? Number((currentTenant?.settings as any)?.monthly_fee)
     : 3000;
 
   useEffect(() => {
     if (currentTenant?.id) {
-      loadData();
+      void loadData();
     }
   }, [currentTenant?.id]);
 
   const loadData = async () => {
     if (!currentTenant?.id) return;
+
     try {
       const [studentsResult, activitiesResult] = await Promise.all([
-        supabase.from("students" as any).select("id, first_name, last_name, enrollment_date").eq("tenant_id", currentTenant?.id).order("last_name"),
-        supabase.from("activities" as any).select("*").eq("tenant_id", currentTenant?.id)
+        supabase
+          .from("students" as any)
+          .select("id, first_name, last_name, enrollment_date")
+          .eq("tenant_id", currentTenant.id)
+          .order("last_name"),
+        supabase
+          .from("activities" as any)
+          .select("id, name, amount, activity_date")
+          .eq("tenant_id", currentTenant.id)
+          .order("name"),
       ]);
 
       if (studentsResult.error) throw studentsResult.error;
       if (activitiesResult.error) throw activitiesResult.error;
 
-      const mappedStudents = (studentsResult.data || []).map(s => ({
-        ...s,
-        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
-      }));
-
-      setStudents(mappedStudents);
+      setStudents(
+        (studentsResult.data || []).map((student) => ({
+          id: student.id,
+          enrollment_date: student.enrollment_date,
+          name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
+        })),
+      );
       setActivities(activitiesResult.data || []);
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("Error loading debt report data:", error);
       toast.error("Error al cargar datos");
     }
   };
 
-  const calculateMonthlyDebts = async (): Promise<MonthlyDebt[]> => {
-    const studentsDataResult = await supabase
-      .from("students")
-      .select("id, first_name, last_name, enrollment_date")
-      .eq("tenant_id", currentTenant?.id);
-
-    if (studentsDataResult.error) throw studentsDataResult.error;
-    const studentsData = studentsDataResult.data || [];
-    const studentIds = studentsData.map(s => s.id).filter(id => id !== null && id !== undefined);
-
-    const [paymentsResult, applicationsResult] = await Promise.all([
-      studentIds.length > 0
-        ? supabase.from("payments")
-            .select("student_id, concept, amount, activity_id, redirected_amount, month_period")
-            .eq("tenant_id", currentTenant?.id)
-            .in("student_id", studentIds as any)
-            .then(res => res, err => ({ data: [], error: err }))
-        : Promise.resolve({ data: [], error: null }),
-      studentIds.length > 0
-        ? supabase.from("credit_applications")
-            .select("student_id, amount, reversed_amount, target_type, target_month")
-            .eq("tenant_id", currentTenant?.id)
-            .in("student_id", studentIds as any)
-            .then(res => res, err => ({ data: [], error: err }))
-        : Promise.resolve({ data: [], error: null })
-    ]);
-
-    const debts: MonthlyDebt[] = [];
-
-    const studentsToProcess = scope === "individual" && selectedStudent
-      ? students.filter(s => String(s.id) === selectedStudent)
+  const getStudentsToProcess = () =>
+    scope === "individual" && selectedStudent
+      ? students.filter((student) => String(student.id) === selectedStudent)
       : students;
 
-    studentsToProcess.forEach(student => {
-      // Obtener fecha de matrícula
-      const studentData = studentsData.find(s => sameId(s.id, student.id));
-      if (!studentData) return;
+  const getActivitiesToProcess = () =>
+    selectedActivity === "all"
+      ? activities
+      : activities.filter((activity) => String(activity.id) === selectedActivity);
 
+  const calculateMonthlyDebts = async (): Promise<MonthlyDebt[]> => {
+    const studentsToProcess = getStudentsToProcess();
+    const studentIds = studentsToProcess.map((student) => student.id);
+
+    if (studentIds.length === 0) return [];
+
+    const [paymentsResult, applicationsResult] = await Promise.all([
+      supabase
+        .from("payments")
+        .select("student_id, concept, amount, activity_id, redirected_amount, month_period")
+        .eq("tenant_id", currentTenant?.id)
+        .in("student_id", studentIds as any),
+      supabase
+        .from("credit_applications")
+        .select("student_id, amount, reversed_amount, target_type, target_month")
+        .eq("tenant_id", currentTenant?.id)
+        .in("student_id", studentIds as any),
+    ]);
+
+    if (paymentsResult.error) throw paymentsResult.error;
+    if (applicationsResult.error) throw applicationsResult.error;
+
+    return studentsToProcess.flatMap((student) => {
       const monthItems = calculateMonthlyDebtItems({
-        enrollmentDate: studentData.enrollment_date,
+        enrollmentDate: student.enrollment_date,
         monthlyFee,
-        payments: (paymentsResult.data || []).filter(p => sameId(p.student_id, student.id)),
-        applications: (applicationsResult.data || []).filter(a => sameId(a.student_id, student.id)),
+        payments: (paymentsResult.data || []).filter((payment) => sameId(payment.student_id, student.id)),
+        applications: (applicationsResult.data || []).filter((application) => sameId(application.student_id, student.id)),
         period: monthlyPeriod,
       });
 
       const totalOwed = monthItems.reduce((sum, item) => sum + item.due, 0);
-      if (totalOwed > 0) {
-        debts.push({
-          student_name: student.name,
-          total_owed: totalOwed,
-          months_owed: monthItems.filter(item => item.due > 0).map(item => item.month),
-        });
+      if (totalOwed <= 0) {
+        return [];
       }
-    });
 
-    return debts;
+      return [{
+        student_name: student.name,
+        total_owed: totalOwed,
+        months_owed: monthItems.filter((item) => item.due > 0).map((item) => item.month),
+      }];
+    });
   };
 
   const calculateActivityDebts = async (): Promise<ActivityDebt[]> => {
-    const studentIds = students.map(s => s.id).filter(id => id !== null && id !== undefined);
+    const studentsToProcess = getStudentsToProcess();
+    const activitiesToProcess = getActivitiesToProcess();
+    const studentIds = studentsToProcess.map((student) => student.id);
+
+    if (studentIds.length === 0 || activitiesToProcess.length === 0) return [];
 
     const [paymentsResult, exclusionsResult, applicationsResult] = await Promise.all([
-      studentIds.length > 0
-        ? supabase.from("payments")
-            .select("student_id, concept, amount, activity_id, redirected_amount")
-            .eq("tenant_id", currentTenant?.id)
-            .in("student_id", studentIds as any)
-            .then(res => res, err => ({ data: [], error: err }))
-        : Promise.resolve({ data: [], error: null }),
-      supabase.from("activity_exclusions")
+      supabase
+        .from("payments")
+        .select("student_id, concept, amount, activity_id, redirected_amount")
+        .eq("tenant_id", currentTenant?.id)
+        .in("student_id", studentIds as any),
+      supabase
+        .from("activity_exclusions")
         .select("student_id, activity_id")
         .eq("tenant_id", currentTenant?.id)
-        .in("student_id", studentIds as any)
-        .then(res => res, err => ({ data: [], error: err })),
-      studentIds.length > 0
-        ? supabase.from("credit_applications")
-            .select("student_id, amount, reversed_amount, target_type, target_activity_id")
-            .eq("tenant_id", currentTenant?.id)
-            .eq("target_type", "activity")
-            .in("student_id", studentIds as any)
-            .then(res => res, err => ({ data: [], error: err }))
-        : Promise.resolve({ data: [], error: null }),
+        .in("student_id", studentIds as any),
+      supabase
+        .from("credit_applications")
+        .select("student_id, amount, reversed_amount, target_type, target_activity_id")
+        .eq("tenant_id", currentTenant?.id)
+        .eq("target_type", "activity")
+        .in("student_id", studentIds as any),
     ]);
+
+    if (paymentsResult.error) throw paymentsResult.error;
+    if (exclusionsResult.error) throw exclusionsResult.error;
+    if (applicationsResult.error) throw applicationsResult.error;
 
     const payments = paymentsResult.data || [];
     const exclusions = exclusionsResult.data || [];
     const applications = applicationsResult.data || [];
-    const debts: ActivityDebt[] = [];
+    const exclusionMap = new Set(exclusions.map((item) => `${item.student_id}-${item.activity_id}`));
 
-    const exclusionMap = new Set(
-      exclusions.map(e => `${e.student_id}-${e.activity_id}`)
-    );
-
-    const studentsToProcess = scope === "individual" && selectedStudent
-      ? students.filter(s => String(s.id) === selectedStudent)
-      : students;
-
-    studentsToProcess.forEach(student => {
-      activities.forEach(activity => {
-        const key = `${student.id}-${activity.id}`;
-        const isExcluded = exclusionMap.has(key);
-
-        // Check if student was enrolled at activity date
-        const wasNotEnrolled = activity.activity_date &&
-          student.enrollment_date &&
-          parseDateFromDB(student.enrollment_date) > parseDateFromDB(activity.activity_date);
-
-        if (!isExcluded && !wasNotEnrolled) {
-          const activityPayments = payments.filter(p =>
-            sameId(p.student_id, student.id) && (
-              sameId(p.activity_id, activity.id) ||
-              p.concept?.toUpperCase().includes(activity.name.toUpperCase())
-            )
-          );
-
-          const totalPaid = activityPayments.reduce((sum, p) => sum + getNetPaymentAmount(p), 0);
-          const appliedCredit = getAppliedCreditForActivity(
-            applications.filter(app => sameId(app.student_id, student.id)),
-            activity.id,
-          );
-          const amountOwed = Math.max(0, activity.amount - totalPaid - appliedCredit);
-
-          if (amountOwed > 0) {
-            debts.push({
-              student_name: student.name,
-              activity_name: activity.name,
-              amount_owed: amountOwed
-            });
-          }
+    return studentsToProcess.flatMap((student) =>
+      activitiesToProcess.flatMap((activity) => {
+        if (exclusionMap.has(`${student.id}-${activity.id}`)) {
+          return [];
         }
+
+        const wasNotEnrolled = activity.activity_date
+          && parseDateFromDB(student.enrollment_date) > parseDateFromDB(activity.activity_date);
+
+        if (wasNotEnrolled) {
+          return [];
+        }
+
+        const relatedPayments = payments.filter((payment) =>
+          sameId(payment.student_id, student.id)
+          && (
+            sameId(payment.activity_id, activity.id)
+            || String(payment.concept || "").toUpperCase().includes(activity.name.toUpperCase())
+          ),
+        );
+
+        const totalPaid = relatedPayments.reduce((sum, payment) => sum + getNetPaymentAmount(payment), 0);
+        const appliedCredit = getAppliedCreditForActivity(
+          applications.filter((application) => sameId(application.student_id, student.id)),
+          activity.id,
+        );
+        const amountOwed = Math.max(0, Number(activity.amount || 0) - totalPaid - appliedCredit);
+
+        if (amountOwed <= 0) {
+          return [];
+        }
+
+        return [{
+          student_name: student.name,
+          activity_id: activity.id,
+          activity_name: activity.name,
+          amount_owed: amountOwed,
+        }];
+      }),
+    );
+  };
+
+  const calculateReportData = async () => {
+    const [monthlyDebts, activityDebts] = await Promise.all([
+      reportType === "activities" ? Promise.resolve([] as MonthlyDebt[]) : calculateMonthlyDebts(),
+      reportType === "monthly" ? Promise.resolve([] as ActivityDebt[]) : calculateActivityDebts(),
+    ]);
+
+    return { monthlyDebts, activityDebts };
+  };
+
+  const buildStudentsWithDebt = (monthlyDebts: MonthlyDebt[], activityDebts: ActivityDebt[]) => {
+    const studentsWithDebt = new Map<string, StudentDebtCertificate>();
+
+    monthlyDebts.forEach((debt) => {
+      studentsWithDebt.set(debt.student_name, {
+        monthly: debt.total_owed,
+        months: debt.months_owed,
+        activities: [],
       });
     });
 
-    return debts;
+    activityDebts.forEach((debt) => {
+      const existing = studentsWithDebt.get(debt.student_name) || {
+        monthly: 0,
+        months: [],
+        activities: [],
+      };
+
+      existing.activities.push({
+        id: debt.activity_id,
+        name: debt.activity_name,
+        amount: debt.amount_owed,
+      });
+
+      studentsWithDebt.set(debt.student_name, existing);
+    });
+
+    return studentsWithDebt;
   };
 
   const handleConsultDebts = async () => {
@@ -234,23 +280,12 @@ export default function DebtReports() {
       toast.error("Error: No se ha identificado el curso actual");
       return;
     }
+
     try {
       setLoading(true);
-
-      if (reportType === "monthly" || reportType === "both") {
-        const monthlyDebts = await calculateMonthlyDebts();
-        setPreviewMonthlyDebts(monthlyDebts);
-      } else {
-        setPreviewMonthlyDebts([]);
-      }
-
-      if (reportType === "activities" || reportType === "both") {
-        const activityDebts = await calculateActivityDebts();
-        setPreviewActivityDebts(activityDebts);
-      } else {
-        setPreviewActivityDebts([]);
-      }
-
+      const { monthlyDebts, activityDebts } = await calculateReportData();
+      setPreviewMonthlyDebts(monthlyDebts);
+      setPreviewActivityDebts(activityDebts);
       setShowPreview(true);
       toast.success("Deudas consultadas exitosamente");
     } catch (error) {
@@ -264,329 +299,130 @@ export default function DebtReports() {
   const generatePDF = async () => {
     try {
       setLoading(true);
+      const { monthlyDebts, activityDebts } = await calculateReportData();
       const doc = new jsPDF();
       const pdfBranding = getPdfBranding(currentTenant);
-
       const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
-      // Header background with subtle color
       doc.setFillColor(240, 245, 250);
-      doc.rect(0, 0, 210, 36, 'F');
+      doc.rect(0, 0, 210, 36, "F");
 
-      // Add header logo
       if (logoImg) {
-        doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
+        doc.addImage(logoImg, "PNG", 15, 8, 22, 22);
       }
 
-      // Title section
       doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(30, 58, 138); // Dark blue
+      doc.setTextColor(30, 58, 138);
       doc.text("INFORME DE DEUDAS", 105, 18, { align: "center" });
 
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(71, 85, 105); // Slate gray
-
+      doc.setTextColor(71, 85, 105);
       doc.text(pdfBranding.reportSubtitle, 105, 24, { align: "center" });
       doc.text(`Fecha: ${new Date().toLocaleDateString("es-CL")}`, 105, 28, { align: "center" });
 
-      // Horizontal line separator with color
-      doc.setDrawColor(59, 130, 246); // Blue
-      doc.setLineWidth(0.5);
-      doc.line(15, 34, 195, 34);
-
       let yPos = 42;
 
-      // Combined report (both monthly and activities)
-      if (reportType === "both") {
-        const monthlyCreditsUsed = await calculateMonthlyCreditsUsed();
-        const [monthlyDebts, activityDebts] = await Promise.all([
-          calculateMonthlyDebts(),
-          calculateActivityDebts(monthlyCreditsUsed)
-        ]);
+      if (monthlyDebts.length > 0) {
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 58, 138);
+        doc.text("CUOTAS MENSUALES ADEUDADAS", 15, yPos);
+        yPos += 8;
 
-        // Combine debts by student with detailed info
-        const combinedDebts = new Map<string, {
-          monthlyOwed: number;
-          monthsOwed: string[];
-          activityOwed: number;
-          activities: { name: string; amount: number }[];
-          total: number;
-        }>();
-
-        monthlyDebts.forEach(debt => {
-          combinedDebts.set(debt.student_name, {
-            monthlyOwed: debt.total_owed,
-            monthsOwed: debt.months_owed,
-            activityOwed: 0,
-            activities: [],
-            total: debt.total_owed
-          });
-        });
-
-        activityDebts.forEach(debt => {
-          const existing = combinedDebts.get(debt.student_name);
-          if (existing) {
-            existing.activityOwed += debt.amount_owed;
-            existing.activities.push({ name: debt.activity_name, amount: debt.amount_owed });
-            existing.total += debt.amount_owed;
-          } else {
-            combinedDebts.set(debt.student_name, {
-              monthlyOwed: 0,
-              monthsOwed: [],
-              activityOwed: debt.amount_owed,
-              activities: [{ name: debt.activity_name, amount: debt.amount_owed }],
-              total: debt.amount_owed
-            });
-          }
-        });
-
-        if (combinedDebts.size > 0) {
-          // Section title with background
-          doc.setFillColor(237, 242, 247);
-          doc.rect(15, yPos - 3, 180, 7, 'F');
-
-          doc.setFontSize(11);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 58, 138);
-          doc.text("DEUDAS TOTALES POR ALUMNO", 17, yPos + 1);
-          yPos += 8;
-
-          doc.setFontSize(9);
-
-          let index = 0;
-          combinedDebts.forEach((debt, studentName) => {
-            const detailLines = monthlyDetailType === "detailed"
-              ? (debt.monthsOwed.length > 0 ? 1 : 0) + (debt.activities.length > 0 ? 1 : 0) + 1
-              : 1;
-            const itemHeight = 4 + (detailLines * 3.5) + 3;
-
-            if (yPos > 270) {
-              doc.addPage();
-              yPos = 20;
-            }
-
-            // Subtle alternating background
-            if (index % 2 === 0) {
-              doc.setFillColor(249, 250, 251);
-              doc.rect(17, yPos - 2, 176, itemHeight + 2, 'F');
-            }
-
-            // Student name
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(51, 65, 85);
-            doc.text(`${index + 1}. ${studentName}`, 18, yPos);
-            yPos += 4;
-
-            if (monthlyDetailType === "summary") {
-              // Summary mode
-              doc.setFont("helvetica", "normal");
-              doc.setTextColor(71, 85, 105);
-              doc.text(`Cuotas: $${debt.monthlyOwed.toLocaleString("es-CL")} | Actividades: $${debt.activityOwed.toLocaleString("es-CL")}`, 23, yPos);
-              yPos += 3.5;
-            } else {
-              // Detailed mode
-              doc.setFont("helvetica", "normal");
-              doc.setTextColor(71, 85, 105);
-
-              if (debt.monthsOwed.length > 0) {
-                doc.text(`Cuotas (${debt.monthsOwed.join(", ")}): $${debt.monthlyOwed.toLocaleString("es-CL")}`, 23, yPos);
-                yPos += 3.5;
-              }
-
-              if (debt.activities.length > 0) {
-                const activitiesText = debt.activities.map(a => a.name).join(", ");
-                doc.text(`Actividades (${activitiesText}): $${debt.activityOwed.toLocaleString("es-CL")}`, 23, yPos);
-                yPos += 3.5;
-              }
-            }
-
-            // Total
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(220, 38, 38);
-            doc.text(`Total adeudado: $${debt.total.toLocaleString("es-CL")}`, 23, yPos);
-            yPos += 6;
-
-            index++;
-          });
-
-          yPos += 3;
-        }
-      }
-
-      // Monthly debts only
-      else if (reportType === "monthly") {
-        const monthlyDebts = await calculateMonthlyDebts();
-
-        if (monthlyDebts.length > 0) {
-          // Section title with background
-          doc.setFillColor(237, 242, 247);
-          doc.rect(15, yPos - 3, 180, 7, 'F');
-
-          doc.setFontSize(11);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 58, 138);
-          doc.text("CUOTAS MENSUALES ADEUDADAS", 17, yPos + 1);
-          yPos += 8;
-
-          doc.setFontSize(9);
-          doc.setFont("helvetica", "normal");
-
-          monthlyDebts.forEach((debt, index) => {
-            if (yPos > 275) {
-              doc.addPage();
-              yPos = 20;
-            }
-
-            // Subtle alternating background
-            if (index % 2 === 0) {
-              doc.setFillColor(249, 250, 251);
-              doc.rect(17, yPos - 2, 176, monthlyDetailType === "summary" ? 7 : 10, 'F');
-            }
-
-            // Student name with number
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(51, 65, 85);
-            doc.text(`${index + 1}. ${debt.student_name}`, 18, yPos);
-            yPos += 4;
-
-            // Debt details
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(71, 85, 105);
-            if (monthlyDetailType === "summary") {
-              doc.setTextColor(220, 38, 38);
-              doc.text(`Monto adeudado: $${debt.total_owed.toLocaleString("es-CL")}`, 23, yPos);
-              yPos += 5;
-            } else {
-              doc.setTextColor(71, 85, 105);
-              doc.text(`Meses: ${debt.months_owed.join(", ")}`, 23, yPos);
-              yPos += 3;
-              doc.setFont("helvetica", "bold");
-              doc.setTextColor(220, 38, 38);
-              doc.text(`Total: $${debt.total_owed.toLocaleString("es-CL")}`, 23, yPos);
-              yPos += 5;
-              doc.setFont("helvetica", "normal");
-            }
-          });
-
-          yPos += 3;
-        }
-      }
-
-      // Activity debts only
-      else if (reportType === "activities") {
-        const monthlyCreditsUsed = await calculateMonthlyCreditsUsed();
-        const activityDebts = await calculateActivityDebts(monthlyCreditsUsed);
-
-        if (activityDebts.length > 0) {
-          if (yPos > 255) {
+        monthlyDebts.forEach((debt, index) => {
+          if (yPos > 275) {
             doc.addPage();
             yPos = 20;
           }
 
-          // Section title with background
-          doc.setFillColor(237, 242, 247);
-          doc.rect(15, yPos - 3, 180, 7, 'F');
-
-          doc.setFontSize(11);
+          doc.setFontSize(9);
           doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 58, 138);
-          doc.text("ACTIVIDADES ADEUDADAS", 17, yPos + 1);
-          yPos += 8;
+          doc.setTextColor(51, 65, 85);
+          doc.text(`${index + 1}. ${debt.student_name}`, 17, yPos);
+          yPos += 4;
+
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(71, 85, 105);
+          if (monthlyDetailType === "detailed") {
+            doc.text(`Meses: ${debt.months_owed.join(", ")}`, 22, yPos);
+            yPos += 4;
+          }
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(220, 38, 38);
+          doc.text(`Monto adeudado: $${debt.total_owed.toLocaleString("es-CL")}`, 22, yPos);
+          yPos += 7;
+        });
+      }
+
+      if (activityDebts.length > 0) {
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 58, 138);
+        doc.text("ACTIVIDADES ADEUDADAS", 15, yPos);
+        yPos += 8;
+
+        const groupedByActivity = activityDebts.reduce<Record<string, ActivityDebt[]>>((acc, debt) => {
+          acc[debt.activity_name] = [...(acc[debt.activity_name] || []), debt];
+          return acc;
+        }, {});
+
+        Object.entries(groupedByActivity).forEach(([activityName, debts]) => {
+          if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+          }
 
           doc.setFontSize(9);
-          doc.setFont("helvetica", "normal");
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 64, 175);
+          doc.text(activityName, 17, yPos);
+          yPos += 5;
 
-          // Group by activity
-          const grouped = activityDebts.reduce((acc, debt) => {
-            if (!acc[debt.activity_name]) {
-              acc[debt.activity_name] = [];
-            }
-            acc[debt.activity_name].push(debt);
-            return acc;
-          }, {} as Record<string, ActivityDebt[]>);
-
-          Object.entries(grouped).forEach(([activityName, debts]) => {
+          debts.forEach((debt) => {
             if (yPos > 275) {
               doc.addPage();
               yPos = 20;
             }
 
-            // Activity name with subtle background
-            doc.setFillColor(243, 244, 246);
-            doc.rect(17, yPos - 2, 176, 5, 'F');
-
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(30, 64, 175);
-            doc.text(activityName, 18, yPos);
-            yPos += 5;
-
-            // Students owing this activity
             doc.setFont("helvetica", "normal");
             doc.setTextColor(71, 85, 105);
-            debts.forEach(debt => {
-              if (yPos > 278) {
-                doc.addPage();
-                yPos = 20;
-              }
-              doc.setTextColor(71, 85, 105);
-              doc.text(`  • ${debt.student_name}: `, 23, yPos, { align: 'left' });
-              doc.setTextColor(220, 38, 38);
-              doc.text(`$${debt.amount_owed.toLocaleString("es-CL")}`, 85, yPos);
-              yPos += 3.5;
-            });
-
-            yPos += 2;
+            doc.text(`• ${debt.student_name}`, 22, yPos);
+            doc.setTextColor(220, 38, 38);
+            doc.text(`$${debt.amount_owed.toLocaleString("es-CL")}`, 190, yPos, { align: "right" });
+            yPos += 4;
           });
-        }
+
+          yPos += 3;
+        });
       }
 
-      // Add signature at the bottom of last page
       const pageHeight = doc.internal.pageSize.getHeight();
-      const pageWidth = doc.internal.pageSize.getWidth();
-
-      // Reserve space for signature (45mm from bottom)
-      const signatureSpace = 45;
-
-      // Check if there's enough space for signature on current page
-      if (yPos > pageHeight - signatureSpace - 5) {
-        // Only add new page if we're already far down the page
-        // If content is minimal, keep signature on same page
-        if (yPos > 100) {
-          doc.addPage();
-          yPos = 20;
-        }
-      }
-
-      // Position signature at bottom
       const signatureYPos = pageHeight - 45;
-
-      // Add bottom separator line with color
-      doc.setDrawColor(59, 130, 246); // Blue
-      doc.setLineWidth(0.5);
+      doc.setDrawColor(59, 130, 246);
       doc.line(15, signatureYPos, 195, signatureYPos);
-
+      doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(51, 65, 85);
-      doc.setFontSize(10);
       doc.text(pdfBranding.signatureCourseLine, 190, signatureYPos + 10, { align: "right" });
-      doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
       doc.text(pdfBranding.signatureInstitutionLine, 190, signatureYPos + 16, { align: "right" });
 
-      // Save PDF with appropriate name
-      let fileName = "Informe_Deudas";
-      if (reportType === "activities") {
-        fileName = "Informe_Actividades_Adeudadas";
-      } else if (reportType === "monthly") {
-        fileName = "Informe_Cuotas_Adeudadas";
-      } else {
-        fileName = "Informe_Deudas_General";
-      }
-      fileName += `_${new Date().toISOString().split('T')[0]}.pdf`;
+      const suffix = reportType === "activities"
+        ? "Actividades_Adeudadas"
+        : reportType === "monthly"
+          ? "Cuotas_Adeudadas"
+          : "Deudas_General";
 
-      doc.save(fileName);
+      doc.save(`Informe_${suffix}_${new Date().toISOString().split("T")[0]}.pdf`);
       toast.success("Informe PDF generado exitosamente");
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -596,58 +432,11 @@ export default function DebtReports() {
     }
   };
 
-  const handleGenerateDebtCertificates = async () => {
-    setLoading(true);
-    try {
-      // Calcular créditos usados primero
-      const monthlyCreditsUsed = await calculateMonthlyCreditsUsed();
-
-      // Calcular deudas de todos los estudiantes
-      const monthlyDebts = await calculateMonthlyDebts();
-      const activityDebts = await calculateActivityDebts(monthlyCreditsUsed);
-
-      // Filtrar solo estudiantes con deuda
-      const studentsWithDebt = new Map<string, { monthly: number; activities: { name: string; amount: number }[]; months: string[] }>();
-
-      monthlyDebts.forEach(debt => {
-        if (debt.total_owed > 0) {
-          studentsWithDebt.set(debt.student_name, {
-            monthly: debt.total_owed,
-            activities: [],
-            months: debt.months_owed
-          });
-        }
-      });
-
-      activityDebts.forEach(debt => {
-        if (debt.amount_owed > 0) {
-          const existing = studentsWithDebt.get(debt.student_name) || { monthly: 0, activities: [], months: [] };
-          existing.activities.push({ name: debt.activity_name, amount: debt.amount_owed });
-          studentsWithDebt.set(debt.student_name, existing);
-        }
-      });
-
-      if (studentsWithDebt.size === 0) {
-        toast.info("No hay estudiantes con deudas pendientes");
-        setLoading(false);
-        return;
-      }
-
-      // Generar PDF con certificados
-      await generateDebtCertificatesPDF(studentsWithDebt);
-
-      toast.success(`Certificados generados para ${studentsWithDebt.size} estudiante(s)`);
-    } catch (error) {
-      console.error("Error generating certificates:", error);
-      toast.error("Error al generar certificados");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generateDebtCertificatesPDF = async (studentsWithDebt: Map<string, { monthly: number; activities: { name: string; amount: number }[]; months: string[] }>) => {
+  const generateDebtCertificatesPDF = async (studentsWithDebt: Map<string, StudentDebtCertificate>) => {
     const doc = new jsPDF();
     const currentDate = new Date();
+    const pdfBranding = getPdfBranding(currentTenant);
+    const logoImg = await loadImageElement(pdfBranding.logoUrl);
     let isFirstPage = true;
 
     for (const [studentName, debts] of studentsWithDebt.entries()) {
@@ -659,86 +448,61 @@ export default function DebtReports() {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
-      let yPos = 15;
+      let yPos = 18;
 
-      // Logo
-      try {
-        const img = await loadImageElement(pdfBranding.logoUrl);
-        if (img) {
-          doc.addImage(img, "PNG", margin, yPos, 25, 25);
-        }
-      } catch (error) {
-        console.error("Error loading logo:", error);
+      if (logoImg) {
+        doc.addImage(logoImg, "PNG", margin, yPos - 3, 25, 25);
       }
 
-      // Título
       doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.text("CERTIFICADO DE DEUDA", pageWidth / 2, yPos + 10, { align: "center" });
-
-      yPos += 30;
+      doc.text("CERTIFICADO DE DEUDA", pageWidth / 2, yPos + 8, { align: "center" });
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.text(`Fecha de emisión: ${currentDate.toLocaleDateString("es-CL")}`, pageWidth - margin, yPos, { align: "right" });
+      doc.text(`Fecha de emision: ${currentDate.toLocaleDateString("es-CL")}`, pageWidth - margin, yPos + 8, { align: "right" });
 
-      yPos += 15;
-
-      // Encabezado del estudiante
+      yPos += 32;
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.text("APODERADO DE:", margin, yPos);
       doc.setFont("helvetica", "normal");
       doc.text(studentName, margin + 40, yPos);
 
-      yPos += 15;
-
-      // Detalle de deudas
+      yPos += 14;
       doc.setFont("helvetica", "bold");
       doc.text("DETALLE DE DEUDAS PENDIENTES:", margin, yPos);
       yPos += 10;
 
-      // Cuotas mensuales
       if (debts.monthly > 0) {
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.text("Cuotas Mensuales:", margin + 5, yPos);
+        doc.text("Cuotas Mensuales", margin + 5, yPos);
         yPos += 7;
-
         if (debts.months.length > 0) {
-          const monthsText = `  Meses: ${debts.months.join(", ")}`;
-          const splitMonths = doc.splitTextToSize(monthsText, pageWidth - margin * 2 - 10);
-          doc.text(splitMonths, margin + 5, yPos);
-          yPos += splitMonths.length * 5;
+          const monthText = doc.splitTextToSize(`Meses: ${debts.months.join(", ")}`, pageWidth - margin * 2 - 10);
+          doc.text(monthText, margin + 10, yPos);
+          yPos += monthText.length * 5;
         }
-
         doc.setFont("helvetica", "bold");
-        doc.text(`  Monto: $${debts.monthly.toLocaleString("es-CL")}`, margin + 5, yPos);
+        doc.text(`Monto: $${debts.monthly.toLocaleString("es-CL")}`, margin + 10, yPos);
         yPos += 10;
       }
 
-      // Actividades
       if (debts.activities.length > 0) {
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.text("Actividades:", margin + 5, yPos);
+        doc.text("Actividades", margin + 5, yPos);
         yPos += 7;
-
-        debts.activities.forEach(activity => {
-          doc.text(`  • ${activity.name}`, margin + 5, yPos);
-          yPos += 5;
+        debts.activities.forEach((activity) => {
+          doc.text(`• ${activity.name}`, margin + 10, yPos);
           doc.setFont("helvetica", "bold");
-          doc.text(`    Monto: $${activity.amount.toLocaleString("es-CL")}`, margin + 5, yPos);
+          doc.text(`$${activity.amount.toLocaleString("es-CL")}`, pageWidth - margin, yPos, { align: "right" });
           doc.setFont("helvetica", "normal");
-          yPos += 7;
+          yPos += 6;
         });
+        yPos += 4;
       }
 
-      yPos += 5;
-
-      // Total
-      const totalDebt = debts.monthly + debts.activities.reduce((sum, a) => sum + a.amount, 0);
+      const totalDebt = debts.monthly + debts.activities.reduce((sum, activity) => sum + activity.amount, 0);
       doc.setDrawColor(200, 0, 0);
-      doc.setLineWidth(0.5);
       doc.line(margin, yPos, pageWidth - margin, yPos);
       yPos += 8;
 
@@ -750,58 +514,59 @@ export default function DebtReports() {
       doc.setTextColor(0, 0, 0);
 
       yPos += 15;
-      doc.setLineWidth(0.3);
-      doc.setDrawColor(0, 0, 0);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
-
-      // Texto de validez
-      yPos += 10;
+      const validityText = doc.splitTextToSize(
+        `Este certificado refleja el estado de deuda al ${currentDate.toLocaleDateString("es-CL")}.`,
+        pageWidth - margin * 2,
+      );
       doc.setFontSize(9);
       doc.setFont("helvetica", "italic");
-      doc.setTextColor(100);
-      const validityText = `Este certificado tiene validez a la fecha de emisión y refleja el estado de deuda al ${currentDate.toLocaleDateString("es-CL")}.`;
-      const splitText = doc.splitTextToSize(validityText, pageWidth - margin * 2);
-      doc.text(splitText, margin, yPos);
-      yPos += splitText.length * 5 + 10;
+      doc.text(validityText, margin, yPos);
 
-      doc.setTextColor(0, 0, 0);
-
-      // Firma directiva
-      const firmaYPos = pageHeight - 70;
+      const signatureY = pageHeight - 70;
       doc.setLineWidth(0.3);
-      doc.line(pageWidth / 2 - 35, firmaYPos, pageWidth / 2 + 35, firmaYPos);
+      doc.line(pageWidth / 2 - 35, signatureY, pageWidth / 2 + 35, signatureY);
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text(pdfBranding.signatureCourseLine, pageWidth / 2, firmaYPos + 5, { align: "center" });
+      doc.text(pdfBranding.signatureCourseLine, pageWidth / 2, signatureY + 5, { align: "center" });
       doc.setFont("helvetica", "normal");
-      doc.text(pdfBranding.signatureInstitutionLine, pageWidth / 2, firmaYPos + 10, { align: "center" });
+      doc.text(pdfBranding.signatureInstitutionLine, pageWidth / 2, signatureY + 10, { align: "center" });
 
-      // Espacio para firma del apoderado
-      const apoderadoYPos = pageHeight - 35;
-      doc.setLineWidth(0.3);
-      doc.line(margin + 10, apoderadoYPos, pageWidth / 2 - 10, apoderadoYPos);
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-      const firmaApoderadoX = margin + 10 + (pageWidth / 2 - 10 - margin - 10) / 2;
-      doc.text("Firma del Apoderado", firmaApoderadoX, apoderadoYPos + 5, { align: "center" });
-
-      doc.line(pageWidth / 2 + 10, apoderadoYPos, pageWidth - margin - 10, apoderadoYPos);
-      const fechaRecepcionX = pageWidth / 2 + 10 + (pageWidth - margin - 10 - pageWidth / 2 - 10) / 2;
-      doc.text("Fecha de Recepción", fechaRecepcionX, apoderadoYPos + 5, { align: "center" });
+      const parentSignY = pageHeight - 35;
+      doc.line(margin + 10, parentSignY, pageWidth / 2 - 10, parentSignY);
+      doc.line(pageWidth / 2 + 10, parentSignY, pageWidth - margin - 10, parentSignY);
+      doc.text("Firma del Apoderado", (margin + pageWidth / 2) / 2, parentSignY + 5, { align: "center" });
+      doc.text("Fecha de Recepcion", (pageWidth / 2 + pageWidth - margin) / 2, parentSignY + 5, { align: "center" });
     }
 
     doc.save(`Certificados_Deuda_${currentDate.toLocaleDateString("es-CL").replace(/\//g, "-")}.pdf`);
   };
 
+  const handleGenerateDebtCertificates = async () => {
+    try {
+      setLoading(true);
+      const { monthlyDebts, activityDebts } = await calculateReportData();
+      const studentsWithDebt = buildStudentsWithDebt(monthlyDebts, activityDebts);
+
+      if (studentsWithDebt.size === 0) {
+        toast.info("No hay estudiantes con deudas pendientes");
+        return;
+      }
+
+      await generateDebtCertificatesPDF(studentsWithDebt);
+      toast.success(`Certificados generados para ${studentsWithDebt.size} estudiante(s)`);
+    } catch (error) {
+      console.error("Error generating certificates:", error);
+      toast.error("Error al generar certificados");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 space-y-6">
-      <div className="flex items-center gap-4">
-        <div>
-          <h1 className="text-4xl font-bold">Reportes de Deudas</h1>
-          <p className="text-muted-foreground">
-            Genere informes de deudas para compartir
-          </p>
-        </div>
+      <div>
+        <h1 className="text-4xl font-bold">Reportes de Deudas</h1>
+        <p className="text-muted-foreground">Genere informes de deudas para compartir</p>
       </div>
 
       <Card>
@@ -812,7 +577,7 @@ export default function DebtReports() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label>Tipo de Deuda</Label>
-              <Select value={reportType} onValueChange={(value: any) => setReportType(value)}>
+              <Select value={reportType} onValueChange={(value: "monthly" | "activities" | "both") => setReportType(value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -826,7 +591,7 @@ export default function DebtReports() {
 
             <div className="space-y-2">
               <Label>Alcance</Label>
-              <Select value={scope} onValueChange={(value: any) => setScope(value)}>
+              <Select value={scope} onValueChange={(value: "general" | "individual") => setScope(value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -849,11 +614,30 @@ export default function DebtReports() {
               </div>
             )}
 
+            {(reportType === "activities" || reportType === "both") && (
+              <div className="space-y-2">
+                <Label>Actividad</Label>
+                <Select value={selectedActivity} onValueChange={setSelectedActivity}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las actividades</SelectItem>
+                    {activities.map((activity) => (
+                      <SelectItem key={activity.id} value={String(activity.id)}>
+                        {activity.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {(reportType === "monthly" || reportType === "both") && (
               <>
                 <div className="space-y-2">
                   <Label>Detalle de Cuotas</Label>
-                  <Select value={monthlyDetailType} onValueChange={(value: any) => setMonthlyDetailType(value)}>
+                  <Select value={monthlyDetailType} onValueChange={(value: "summary" | "detailed") => setMonthlyDetailType(value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -866,7 +650,7 @@ export default function DebtReports() {
 
                 <div className="space-y-2">
                   <Label>Período de Cuotas</Label>
-                  <Select value={monthlyPeriod} onValueChange={(value: any) => setMonthlyPeriod(value)}>
+                  <Select value={monthlyPeriod} onValueChange={(value: "current" | "year") => setMonthlyPeriod(value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -891,7 +675,7 @@ export default function DebtReports() {
             </Button>
             <Button
               onClick={handleGenerateDebtCertificates}
-              disabled={loading}
+              disabled={loading || (scope === "individual" && !selectedStudent)}
               variant="secondary"
               className="w-full sm:flex-1"
             >
@@ -908,17 +692,10 @@ export default function DebtReports() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
               <div>
                 <CardTitle className="text-base md:text-xl">Vista Previa de Deudas</CardTitle>
-                <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                  Revise las deudas antes de generar el PDF
-                </p>
+                <p className="text-xs md:text-sm text-muted-foreground mt-1">Revise las deudas antes de generar el PDF</p>
               </div>
               {(previewMonthlyDebts.length > 0 || previewActivityDebts.length > 0) && (
-                <Button
-                  onClick={generatePDF}
-                  disabled={loading}
-                  size="sm"
-                  className="h-8 md:h-10 text-xs md:text-sm"
-                >
+                <Button onClick={generatePDF} disabled={loading} size="sm" className="h-8 md:h-10 text-xs md:text-sm">
                   <FileText className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
                   {loading ? "Generando..." : "Generar PDF"}
                 </Button>
@@ -928,7 +705,7 @@ export default function DebtReports() {
           <CardContent>
             {previewMonthlyDebts.length === 0 && previewActivityDebts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No hay deudas pendientes según los criterios seleccionados
+                No hay deudas pendientes segun los criterios seleccionados
               </div>
             ) : (
               <div className="space-y-6">
@@ -945,24 +722,14 @@ export default function DebtReports() {
                       </TableHeader>
                       <TableBody>
                         {previewMonthlyDebts.map((debt, index) => (
-                          <TableRow key={index}>
+                          <TableRow key={`${debt.student_name}-${index}`}>
                             <TableCell className="font-medium">{debt.student_name}</TableCell>
-                            {monthlyDetailType === "detailed" && (
-                              <TableCell>{debt.months_owed.join(", ")}</TableCell>
-                            )}
+                            {monthlyDetailType === "detailed" && <TableCell>{debt.months_owed.join(", ")}</TableCell>}
                             <TableCell className="text-right font-semibold text-red-600">
                               ${debt.total_owed.toLocaleString("es-CL")}
                             </TableCell>
                           </TableRow>
                         ))}
-                        <TableRow className="bg-red-50 font-bold">
-                          <TableCell colSpan={monthlyDetailType === "detailed" ? 2 : 1}>
-                            TOTAL
-                          </TableCell>
-                          <TableCell className="text-right text-red-600">
-                            ${previewMonthlyDebts.reduce((sum, d) => sum + d.total_owed, 0).toLocaleString("es-CL")}
-                          </TableCell>
-                        </TableRow>
                       </TableBody>
                     </Table>
                   </div>
@@ -981,7 +748,7 @@ export default function DebtReports() {
                       </TableHeader>
                       <TableBody>
                         {previewActivityDebts.map((debt, index) => (
-                          <TableRow key={index}>
+                          <TableRow key={`${debt.student_name}-${debt.activity_id}-${index}`}>
                             <TableCell className="font-medium">{debt.student_name}</TableCell>
                             <TableCell>{debt.activity_name}</TableCell>
                             <TableCell className="text-right font-semibold text-red-600">
@@ -989,12 +756,6 @@ export default function DebtReports() {
                             </TableCell>
                           </TableRow>
                         ))}
-                        <TableRow className="bg-red-50 font-bold">
-                          <TableCell colSpan={2}>TOTAL</TableCell>
-                          <TableCell className="text-right text-red-600">
-                            ${previewActivityDebts.reduce((sum, d) => sum + d.amount_owed, 0).toLocaleString("es-CL")}
-                          </TableCell>
-                        </TableRow>
                       </TableBody>
                     </Table>
                   </div>
@@ -1012,10 +773,10 @@ export default function DebtReports() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>• Configure el tipo de deuda que desea informar (cuotas, actividades o ambas)</p>
           <p>• Seleccione si desea un informe general o de un estudiante específico</p>
-          <p>• Para cuotas mensuales, elija entre resumen total o desglose por meses</p>
+          <p>• Para actividades, puede elegir todas o una actividad puntual</p>
           <p>• Consulte las deudas para ver una vista previa antes de generar el PDF</p>
-          <p>• El informe PDF incluirá solo los estudiantes con deudas pendientes</p>
-          <p>• Puede compartir el PDF generado directamente en WhatsApp</p>
+          <p>• El informe PDF incluirá solo estudiantes con deudas pendientes</p>
+          <p>• Los certificados respetan los mismos filtros aplicados en pantalla</p>
         </CardContent>
       </Card>
     </div>

@@ -14,12 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { formatDateForDisplay } from "@/lib/dateUtils";
-import { Download, Search, X, FileText, Pencil, Trash2 } from "lucide-react";
+import { Download, X, FileText, Pencil, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { generatePaymentReceipt } from "@/lib/receiptGenerator";
 import { useTenant } from "@/contexts/TenantContext";
+import { groupPaymentsForDisplay, type GroupedPayment } from "@/lib/paymentGrouping";
 import {
   Dialog,
   DialogContent,
@@ -48,12 +48,13 @@ interface Payment {
   concept: string;
   month_period: string | null;
   amount: number;
+  activity_id?: string | null;
 }
 
 export default function Income() {
   const { currentTenant } = useTenant();
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
+  const [filteredPayments, setFilteredPayments] = useState<GroupedPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalIncome, setTotalIncome] = useState(0);
   
@@ -65,7 +66,7 @@ export default function Income() {
   const [endDate, setEndDate] = useState("");
 
   // Estados para edición
-  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [editingPayment, setEditingPayment] = useState<GroupedPayment | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editFormData, setEditFormData] = useState({
     payment_date: "",
@@ -75,7 +76,7 @@ export default function Income() {
   });
 
   // Estados para eliminación
-  const [deletingPayment, setDeletingPayment] = useState<Payment | null>(null);
+  const [deletingPayment, setDeletingPayment] = useState<GroupedPayment | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
@@ -121,7 +122,7 @@ export default function Income() {
       if (error) throw error;
 
       setPayments(data || []);
-      setFilteredPayments(data || []);
+      setFilteredPayments(groupPaymentsForDisplay(data || []));
       
       // Calculate total income
       const total = (data || []).reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -171,7 +172,7 @@ export default function Income() {
       );
     }
 
-    setFilteredPayments(filtered);
+    setFilteredPayments(groupPaymentsForDisplay(filtered));
     
     // Recalcular total filtrado
     const total = filtered.reduce((sum, payment) => sum + payment.amount, 0);
@@ -196,11 +197,11 @@ export default function Income() {
   const exportToExcel = () => {
     try {
       const dataToExport = filteredPayments.map((payment) => ({
-        Folio: payment.folio,
-        Fecha: format(new Date(payment.payment_date), "dd/MM/yyyy"),
-        Estudiante: payment.student_name || "N/A",
+        Folio: payment.folioLabel,
+        Fecha: format(new Date(payment.paymentDate), "dd/MM/yyyy"),
+        Estudiante: payment.studentName || "N/A",
         Concepto: payment.concept,
-        Período: payment.month_period || "-",
+        Período: payment.monthPeriod || "-",
         Monto: payment.amount,
       }));
 
@@ -228,8 +229,8 @@ export default function Income() {
     }
   };
 
-  const handleGenerateReceipt = async (payment: Payment) => {
-    if (!payment.student_id || !payment.student_name) {
+  const handleGenerateReceipt = async (payment: GroupedPayment) => {
+    if (!payment.studentId || !payment.studentName) {
       toast.error("Este pago no tiene información de estudiante");
       return;
     }
@@ -246,19 +247,19 @@ export default function Income() {
 
       const correlativo = Math.max(
         1,
-        (orderedStudents || []).findIndex((student) => String(student.id) === String(payment.student_id)) + 1,
+        (orderedStudents || []).findIndex((student) => String(student.id) === String(payment.studentId)) + 1,
       );
 
       await generatePaymentReceipt({
-        folio: payment.folio,
-        studentId: payment.student_id,
+        folio: payment.folioStart,
+        studentId: payment.studentId,
         studentReferenceLabel: "N° Correlativo",
         studentReferenceValue: correlativo,
-        studentName: payment.student_name,
-        paymentDate: payment.payment_date,
+        studentName: payment.studentName,
+        paymentDate: payment.paymentDate,
         amount: payment.amount,
         concept: payment.concept
-      });
+      }, currentTenant);
       toast.success("Comprobante generado exitosamente");
     } catch (error) {
       console.error("Error generating receipt:", error);
@@ -266,13 +267,13 @@ export default function Income() {
     }
   };
 
-  const handleEditClick = (payment: Payment) => {
+  const handleEditClick = (payment: GroupedPayment) => {
     setEditingPayment(payment);
     setEditFormData({
-      payment_date: payment.payment_date,
+      payment_date: payment.paymentDate,
       concept: payment.concept,
       amount: payment.amount,
-      student_name: payment.student_name || "",
+      student_name: payment.studentName || "",
     });
     setShowEditDialog(true);
   };
@@ -281,16 +282,21 @@ export default function Income() {
     if (!editingPayment) return;
 
     try {
-      const { error } = await supabase
+      const query = supabase
         .from("payments")
         .update({
           payment_date: editFormData.payment_date,
-          concept: editFormData.concept,
-          amount: editFormData.amount,
           student_name: editFormData.student_name || null,
+          ...(editingPayment.isGrouped ? {} : {
+            concept: editFormData.concept,
+            amount: editFormData.amount,
+          }),
         })
-        .eq("tenant_id", currentTenant?.id)
-        .eq("id", editingPayment.id);
+        .eq("tenant_id", currentTenant?.id);
+
+      const { error } = editingPayment.isGrouped
+        ? await query.in("id", editingPayment.paymentIds)
+        : await query.eq("id", editingPayment.id);
 
       if (error) throw error;
 
@@ -304,7 +310,7 @@ export default function Income() {
     }
   };
 
-  const handleDeleteClick = (payment: Payment) => {
+  const handleDeleteClick = (payment: GroupedPayment) => {
     setDeletingPayment(payment);
     setShowDeleteDialog(true);
   };
@@ -313,11 +319,14 @@ export default function Income() {
     if (!deletingPayment) return;
 
     try {
-      const { error } = await supabase
+      const query = supabase
         .from("payments")
         .delete()
-        .eq("tenant_id", currentTenant?.id)
-        .eq("id", deletingPayment.id);
+        .eq("tenant_id", currentTenant?.id);
+
+      const { error } = deletingPayment.isGrouped
+        ? await query.in("id", deletingPayment.paymentIds)
+        : await query.eq("id", deletingPayment.id);
 
       if (error) throw error;
 
@@ -464,14 +473,14 @@ export default function Income() {
                   {filteredPayments.map((payment) => (
                     <TableRow key={payment.id}>
                       <TableCell className="font-medium">
-                        {payment.folio}
+                        {payment.folioLabel}
                       </TableCell>
                       <TableCell>
-                        {formatDateForDisplay(payment.payment_date)}
+                        {formatDateForDisplay(payment.paymentDate)}
                       </TableCell>
-                      <TableCell>{payment.student_name || "N/A"}</TableCell>
+                      <TableCell>{payment.studentName || "N/A"}</TableCell>
                       <TableCell>{payment.concept}</TableCell>
-                      <TableCell>{payment.month_period || "-"}</TableCell>
+                      <TableCell>{payment.monthPeriod || "-"}</TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(payment.amount)}
                       </TableCell>
@@ -481,8 +490,8 @@ export default function Income() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleGenerateReceipt(payment)}
-                            disabled={!payment.student_id || !payment.student_name}
-                            title={!payment.student_id || !payment.student_name ? "Pago sin información de estudiante" : "Generar comprobante"}
+                            disabled={!payment.studentId || !payment.studentName}
+                            title={!payment.studentId || !payment.studentName ? "Pago sin información de estudiante" : "Generar comprobante"}
                           >
                             <FileText className="h-4 w-4" />
                           </Button>
@@ -519,7 +528,7 @@ export default function Income() {
           <DialogHeader>
             <DialogTitle>Editar Pago</DialogTitle>
             <DialogDescription>
-              Modifica los datos del pago. Folio: {editingPayment?.folio}
+              Modifica los datos del pago. Folio: {editingPayment?.folioLabel}
             </DialogDescription>
           </DialogHeader>
 
@@ -550,6 +559,7 @@ export default function Income() {
                 id="edit-concept"
                 value={editFormData.concept}
                 onChange={(e) => setEditFormData({ ...editFormData, concept: e.target.value })}
+                disabled={!!editingPayment?.isGrouped}
               />
             </div>
 
@@ -560,8 +570,14 @@ export default function Income() {
                 type="number"
                 value={editFormData.amount}
                 onChange={(e) => setEditFormData({ ...editFormData, amount: Number(e.target.value) })}
+                disabled={!!editingPayment?.isGrouped}
               />
             </div>
+            {editingPayment?.isGrouped && (
+              <p className="text-sm text-muted-foreground">
+                Este pago corresponde a un lote historico agrupado. Solo se pueden editar fecha y nombre del estudiante.
+              </p>
+            )}
           </div>
 
           <DialogFooter>
@@ -581,7 +597,7 @@ export default function Income() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará permanentemente el pago con folio {deletingPayment?.folio}.
+              Esta acción eliminará permanentemente el pago con folio {deletingPayment?.folioLabel}.
               Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>

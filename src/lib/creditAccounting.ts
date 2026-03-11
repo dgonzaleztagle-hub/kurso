@@ -61,10 +61,43 @@ export const getMonthLabel = (key: string) => {
 
 const MONTH_NAME_SET = new Set(SCHOOL_MONTHS.map((item) => item.name));
 
-const normalizeMonthName = (value: string | null | undefined): SchoolMonthName | null => {
+export const normalizeMonthToken = (value: string | null | undefined): SchoolMonthName | null => {
   if (!value) return null;
   const normalized = String(value).trim().toUpperCase();
   return MONTH_NAME_SET.has(normalized as SchoolMonthName) ? (normalized as SchoolMonthName) : null;
+};
+
+export const parseMonthPeriodToMonths = (rawPeriod: string | null | undefined) => {
+  if (!rawPeriod) return [] as SchoolMonthName[];
+
+  const directMonthName = normalizeMonthToken(rawPeriod);
+  if (directMonthName) {
+    return [directMonthName];
+  }
+
+  const normalized = String(rawPeriod).trim().toUpperCase();
+
+  if (normalized.includes(",")) {
+    return normalized
+      .split(",")
+      .map((part) => normalizeMonthToken(part))
+      .filter((month): month is SchoolMonthName => month !== null);
+  }
+
+  const [rangeStartRaw, rangeEndRaw] = normalized.split("-");
+  const rangeStart = normalizeMonthToken(rangeStartRaw);
+  const rangeEnd = normalizeMonthToken(rangeEndRaw);
+
+  if (rangeStart && rangeEnd) {
+    const startIndex = SCHOOL_MONTHS.findIndex((month) => month.name === rangeStart);
+    const endIndex = SCHOOL_MONTHS.findIndex((month) => month.name === rangeEnd);
+
+    if (startIndex >= 0 && endIndex >= startIndex) {
+      return SCHOOL_MONTHS.slice(startIndex, endIndex + 1).map((month) => month.name);
+    }
+  }
+
+  return [] as SchoolMonthName[];
 };
 
 const resolveMonthKeysFromPeriod = (
@@ -74,31 +107,15 @@ const resolveMonthKeysFromPeriod = (
 ) => {
   if (!rawPeriod) return [] as string[];
 
-  const directMonthName = normalizeMonthName(rawPeriod);
-  if (directMonthName) {
-    return [getMonthKey(year, directMonthName)];
-  }
-
   const normalized = String(rawPeriod).trim().toUpperCase();
 
   if (/^\d{4}-[A-ZÁÉÍÓÚÑ]+$/.test(normalized)) {
     return [normalized];
   }
 
-  const [rangeStartRaw, rangeEndRaw] = normalized.split("-");
-  const rangeStart = normalizeMonthName(rangeStartRaw);
-  const rangeEnd = normalizeMonthName(rangeEndRaw);
-
-  if (rangeStart && rangeEnd) {
-    const startIndex = payableMonths.findIndex((month) => month.month === rangeStart);
-    const endIndex = payableMonths.findIndex((month) => month.month === rangeEnd);
-
-    if (startIndex >= 0 && endIndex >= startIndex) {
-      return payableMonths.slice(startIndex, endIndex + 1).map((month) => month.key);
-    }
-  }
-
-  return [] as string[];
+  return parseMonthPeriodToMonths(rawPeriod)
+    .map((month) => payableMonths.find((payableMonth) => payableMonth.month === month)?.key || null)
+    .filter((key): key is string => key !== null);
 };
 
 export const getPayableSchoolMonths = (

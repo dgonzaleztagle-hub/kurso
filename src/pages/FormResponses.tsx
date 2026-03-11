@@ -18,6 +18,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Form, FormField, FormResponse, FieldOption, ScaleConfig, MatrixConfig, FieldType } from '@/types/forms';
 import { Layout } from '@/components/Layout';
 import { generatePendingFormReport } from '@/lib/receiptGenerator';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface FormExclusion {
   id: string;
@@ -28,6 +30,8 @@ interface FormExclusion {
 export default function FormResponses() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { currentTenant } = useTenant();
 
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Form | null>(null);
@@ -70,7 +74,8 @@ export default function FormResponses() {
         .insert({
           form_id: id,
           student_id: parseInt(newExclusionStudentId),
-          reason: newExclusionReason.trim() || null
+          reason: newExclusionReason.trim() || null,
+          created_by: user?.id || null,
         });
 
       if (error) throw error;
@@ -78,6 +83,7 @@ export default function FormResponses() {
       await loadExclusions();
       setNewExclusionStudentId('');
       setNewExclusionReason('');
+      setExclusionsDialogOpen(true);
       toast.success('Exclusión agregada');
     } catch (error: any) {
       if (error.code === '23505') {
@@ -98,7 +104,7 @@ export default function FormResponses() {
 
       if (error) throw error;
 
-      setExclusions(exclusions.filter(e => e.id !== exclusionId));
+      await loadExclusions();
       toast.success('Exclusión eliminada');
     } catch (error) {
       console.error('Error deleting exclusion:', error);
@@ -330,7 +336,7 @@ export default function FormResponses() {
       excludedStudents: excludedWithNames,
       totalStudents: allStudents.length,
       respondedCount: responses.filter(r => r.student_id !== null).length
-    });
+    }, currentTenant);
 
     toast.success('Informe PDF generado');
   };
