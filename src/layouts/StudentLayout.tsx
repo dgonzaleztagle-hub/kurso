@@ -3,6 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
+import { resolveBranding } from "@/lib/branding";
 import { School, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { studentNavigation } from "@/config/navigation";
@@ -14,7 +16,9 @@ interface StudentLayoutProps {
 export const StudentLayout = ({ children }: StudentLayoutProps) => {
     const location = useLocation();
     const { signOut, studentId } = useAuth();
+    const { currentTenant } = useTenant();
     const [studentName, setStudentName] = useState<string | null>(null);
+    const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
 
     useEffect(() => {
         const fetchStudentName = async () => {
@@ -39,8 +43,12 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
             <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
                 <div className="flex h-14 md:h-16 items-center gap-2 md:gap-4 px-3 md:px-4">
                     <Link to="/" className="flex items-center gap-1.5 md:gap-2 hover:opacity-80 transition-opacity">
-                        <School className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                        <span className="text-base md:text-xl font-bold text-foreground truncate">Mi Kurso</span>
+                        {branding.logoUrl ? (
+                            <img src={branding.logoUrl} alt={branding.appName} className="h-6 w-6 md:h-7 md:w-7 rounded object-contain" />
+                        ) : (
+                            <School className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                        )}
+                        <span className="text-base md:text-xl font-bold text-foreground truncate">{branding.appName}</span>
                     </Link>
                     <div className="ml-auto flex items-center gap-2 md:gap-4">
                         {studentName && (
@@ -101,17 +109,7 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
             </main>
 
             <footer className="border-t py-4 px-3 md:px-4 flex flex-col items-center justify-center gap-2 text-center text-xs md:text-sm text-muted-foreground">
-                <p>Potenciado por <strong>Mi Kurso</strong></p>
-                <a
-                    href="https://hojacero.cl"
-                    target="_blank"
-                    rel="noopener noreferrer dofollow"
-                    className="text-[9px] opacity-35 hover:opacity-100 uppercase tracking-widest transition-all"
-                    aria-label="HojaCero - Ingeniería de Software, Infraestructura Digital y Soluciones SaaS de alto performance. Contacto: contacto@hojacero.cl"
-                    title="HojaCero.cl | Engineering Digital Solutions & AEO"
-                >
-                    Powered by HojaCero.cl | Architect of Digital Experiences
-                </a>
+                <p><strong>{branding.appName}</strong>{branding.institutionName ? ` · ${branding.institutionName}` : ""}</p>
             </footer>
         </div>
     );

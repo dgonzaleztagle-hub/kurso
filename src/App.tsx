@@ -34,6 +34,7 @@ import Reimbursements from "./pages/Reimbursements";
 import ScheduledActivities from "./pages/ScheduledActivities";
 import SupplierPaymentRequest from "./pages/SupplierPaymentRequest";
 import PostManagement from "./pages/PostManagement";
+import TenantBranding from "./pages/TenantBranding";
 
 import CreditManagement from "./pages/CreditManagement";
 import CreditMovements from "./pages/CreditMovements";
@@ -132,6 +133,11 @@ function AppRoutes() {
       <Route path="/user-management" element={
         <ProtectedRoute allowedRoles={['master', 'owner']}>
           <Layout><UserManagement /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/branding" element={
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+          <Layout><TenantBranding /></Layout>
         </ProtectedRoute>
       } />
 

@@ -6,14 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { School, Eye, EyeOff, KeyRound, ArrowLeft, Mail } from "lucide-react";
-import logoImage from "@/assets/logo-santa-cruz.png";
+import { Eye, EyeOff, KeyRound, ArrowLeft, Mail, School } from "lucide-react";
+import { resolveBranding } from "@/lib/branding";
 import { validateRut, generateRutEmail } from "@/lib/rutUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 type ViewMode = "login" | "reset-password" | "signup";
 
 export default function Auth() {
+  const branding = resolveBranding();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -231,13 +232,17 @@ export default function Auth() {
           <div className="flex justify-center">
 
           </div>
-          <div className="text-center space-y-2">
-            <div className="flex items-center justify-center gap-2">
-              <School className="h-6 w-6 text-primary" />
-              <CardTitle className="text-2xl">Mi Kurso</CardTitle>
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center gap-2">
+              {branding.iconUrl ? (
+                <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 object-contain" />
+              ) : (
+                <School className="h-6 w-6 text-primary" />
+              )}
+              <CardTitle className="text-2xl">{branding.appName}</CardTitle>
             </div>
             <CardDescription>
-              {viewMode === 'signup' ? 'Crea tu cuenta para comenzar' : 'Inicia sesión en su cuenta'}
+              {viewMode === 'signup' ? 'Crea tu cuenta para comenzar' : branding.authDescription}
             </CardDescription>
           </div>
         </CardHeader>
@@ -313,10 +318,10 @@ export default function Auth() {
 
       <footer className="mt-8 text-center">
         <p className="text-sm text-muted-foreground/80">
-          Plataforma de Gestión Educativa
+          {branding.authFooter}
         </p>
         <p className="text-xs text-muted-foreground/60 mt-1">
-          © {new Date().getFullYear()} Mi Kurso Inc.
+          © {new Date().getFullYear()} {branding.legalName}
         </p>
       </footer>
     </div>

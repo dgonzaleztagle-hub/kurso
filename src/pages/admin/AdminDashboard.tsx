@@ -34,7 +34,7 @@ export default function AdminDashboard() {
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-primary">SuperAdmin Panel</h1>
-                        <p className="text-muted-foreground">Sistema de Control Global Mi Kurso</p>
+                        <p className="text-muted-foreground">Sistema de Control Global Kurso</p>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={async () => {

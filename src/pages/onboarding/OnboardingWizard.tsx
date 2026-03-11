@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { resolveBranding } from "@/lib/branding";
 import { Loader2, Rocket, CheckCircle2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -16,6 +17,7 @@ export default function OnboardingWizard() {
     const { refreshTenants, availableTenants } = useTenant(); // Usar refresh del contexto
     const navigate = useNavigate();
     const { toast } = useToast();
+    const branding = resolveBranding();
     const [courseName, setCourseName] = useState("");
     const [institutionName, setInstitutionName] = useState("");
     const [loading, setLoading] = useState(false);
@@ -120,7 +122,7 @@ export default function OnboardingWizard() {
                                 </div>
                                 <div className="space-y-2">
                                     <CardTitle className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600">
-                                        Bienvenido a Mi Kurso
+                                        {branding.onboardingTitle}
                                     </CardTitle>
                                     <CardDescription className="text-lg text-muted-foreground/90">
                                         Configuremos tu espacio educativo.

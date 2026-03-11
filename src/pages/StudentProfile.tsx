@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
-import { DollarSign, AlertCircle, Calendar, FileText, ChevronDown, ChevronUp, User } from "lucide-react";
+import { DollarSign, AlertCircle, Calendar, FileText, ChevronDown, ChevronUp, User, School } from "lucide-react";
+import { resolveBranding } from "@/lib/branding";
 import { formatDateForDisplay, parseDateFromDB } from "@/lib/dateUtils";
-import logoImage from "@/assets/logo-colegio.png";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { calculateMonthlyDebtItems, getAppliedCreditForActivity, getNetPaymentAmount } from "@/lib/creditAccounting";
@@ -63,6 +63,7 @@ import { useTenant } from "@/contexts/TenantContext";
 
 export default function StudentProfile() {
   const { currentTenant } = useTenant();
+  const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [studentName, setStudentName] = useState("");
@@ -261,14 +262,20 @@ export default function StudentProfile() {
       <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center space-y-2 sm:space-y-4">
-          <img
-            src={(currentTenant.settings as any)?.logo_url || logoImage}
-            alt={currentTenant.name}
-            className="h-16 sm:h-20 mx-auto object-contain"
-          />
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.appName}
+              className="h-16 sm:h-20 mx-auto object-contain"
+            />
+          ) : (
+            <div className="h-16 w-16 sm:h-20 sm:w-20 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
+              <School className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
+            </div>
+          )}
           <div>
             <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white capitalize">
-              {currentTenant.name}
+              {branding.institutionName || currentTenant.name}
             </h1>
             <p className="text-base sm:text-lg text-purple-600 dark:text-purple-400 font-semibold mt-1">¡Siempre Subir!</p>
           </div>

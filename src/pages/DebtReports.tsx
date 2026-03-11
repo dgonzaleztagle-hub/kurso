@@ -8,8 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
-import logoImage from "@/assets/logo-colegio.png";
-import firmaImage from "@/assets/firma-directiva.png";
+import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 import { StudentCombobox } from "@/components/StudentCombobox";
 import { parseDateFromDB } from "@/lib/dateUtils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -266,33 +265,18 @@ export default function DebtReports() {
     try {
       setLoading(true);
       const doc = new jsPDF();
+      const pdfBranding = getPdfBranding(currentTenant);
 
-      // Load images
-      const [logoImg, firmaImg] = await Promise.all([
-        new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.src = logoImage;
-          img.onload = () => resolve(img);
-        }),
-        new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.src = firmaImage;
-          img.onload = () => resolve(img);
-        })
-      ]);
+      const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
       // Header background with subtle color
       doc.setFillColor(240, 245, 250);
       doc.rect(0, 0, 210, 36, 'F');
 
       // Add header logo
-      const settings = currentTenant?.settings as any;
-      const logoUrl = settings?.logo_url || logoImage;
-      // We need to resolve logoUrl via fetch if it's a URL, or pass it if it's imported.
-      // Since fetch might fail or be CORS blocked if simple string, and current code expects loaded Image object.
-      // The Promise.all block above loads logoImage. We should update THAT block to use currentTenant logo if possible.
-      // But for now, let's just fix the Text.
-      doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
+      if (logoImg) {
+        doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
+      }
 
       // Title section
       doc.setFontSize(16);
@@ -304,8 +288,7 @@ export default function DebtReports() {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(71, 85, 105); // Slate gray
 
-      const tenantName = currentTenant ? `${currentTenant.name} - Colegio Santa Cruz` : "Colegio Santa Cruz";
-      doc.text(tenantName, 105, 24, { align: "center" });
+      doc.text(pdfBranding.reportSubtitle, 105, 24, { align: "center" });
       doc.text(`Fecha: ${new Date().toLocaleDateString("es-CL")}`, 105, 28, { align: "center" });
 
       // Horizontal line separator with color
@@ -584,8 +567,13 @@ export default function DebtReports() {
       doc.setLineWidth(0.5);
       doc.line(15, signatureYPos, 195, signatureYPos);
 
-      // Add signature image at bottom right
-      doc.addImage(firmaImg, 'PNG', pageWidth - 62, signatureYPos + 5, 47, 35);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(10);
+      doc.text(pdfBranding.signatureCourseLine, 190, signatureYPos + 10, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(pdfBranding.signatureInstitutionLine, 190, signatureYPos + 16, { align: "right" });
 
       // Save PDF with appropriate name
       let fileName = "Informe_Deudas";
@@ -675,9 +663,10 @@ export default function DebtReports() {
 
       // Logo
       try {
-        const img = new Image();
-        img.src = logoImage;
-        doc.addImage(img, "PNG", margin, yPos, 25, 25);
+        const img = await loadImageElement(pdfBranding.logoUrl);
+        if (img) {
+          doc.addImage(img, "PNG", margin, yPos, 25, 25);
+        }
       } catch (error) {
         console.error("Error loading logo:", error);
       }
@@ -779,20 +768,13 @@ export default function DebtReports() {
 
       // Firma directiva
       const firmaYPos = pageHeight - 70;
-      try {
-        const firmaImg = new Image();
-        firmaImg.src = firmaImage;
-        // Mantener proporción del logo (aproximadamente 3:1 ancho:alto)
-        doc.addImage(firmaImg, "PNG", pageWidth / 2 - 30, firmaYPos - 25, 60, 25);
-      } catch (error) {
-        console.error("Error loading signature:", error);
-      }
-
       doc.setLineWidth(0.3);
       doc.line(pageWidth / 2 - 35, firmaYPos, pageWidth / 2 + 35, firmaYPos);
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text(`Directiva ${currentTenant?.name || "Pre Kinder B"}`, pageWidth / 2, firmaYPos + 5, { align: "center" });
+      doc.text(pdfBranding.signatureCourseLine, pageWidth / 2, firmaYPos + 5, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.text(pdfBranding.signatureInstitutionLine, pageWidth / 2, firmaYPos + 10, { align: "center" });
 
       // Espacio para firma del apoderado
       const apoderadoYPos = pageHeight - 35;

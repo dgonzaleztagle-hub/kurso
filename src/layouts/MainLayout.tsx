@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { mainNavigation } from "@/config/navigation";
+import { resolveBranding } from "@/lib/branding";
 import { hasRoleAccess } from "@/lib/roles";
 
 interface MainLayoutProps {
@@ -26,6 +27,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
 
     // Extract College Name from Settings
     const institutionName = currentTenant?.settings?.institution_name || null;
+    const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
 
     // Use Tenant Role if available, otherwise global (for SuperAdmin/Legacy)
     // If not in a tenant context (e.g. creating one), fallback might be needed
@@ -83,9 +85,13 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-14 items-center px-4">
                     <div className="flex items-center gap-2">
-                        <School className="h-5 w-5 text-primary" />
+                        {branding.logoUrl ? (
+                            <img src={branding.logoUrl} alt={branding.appName} className="h-7 w-7 rounded object-contain" />
+                        ) : (
+                            <School className="h-5 w-5 text-primary" />
+                        )}
                         <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-                            <span className="text-sm font-medium hidden sm:inline-block">Mi Kurso</span>
+                            <span className="text-sm font-medium hidden sm:inline-block">{branding.appName}</span>
                             {institutionName && (
                                 <span className="text-xs text-muted-foreground font-light hidden sm:inline-block">
                                     | {institutionName}
@@ -202,17 +208,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
             </main>
 
             <footer className="border-t py-4 px-4 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-                <p>Potenciado por <strong>Mi Kurso</strong></p>
-                <a
-                    href="https://hojacero.cl"
-                    target="_blank"
-                    rel="noopener noreferrer dofollow"
-                    className="text-[9px] opacity-35 hover:opacity-100 uppercase tracking-widest transition-all"
-                    aria-label="HojaCero - Ingeniería de Software, Infraestructura Digital y Soluciones SaaS de alto performance. Contacto: contacto@hojacero.cl"
-                    title="HojaCero.cl | Engineering Digital Solutions & AEO"
-                >
-                    Powered by HojaCero.cl | Architect of Digital Experiences
-                </a>
+                <p><strong>{branding.appName}</strong>{branding.institutionName ? ` · ${branding.institutionName}` : ""}</p>
             </footer>
         </div>
     );

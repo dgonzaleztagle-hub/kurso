@@ -10,6 +10,7 @@ import {
     Settings
 } from "lucide-react";
 import { useState } from "react";
+import { resolveBranding } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +20,7 @@ export const AdminLayout = () => {
     const location = useLocation();
     const { signOut } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const branding = resolveBranding();
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -38,9 +40,13 @@ export const AdminLayout = () => {
                 )}
             >
                 <div className="p-6 border-b flex items-center gap-2">
-                    <img src="/kurso-icon.png" className="h-8 w-8" alt="Logo" />
+                    {branding.iconUrl ? (
+                        <img src={branding.iconUrl} className="h-8 w-8 object-contain" alt={branding.appName} />
+                    ) : (
+                        <Settings className="h-8 w-8 text-primary" />
+                    )}
                     <div>
-                        <h2 className="font-bold text-lg">Mi Kurso Admin</h2>
+                        <h2 className="font-bold text-lg">{branding.adminTitle}</h2>
                         <span className="text-xs text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">SuperAdmin</span>
                     </div>
                 </div>

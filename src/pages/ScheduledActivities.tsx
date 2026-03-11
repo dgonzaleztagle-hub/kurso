@@ -29,9 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 import { toast } from "sonner";
-import logoImage from "@/assets/logo-colegio.png";
-import firmaImage from "@/assets/firma-directiva.png";
 
 const COMMON_UNITS = [
   "gramos",
@@ -767,6 +766,7 @@ export default function ScheduledActivities() {
 
   const exportPendingDonationsPDF = () => {
     if (!selectedActivity) return;
+    const pdfBranding = getPdfBranding(currentTenant);
 
     const pendingRows = eligibleDonationStudents
       .map((student) => {
@@ -791,7 +791,7 @@ export default function ScheduledActivities() {
     doc.setFontSize(11);
     doc.text(selectedActivity.name, 105, 26, { align: "center" });
     doc.text(`Fecha: ${formatDateLabel(selectedActivity.activity_date)}`, 20, 38);
-    doc.text(`Curso: ${currentTenant?.name || "Mi Kurso"}`, 20, 46);
+    doc.text(`Curso: ${pdfBranding.reportSubtitle}`, 20, 46);
     doc.text(`Pendientes: ${pendingRows.length}`, 20, 54);
 
     let y = 66;
@@ -823,6 +823,7 @@ export default function ScheduledActivities() {
     }
 
     try {
+      const pdfBranding = getPdfBranding(currentTenant);
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId as any).order("name", { ascending: true }),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
@@ -842,11 +843,14 @@ export default function ScheduledActivities() {
       ]);
 
       const doc = new jsPDF();
-      doc.addImage(logoImage, "PNG", 15, 10, 26, 18);
+      const logoImg = await loadImageElement(pdfBranding.logoUrl);
+      if (logoImg) {
+        doc.addImage(logoImg, "PNG", 15, 10, 26, 18);
+      }
       doc.setFontSize(16);
       doc.text("Estado de Donaciones", 105, 18, { align: "center" });
       doc.setFontSize(10);
-      doc.text(currentTenant?.name || "Mi Kurso", 105, 25, { align: "center" });
+      doc.text(pdfBranding.reportSubtitle, 105, 25, { align: "center" });
       doc.text(formatDateLabel(activity.activity_date), 105, 31, { align: "center" });
       doc.line(15, 36, 195, 36);
 
@@ -934,7 +938,12 @@ export default function ScheduledActivities() {
         y = 20;
       }
 
-      doc.addImage(firmaImage, "PNG", 15, y + 8, 40, 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(pdfBranding.signatureCourseLine, 15, y + 16);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(pdfBranding.signatureInstitutionLine, 15, y + 22);
       doc.save(`Estado_Cumplimiento_${activity.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
       toast.success("Reporte de donaciones generado");
     } catch (error: any) {

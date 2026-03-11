@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveBranding } from '@/lib/branding';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,6 +20,7 @@ interface Student {
 export default function MobileProfile() {
     const { user, appUser, userRole, signOut, updateProfile, refreshUserData } = useAuth();
     const { currentTenant } = useTenant();
+    const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
     const [myStudents, setMyStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingPhone, setEditingPhone] = useState(false);
@@ -243,7 +245,7 @@ export default function MobileProfile() {
                         Cerrar Sesión
                     </Button>
                     <p className="text-center text-xs text-gray-400 mt-4">
-                        Mi Kurso Mobile
+                        {branding.appName}
                     </p>
                 </div>
             </div>

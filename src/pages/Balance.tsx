@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 import { toast } from "sonner";
-import logoImage from "@/assets/logo-colegio.png";
-import firmaImage from "@/assets/firma-directiva.png";
 import { ArrowUpCircle, ArrowDownCircle, Wallet, FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import { useTenant } from "@/contexts/TenantContext";
@@ -265,27 +264,18 @@ export default function Balance() {
     try {
       setLoading(true);
       const doc = new jsPDF();
+      const pdfBranding = getPdfBranding(currentTenant);
 
-      // Load images
-      const [logoImg, firmaImg] = await Promise.all([
-        new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.src = logoImage;
-          img.onload = () => resolve(img);
-        }),
-        new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.src = firmaImage;
-          img.onload = () => resolve(img);
-        })
-      ]);
+      const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
       // Header background
       doc.setFillColor(240, 245, 250);
       doc.rect(0, 0, 210, 36, 'F');
 
       // Logo
-      doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
+      if (logoImg) {
+        doc.addImage(logoImg, 'PNG', 15, 12, 22, 22);
+      }
 
       // Title
       doc.setFontSize(16);
@@ -296,7 +286,7 @@ export default function Balance() {
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(71, 85, 105);
-      doc.text("Pre Kinder B - Colegio Santa Cruz", 105, 24, { align: "center" });
+      doc.text(pdfBranding.reportSubtitle, 105, 24, { align: "center" });
       doc.text(`Fecha: ${new Date().toLocaleDateString("es-CL")}`, 105, 28, { align: "center" });
 
       // Separator line
@@ -479,7 +469,6 @@ export default function Balance() {
 
       // Signature
       const pageHeight = doc.internal.pageSize.getHeight();
-      const pageWidth = doc.internal.pageSize.getWidth();
 
       if (yPos > pageHeight - 50) {
         doc.addPage();
@@ -490,7 +479,13 @@ export default function Balance() {
       doc.setDrawColor(59, 130, 246);
       doc.setLineWidth(0.5);
       doc.line(15, signatureYPos, 195, signatureYPos);
-      doc.addImage(firmaImg, 'PNG', pageWidth - 62, signatureYPos + 5, 47, 35);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(51, 65, 85);
+      doc.setFontSize(10);
+      doc.text(pdfBranding.signatureCourseLine, 190, signatureYPos + 10, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(pdfBranding.signatureInstitutionLine, 190, signatureYPos + 16, { align: "right" });
 
       // Save
       const fileName = `Balance_Financiero_${viewType === "detailed" ? "Detallado" : "Resumen"}_${new Date().toISOString().split('T')[0]}.pdf`;

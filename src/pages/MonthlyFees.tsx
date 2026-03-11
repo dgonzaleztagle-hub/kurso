@@ -54,6 +54,27 @@ export default function MonthlyFees() {
     }
   }, [currentTenant]);
 
+  const updateTenantSettings = async (partialSettings: Record<string, unknown>) => {
+    if (!currentTenant) return null;
+
+    const currentSettings = (currentTenant.settings as any) || {};
+    const updatedSettings = {
+      ...currentSettings,
+      ...partialSettings,
+    };
+
+    const { data, error } = await supabase
+      .from("tenants")
+      .update({ settings: updatedSettings })
+      .eq("id", currentTenant.id)
+      .select("settings")
+      .single();
+
+    if (error) throw error;
+    await refreshTenants(currentTenant.id);
+    return data?.settings || updatedSettings;
+  };
+
   const handleEditClick = () => {
     setEditValue(String(currentFee));
     setIsEditing(true);
@@ -85,29 +106,14 @@ export default function MonthlyFees() {
     }
 
     try {
-      const currentSettings = (currentTenant.settings as any) || {};
-      const updatedSettings = {
-        ...currentSettings,
-        monthly_fee: newFee
-      };
-
-      const { data: updatedTenant, error } = await supabase
-        .from('tenants')
-        .update({ settings: updatedSettings })
-        .eq('id', currentTenant.id)
-        .select('settings');
-
-      if (error) throw error;
-      if (!updatedTenant || (Array.isArray(updatedTenant) && updatedTenant.length === 0)) {
-        throw new Error("La cuota no se pudo persistir en la base de datos");
-      }
+      const persistedSettings = await updateTenantSettings({ monthly_fee: newFee });
+      if (!persistedSettings) throw new Error("La cuota no se pudo persistir en la base de datos");
 
       toast.success("Monto de cuota actualizado");
-      const persistedFee = Number(((updatedTenant as any)?.[0]?.settings || updatedSettings).monthly_fee);
+      const persistedFee = Number((persistedSettings as any).monthly_fee);
       setCurrentFee(Number.isFinite(persistedFee) ? persistedFee : newFee);
       setIsEditing(false);
       loadMonthlyFeeStatuses(Number.isFinite(persistedFee) ? persistedFee : newFee); // Reload with new fee
-      await refreshTenants(currentTenant.id);
     } catch (error) {
       console.error("Error updating fee:", error);
       toast.error("Error al guardar la configuración");

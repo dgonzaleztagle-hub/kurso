@@ -21,6 +21,7 @@ import {
     ShieldCheck,
     NotebookText,
     Archive,
+    Building2,
     LucideIcon
 } from "lucide-react";
 
@@ -115,6 +116,7 @@ export const mainNavigation: NavCategory[] = [
         icon: UserCog,
         isTab: true,
         items: [
+            { name: "Marca Blanca", href: "/branding", icon: Building2 },
             { name: "Usuarios", href: "/user-management", icon: UserCog, masterOnly: true },
             { name: "Historial de Cambios", href: "/admin/audit-logs", icon: ShieldCheck, masterOnly: true },
             { name: "Formularios", href: "/formularios", icon: FileQuestion },

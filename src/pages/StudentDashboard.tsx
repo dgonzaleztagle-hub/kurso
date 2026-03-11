@@ -6,16 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
+import { resolveBranding } from "@/lib/branding";
 import { useNavigate } from "react-router-dom";
-import logoImage from "@/assets/logo-colegio.png";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatDateForDisplay, parseDateFromDB } from "@/lib/dateUtils";
 import { useStudentDashboardData } from "@/hooks/useStudentDashboardData";
+import { School } from "lucide-react";
 
 export default function StudentDashboard() {
   const { studentId, displayName } = useAuth();
+  const { currentTenant } = useTenant();
   const navigate = useNavigate();
+  const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
   const [activitiesOpen, setActivitiesOpen] = useState(false);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
   const {
@@ -151,16 +155,22 @@ export default function StudentDashboard() {
       <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-primary/20">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 p-4 md:p-8">
           <div className="flex items-center gap-4 md:gap-6">
-            <img
-              src={logoImage}
-              alt="Logo del Colegio"
-              className="w-16 h-16 md:w-24 md:h-24 object-contain"
-            />
+            {branding.logoUrl ? (
+              <img
+                src={branding.logoUrl}
+                alt={branding.appName}
+                className="w-16 h-16 md:w-24 md:h-24 object-contain"
+              />
+            ) : (
+              <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <School className="h-8 w-8 md:h-12 md:w-12 text-primary" />
+              </div>
+            )}
             <div>
               <h1 className="text-xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                 Portal de Apoderados
               </h1>
-              <p className="text-xs md:text-sm font-semibold text-primary mt-1">¡Siempre Subir!</p>
+              <p className="text-xs md:text-sm font-semibold text-primary mt-1">{branding.institutionName || branding.appName}</p>
               {displayName && (
                 <p className="text-sm md:text-lg text-muted-foreground mt-2">
                   Bienvenido/a {displayName}

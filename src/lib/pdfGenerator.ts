@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { getPdfBranding } from "@/lib/pdfBranding";
 
 interface PaymentData {
   folio: number;
@@ -11,6 +12,7 @@ interface PaymentData {
 
 export const generatePaymentReceipt = (payment: PaymentData): void => {
   const doc = new jsPDF();
+  const pdfBranding = getPdfBranding();
   
   // Configuración inicial
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -23,7 +25,7 @@ export const generatePaymentReceipt = (payment: PaymentData): void => {
   
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
-  doc.text("Pre Kinder B - Colegio Santa Cruz", pageWidth / 2, 30, { align: "center" });
+  doc.text(pdfBranding.reportSubtitle, pageWidth / 2, 30, { align: "center" });
   
   // Número de folio
   doc.setFontSize(14);

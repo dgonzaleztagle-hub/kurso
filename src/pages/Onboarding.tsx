@@ -8,12 +8,14 @@ import { Rocket, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { resolveBranding } from "@/lib/branding";
 import { toast } from "sonner";
 
 export default function Onboarding() {
     const navigate = useNavigate();
-    const { user, updateProfile } = useAuth(); // Assuming updateProfile is exposed in AuthContext, if not check context.
+    const { user } = useAuth();
     const { refreshTenants } = useTenant();
+    const branding = resolveBranding();
 
     const [courseName, setCourseName] = useState("");
     const [fullName, setFullName] = useState("");
@@ -87,10 +89,10 @@ export default function Onboarding() {
                         <Rocket className="h-10 w-10 text-primary" />
                     </div>
                     <div className="space-y-2">
-                        <CardTitle className="text-2xl font-bold">¡Bienvenido a Mi Kurso!</CardTitle>
+                        <CardTitle className="text-2xl font-bold">{branding.onboardingTitle}</CardTitle>
                         <CardDescription>
                             Para comenzar tu prueba gratis de 7 días, <br />
-                            necesitamos crear tu primer espacio de trabajo.
+                            {branding.onboardingDescription}
                         </CardDescription>
                     </div>
                 </CardHeader>

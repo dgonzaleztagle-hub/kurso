@@ -4,15 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { resolveBranding } from "@/lib/branding";
 import { toast } from "sonner";
 import { Lock, Eye, EyeOff } from "lucide-react";
-import logoImage from "@/assets/logo-colegio.png";
 
 interface FirstLoginPasswordChangeProps {
   onPasswordChanged: () => void;
 }
 
 export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLoginPasswordChangeProps) {
+  const branding = resolveBranding();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);

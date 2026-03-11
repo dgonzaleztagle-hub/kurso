@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { FieldPreview } from '@/components/form-builder/FieldPreview';
+import { resolveBranding } from '@/lib/branding';
 import { Form, FormField, FieldOption, ScaleConfig, MatrixConfig, FieldType } from '@/types/forms';
-import logoSantaCruz from '@/assets/logo-santa-cruz.png';
 
 export default function PublicForm() {
   const { id } = useParams();
@@ -23,6 +23,7 @@ export default function PublicForm() {
   const [fields, setFields] = useState<FormField[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const branding = resolveBranding();
 
   // Wait for auth to fully load before checking form
   useEffect(() => {
@@ -34,12 +35,12 @@ export default function PublicForm() {
   // Update document title dynamically
   useEffect(() => {
     if (form) {
-      document.title = `${form.title} - Pre Kinder B`;
+      document.title = `${form.title} - ${branding.appName}`;
     }
     return () => {
-      document.title = 'Sistema de Gestión de Pagos - Pre Kinder B';
+      document.title = branding.appName;
     };
-  }, [form]);
+  }, [form, branding.appName]);
 
   const loadForm = async () => {
     if (!id) return;
@@ -355,7 +356,9 @@ export default function PublicForm() {
     <div className="min-h-screen bg-muted/30 py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center">
-          <img src={logoSantaCruz} alt="Logo" className="h-16 mx-auto mb-4" />
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.appName} className="h-16 mx-auto mb-4 object-contain" />
+          ) : null}
         </div>
         
         <Card>
@@ -393,7 +396,7 @@ export default function PublicForm() {
         </Card>
         
         <p className="text-center text-xs text-muted-foreground">
-          Formulario creado con el sistema de gestión del Pre Kinder B
+          {branding.publicFormFooter}
         </p>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import logoImage from "@/assets/logo-colegio.png";
+import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 
 interface PaymentReceiptData {
   folio: number;
@@ -38,20 +38,18 @@ interface TransferReceiptData {
 
 export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
   const doc = new jsPDF();
+  const pdfBranding = getPdfBranding();
   
-  // Load logo
-  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
-    const img = new Image();
-    img.src = logoImage;
-    img.onload = () => resolve(img);
-  });
+  const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
   // Background color
   doc.setFillColor(240, 245, 255);
   doc.rect(0, 0, 210, 297, 'F');
 
   // Header - Logo
-  doc.addImage(logoImg, 'PNG', 85, 20, 40, 40);
+  if (logoImg) {
+    doc.addImage(logoImg, 'PNG', 85, 20, 40, 40);
+  }
 
   // Title
   doc.setFontSize(18);
@@ -63,7 +61,7 @@ export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
-  doc.text("Pre Kinder B - Colegio Santa Cruz", 105, 78, { align: "center" });
+  doc.text(pdfBranding.reportSubtitle, 105, 78, { align: "center" });
 
   // Content box
   const boxY = 95;
@@ -117,7 +115,7 @@ export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 58, 138);
-  doc.text("COLEGIO SANTA CRUZ", 105, 270, { align: "center" });
+  doc.text(pdfBranding.legalName.toUpperCase(), 105, 270, { align: "center" });
 
   // Save
   const fileName = `Comprobante_de_Pago_${data.studentName.replace(/\s+/g, '_')}_${data.concept.replace(/\s+/g, '_')}_${new Date(data.paymentDate).toLocaleDateString("es-CL").replace(/\//g, '-')}.pdf`;
@@ -126,13 +124,9 @@ export const generatePaymentReceipt = async (data: PaymentReceiptData) => {
 
 export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
   const doc = new jsPDF();
+  const pdfBranding = getPdfBranding();
   
-  // Load logo
-  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
-    const img = new Image();
-    img.src = logoImage;
-    img.onload = () => resolve(img);
-  });
+  const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
   // Background color
   doc.setFillColor(255, 245, 240);
@@ -144,7 +138,9 @@ export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
   doc.text(new Date().toLocaleDateString("es-CL"), 20, 20);
 
   // Header - Logo
-  doc.addImage(logoImg, 'PNG', 85, 30, 40, 40);
+  if (logoImg) {
+    doc.addImage(logoImg, 'PNG', 85, 30, 40, 40);
+  }
 
   // Title
   doc.setFontSize(18);
@@ -156,7 +152,7 @@ export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
-  doc.text("Pre kínder B - Colegio Santa Cruz", 105, 88, { align: "center" });
+  doc.text(pdfBranding.reportSubtitle, 105, 88, { align: "center" });
 
   // Content box
   const boxY = 105;
@@ -199,8 +195,7 @@ export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(185, 28, 28);
-  doc.text("COLEGIO", 105, 255, { align: "center" });
-  doc.text("SANTA CRUZ", 105, 265, { align: "center" });
+  doc.text(pdfBranding.appName.toUpperCase(), 105, 260, { align: "center" });
 
   // Save
   const fileName = `Comprobante_Salida_${data.folio}.pdf`;
@@ -209,20 +204,18 @@ export const generateExpenseReceipt = async (data: ExpenseReceiptData) => {
 
 export const generateTransferReceipt = async (data: TransferReceiptData) => {
   const doc = new jsPDF();
+  const pdfBranding = getPdfBranding();
   
-  // Load logo
-  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
-    const img = new Image();
-    img.src = logoImage;
-    img.onload = () => resolve(img);
-  });
+  const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
   // Background color
   doc.setFillColor(250, 245, 255);
   doc.rect(0, 0, 210, 297, 'F');
 
   // Header - Logo
-  doc.addImage(logoImg, 'PNG', 85, 20, 40, 40);
+  if (logoImg) {
+    doc.addImage(logoImg, 'PNG', 85, 20, 40, 40);
+  }
 
   // Title
   doc.setFontSize(18);
@@ -234,7 +227,7 @@ export const generateTransferReceipt = async (data: TransferReceiptData) => {
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
-  doc.text("Pre Kinder B - Colegio Santa Cruz", 105, 78, { align: "center" });
+  doc.text(pdfBranding.reportSubtitle, 105, 78, { align: "center" });
 
   // Date stamp
   doc.setFontSize(10);
@@ -329,7 +322,7 @@ export const generateTransferReceipt = async (data: TransferReceiptData) => {
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(126, 34, 206);
-  doc.text("COLEGIO SANTA CRUZ", 105, 270, { align: "center" });
+  doc.text(pdfBranding.legalName.toUpperCase(), 105, 270, { align: "center" });
 
   // Save
   const fileName = `Comprobante_Traspaso_${data.studentName.replace(/\s+/g, '_')}_${new Date(data.transferDate).toLocaleDateString("es-CL").replace(/\//g, '-')}.pdf`;
@@ -346,20 +339,18 @@ interface PendingFormReportData {
 
 export const generatePendingFormReport = async (data: PendingFormReportData) => {
   const doc = new jsPDF();
+  const pdfBranding = getPdfBranding();
   
-  // Load logo
-  const logoImg = await new Promise<HTMLImageElement>((resolve) => {
-    const img = new Image();
-    img.src = logoImage;
-    img.onload = () => resolve(img);
-  });
+  const logoImg = await loadImageElement(pdfBranding.logoUrl);
 
   // Background color
   doc.setFillColor(250, 252, 255);
   doc.rect(0, 0, 210, 297, 'F');
 
   // Header - Logo
-  doc.addImage(logoImg, 'PNG', 85, 15, 40, 40);
+  if (logoImg) {
+    doc.addImage(logoImg, 'PNG', 85, 15, 40, 40);
+  }
 
   // Title
   doc.setFontSize(16);
