@@ -314,7 +314,13 @@ const Landing = () => {
                             </div>
                         </div>
                         <div className="flex-1 flex justify-center">
-                            <img src={branding.iconUrl} alt={branding.appName} className="relative w-48 h-48 drop-shadow-2xl object-contain" />
+                            {branding.iconUrl ? (
+                                <img src={branding.iconUrl} alt={branding.appName} className="relative w-48 h-48 drop-shadow-2xl object-contain" />
+                            ) : (
+                                <div className="flex h-48 w-48 items-center justify-center rounded-full border border-primary/20 bg-white/70 text-4xl font-black text-primary shadow-2xl">
+                                    K
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -353,7 +359,13 @@ const Landing = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col justify-between items-center gap-6">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6 w-full">
                         <div className="flex items-center space-x-2">
-                            <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 grayscale opacity-50 object-contain" />
+                            {branding.iconUrl ? (
+                                <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 grayscale opacity-50 object-contain" />
+                            ) : (
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                                    K
+                                </span>
+                            )}
                             <span className="text-sm text-muted-foreground">© {new Date().getFullYear()} Kurso. Todos los derechos reservados.</span>
                         </div>
                         <div className="flex gap-6 text-sm text-muted-foreground">
