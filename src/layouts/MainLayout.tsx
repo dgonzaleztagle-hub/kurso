@@ -12,7 +12,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mainNavigation } from "@/config/navigation";
+import { mainNavigation, type NavCategory, type NavItem } from "@/config/navigation";
 import { resolveBranding } from "@/lib/branding";
 import { hasRoleAccess } from "@/lib/roles";
 import { SaasBillingBanner } from "@/components/subscription/SaasBillingBanner";
@@ -21,6 +21,9 @@ import { getCommercialStatusLabel } from "@/lib/saasBilling";
 interface MainLayoutProps {
     children: ReactNode;
 }
+
+type AppModule = Exclude<NavItem["module"], undefined>;
+type NavCategoryWithItems = NavCategory & { items: NavItem[] };
 
 import { useTenant } from "@/contexts/TenantContext";
 
@@ -47,10 +50,10 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         return location.pathname.startsWith(href);
     };
 
-    const isCategoryActive = (category: any) => {
+    const isCategoryActive = (category: NavCategory) => {
         if (category.href) return isRouteActive(category.href);
         if (category.items) {
-            return category.items.some((item: any) => isRouteActive(item.href));
+            return category.items.some((item) => isRouteActive(item.href));
         }
         return false;
     };
@@ -58,11 +61,10 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     const filteredCategories = mainNavigation
         .map(category => {
             if (!category.items) {
-                if ((category as any).masterOnly && !hasRoleAccess(activeRole, "master")) return null;
                 return category;
             }
 
-            const filteredItems = category.items.filter((item: any) => {
+            const filteredItems = category.items.filter((item) => {
                 if (hasRoleAccess(activeRole, "master")) return true;
                 if (item.masterOnly) return false;
 
@@ -76,13 +78,13 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                     if (!item.allowStudent) return false;
                 }
 
-                return item.module ? hasPermission(item.module as any) : true;
+                return item.module ? hasPermission(item.module as AppModule) : true;
             });
 
             if (filteredItems.length === 0) return null;
-            return { ...category, items: filteredItems };
+            return { ...category, items: filteredItems } satisfies NavCategoryWithItems;
         })
-        .filter(Boolean);
+        .filter((category): category is NavCategory | NavCategoryWithItems => category !== null);
 
     return (
         <div className="min-h-screen flex flex-col bg-background">
@@ -140,7 +142,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                 <div className="container px-4">
                     <div className="flex overflow-x-auto hide-scrollbar">
                         <div className="flex min-w-full py-2 gap-1">
-                            {filteredCategories.map((category: any) => {
+                            {filteredCategories.map((category) => {
                                 const Icon = category.icon;
                                 const isActive = isCategoryActive(category);
 
@@ -181,7 +183,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="start" className="w-56">
-                                            {category.items.map((item: any) => {
+                                            {category.items.map((item) => {
                                                 const ItemIcon = item.icon;
                                                 const itemActive = isRouteActive(item.href);
 
