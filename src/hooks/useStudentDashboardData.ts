@@ -72,6 +72,13 @@ const initialState: StudentDashboardDataState = {
 };
 
 export async function fetchStudentDashboardData(studentId: string | number) {
+  return fetchStudentDashboardDataForPeriod(studentId, "current");
+}
+
+export async function fetchStudentDashboardDataForPeriod(
+  studentId: string | number,
+  period: "current" | "year" = "current",
+) {
   const [studentResult, paymentsResult, exclusionsResult, creditResult, applicationsResult] = await Promise.all([
     supabase.from("students").select("first_name, last_name, enrollment_date, tenant_id").eq("id", studentId).single(),
     supabase.from("payments").select("*").eq("student_id", studentId).order("payment_date", { ascending: false }),
@@ -139,7 +146,7 @@ export async function fetchStudentDashboardData(studentId: string | number) {
     monthlyFee,
     payments: paymentHistory,
     applications: applicationsResult.data || [],
-    period: "current",
+    period,
   });
 
   const monthlyDebt = monthlyDebtItems.reduce((sum, item) => sum + item.due, 0);

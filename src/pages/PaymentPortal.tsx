@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { paymentNotificationSchema } from '@/lib/validationSchemas';
 import { Loader2, CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchStudentDashboardData } from '@/hooks/useStudentDashboardData';
+import { fetchStudentDashboardDataForPeriod } from '@/hooks/useStudentDashboardData';
 
 const CHILEAN_BANKS = [
   'Banco de Chile',
@@ -129,7 +129,7 @@ export default function PaymentPortal() {
   };
 
   const loadDebts = async (studentId: string) => {
-    const snapshot = await fetchStudentDashboardData(studentId);
+    const snapshot = await fetchStudentDashboardDataForPeriod(studentId, 'year');
 
     const debtsData: DebtItem[] = [
       ...snapshot.monthlyDebtItems
