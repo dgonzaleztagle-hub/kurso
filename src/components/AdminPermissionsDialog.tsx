@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +9,9 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
 type AppModule = 'dashboard' | 'students' | 'income' | 'expenses' | 'debt_reports' | 'payment_reports' | 'balance' | 'import' | 'movements' | 'activities' | 'activity_exclusions' | 'activity_payments' | 'monthly_fees' | 'payment_notifications' | 'reimbursements' | 'scheduled_activities' | 'student_profile' | 'credit_management' | 'credit_movements';
+type AdminPermissionRow = Tables<'admin_permissions'>;
+type PermissionInsert = Pick<AdminPermissionRow, 'user_id' | 'module'>;
+type ErrorWithMessage = { message?: string };
 
 interface AdminPermissionsDialogProps {
   open: boolean;
@@ -43,16 +47,10 @@ export function AdminPermissionsDialog({ open, onOpenChange, userId, userName }:
   const [saving, setSaving] = useState(false);
   const [permissions, setPermissions] = useState<AppModule[]>([]);
 
-  useEffect(() => {
-    if (open && userId) {
-      loadPermissions();
-    }
-  }, [open, userId]);
-
-  const loadPermissions = async () => {
+  const loadPermissions = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('admin_permissions')
         .select('module')
         .eq('user_id', userId);
@@ -60,20 +58,28 @@ export function AdminPermissionsDialog({ open, onOpenChange, userId, userName }:
       if (error) throw error;
 
       // admin_permissions now stores DENIED modules (restrictions)
-      const deniedModules = data?.map((p: any) => p.module as AppModule) || [];
+      const deniedModules = (data ?? [])
+        .map((permission) => permission.module)
+        .filter((module): module is AppModule => module in MODULE_LABELS);
       
       // Show all modules as checked except the denied ones
       const allModulesList = Object.keys(MODULE_LABELS) as AppModule[];
       const allowedModules = allModulesList.filter(m => !deniedModules.includes(m));
       
       setPermissions(allowedModules);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading permissions:", error);
-      toast.error("Error al cargar permisos");
+      toast.error((error as ErrorWithMessage).message || "Error al cargar permisos");
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (open && userId) {
+      void loadPermissions();
+    }
+  }, [loadPermissions, open, userId]);
 
   const handleTogglePermission = (module: AppModule) => {
     setPermissions(prev => 
@@ -87,7 +93,7 @@ export function AdminPermissionsDialog({ open, onOpenChange, userId, userName }:
     setSaving(true);
     try {
       // Delete all existing permissions
-      const { error: deleteError } = await (supabase as any)
+      const { error: deleteError } = await supabase
         .from('admin_permissions')
         .delete()
         .eq('user_id', userId);
@@ -100,21 +106,23 @@ export function AdminPermissionsDialog({ open, onOpenChange, userId, userName }:
 
       // Insert denied modules as restrictions
       if (deniedModules.length > 0) {
-        const { error: insertError } = await (supabase as any)
+        const deniedPermissions: PermissionInsert[] = deniedModules.map((module) => ({
+          user_id: userId,
+          module,
+        }));
+
+        const { error: insertError } = await supabase
           .from('admin_permissions')
-          .insert(deniedModules.map(module => ({
-            user_id: userId,
-            module
-          })));
+          .insert(deniedPermissions);
 
         if (insertError) throw insertError;
       }
 
       toast.success("Permisos actualizados correctamente");
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error saving permissions:", error);
-      toast.error("Error al guardar permisos");
+      toast.error((error as ErrorWithMessage).message || "Error al guardar permisos");
     } finally {
       setSaving(false);
     }

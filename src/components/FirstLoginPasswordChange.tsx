@@ -12,6 +12,8 @@ interface FirstLoginPasswordChangeProps {
   onPasswordChanged: () => void;
 }
 
+type ErrorWithMessage = { message?: string };
+
 export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLoginPasswordChangeProps) {
   const branding = resolveBranding();
   const [newPassword, setNewPassword] = useState("");
@@ -69,9 +71,9 @@ export default function FirstLoginPasswordChange({ onPasswordChanged }: FirstLog
       await new Promise(resolve => setTimeout(resolve, 300));
       await onPasswordChanged();
       window.location.replace("/");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error cambiando contraseña:", error);
-      toast.error(error.message || "Error al cambiar la contraseña");
+      toast.error((error as ErrorWithMessage).message || "Error al cambiar la contraseña");
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,13 +27,7 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (open && currentTenant?.id) {
-      loadNotifications();
-    }
-  }, [open, currentTenant?.id]);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -50,7 +44,13 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (open && currentTenant?.id) {
+      void loadNotifications();
+    }
+  }, [currentTenant?.id, loadNotifications, open]);
 
   const handleDeactivate = async (id: string) => {
     try {
@@ -63,7 +63,7 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
       if (error) throw error;
 
       toast.success("Notificación desactivada");
-      loadNotifications();
+      void loadNotifications();
     } catch (error) {
       console.error("Error deactivating notification:", error);
       toast.error("Error al desactivar la notificación");
@@ -81,7 +81,7 @@ export function NotificationManagementDialog({ open, onOpenChange }: Notificatio
       if (error) throw error;
 
       toast.success("Notificación eliminada");
-      loadNotifications();
+      void loadNotifications();
     } catch (error) {
       console.error("Error deleting notification:", error);
       toast.error("Error al eliminar la notificación");

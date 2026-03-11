@@ -13,6 +13,8 @@ interface MassNotificationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type ErrorWithMessage = { message?: string };
+
 export function MassNotificationDialog({ open, onOpenChange }: MassNotificationDialogProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -55,9 +57,9 @@ export function MassNotificationDialog({ open, onOpenChange }: MassNotificationD
       toast.success("Notificación publicada en el dashboard de todos los alumnos");
       setMessage("");
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending mass notification:", error);
-      toast.error(error?.message || "Error al publicar la notificación");
+      toast.error((error as ErrorWithMessage).message || "Error al publicar la notificación");
     } finally {
       setSending(false);
     }
