@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +32,8 @@ interface Expense {
   concept: string;
 }
 
+type ExpenseRow = Tables<"expenses">;
+
 export default function Expenses() {
   const { currentTenant } = useTenant();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -38,12 +41,6 @@ export default function Expenses() {
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
-
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadExpenses();
-    }
-  }, [currentTenant?.id]);
 
   useEffect(() => {
     const filtered = expenses.filter(
@@ -54,7 +51,7 @@ export default function Expenses() {
     setFilteredExpenses(filtered);
   }, [searchTerm, expenses]);
 
-  const loadExpenses = async () => {
+  const loadExpenses = useCallback(async () => {
     if (!currentTenant?.id) return;
     try {
       const { data, error } = await supabase
@@ -65,22 +62,28 @@ export default function Expenses() {
 
       if (error) throw error;
 
-      const normalized = (data || []).map((row: any) => ({
+      const normalized = (((data as ExpenseRow[] | null) || []).map((row) => ({
         id: row.id,
         folio: row.folio,
         expense_date: row.expense_date,
         amount: Number(row.amount || 0),
         supplier: row.supplier || row.provider || "Sin destinatario",
         concept: row.concept || row.description || "Sin concepto",
-      })) as Expense[];
+      }))) as Expense[];
 
       setExpenses(normalized);
       setFilteredExpenses(normalized);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading expenses:", error);
       toast.error("Error al cargar egresos");
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadExpenses();
+    }
+  }, [currentTenant?.id, loadExpenses]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CL", {
@@ -140,10 +143,10 @@ export default function Expenses() {
       if (error) throw error;
 
       toast.success("Egreso eliminado exitosamente");
-      loadExpenses();
+      await loadExpenses();
       setDeleteDialogOpen(false);
       setExpenseToDelete(null);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting expense:", error);
       toast.error("Error al eliminar el egreso");
     }
