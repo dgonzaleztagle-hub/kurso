@@ -34,6 +34,10 @@ export default function StudentDashboard() {
     loading,
   } = useStudentDashboardData(studentId);
 
+  const visibleActivities = (activities.length > 0 ? activities : upcomingActivities)
+    .filter((activity) => !activity.completed)
+    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-CL", {
       style: "currency",
@@ -79,7 +83,7 @@ export default function StudentDashboard() {
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Próximas 2 actividades */}
-      {upcomingActivities.map((activity) => (
+      {visibleActivities.map((activity) => (
         <Card key={activity.id} className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/30">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">

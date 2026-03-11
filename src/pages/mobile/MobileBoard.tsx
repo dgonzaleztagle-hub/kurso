@@ -15,6 +15,7 @@ export default function MobileBoard() {
   const {
     debtDetail,
     paymentHistory,
+    activities,
     notifications,
     upcomingActivities,
     activityDonations,
@@ -28,6 +29,10 @@ export default function MobileBoard() {
       style: "currency",
       currency: "CLP",
     }).format(amount);
+
+  const visibleActivities = (activities.length > 0 ? activities : upcomingActivities)
+    .filter((activity) => !activity.completed)
+    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
 
   if (loading) {
     return (
@@ -122,13 +127,13 @@ export default function MobileBoard() {
         </Card>
       )}
 
-      {upcomingActivities.length > 0 && (
+      {visibleActivities.length > 0 && (
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Próximas Actividades</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {upcomingActivities.map((activity) => (
+            {visibleActivities.map((activity) => (
               <div key={activity.id} className="rounded-xl border p-3">
                 <div className="flex items-start gap-3">
                   <Calendar className="h-4 w-4 text-primary mt-0.5" />
