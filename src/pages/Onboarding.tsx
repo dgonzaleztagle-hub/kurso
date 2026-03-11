@@ -11,6 +11,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { resolveBranding } from "@/lib/branding";
 import { toast } from "sonner";
 
+type ErrorWithMessage = { message?: string };
+
 export default function Onboarding() {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -72,10 +74,10 @@ export default function Onboarding() {
             // Navigate to dashboard - The IndexSwitcher/TenantContext will handle the rest
             navigate("/?welcome=true");
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error creating course:", error);
             sessionStorage.removeItem("kurso_pending_tenant_id");
-            toast.error(error.message || "Error al crear el curso. Intenta nuevamente.");
+            toast.error((error as ErrorWithMessage).message || "Error al crear el curso. Intenta nuevamente.");
         } finally {
             setLoading(false);
         }

@@ -14,6 +14,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+type ErrorWithMessage = { code?: string; message?: string };
+
 const steps = [
     {
         title: "¡Bienvenido a tu Panel!",
@@ -114,8 +116,9 @@ export function WelcomeGuide() {
         setSaving(false);
 
         if (error) {
-            const errorCode = (error as any)?.code;
-            const errorMessage = String((error as any)?.message || "");
+            const errorData = error as ErrorWithMessage;
+            const errorCode = errorData.code;
+            const errorMessage = String(errorData.message || "");
             if (errorCode === "23505" || errorMessage.toLowerCase().includes("duplicate")) {
                 toast.error("Ese WhatsApp ya está registrado en otra cuenta.");
             } else if (errorMessage) {

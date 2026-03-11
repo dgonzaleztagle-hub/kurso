@@ -12,6 +12,8 @@ import { resolveBranding } from "@/lib/branding";
 import { Loader2, Rocket, CheckCircle2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+type ErrorWithMessage = { message?: string };
+
 export default function OnboardingWizard() {
     const { user, appUser, signOut } = useAuth();
     const { refreshTenants, availableTenants } = useTenant(); // Usar refresh del contexto
@@ -37,7 +39,7 @@ export default function OnboardingWizard() {
             setLoading(true);
 
             // 1. Llamada a la RPC segura (ahora con Institución)
-            const { data, error } = await supabase.rpc('create_own_tenant' as any, {
+            const { data, error } = await supabase.rpc('create_own_tenant', {
                 new_tenant_name: courseName.trim(),
                 new_institution_name: institutionName.trim()
             });
@@ -65,12 +67,12 @@ export default function OnboardingWizard() {
                 navigate("/?welcome=true"); // Redirigir al Dashboard con flag de bienvenida
             }, 1500);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
             sessionStorage.removeItem("kurso_pending_tenant_id");
             toast({
                 title: "Error de configuración",
-                description: error.message || "No pudimos crear el espacio. Intenta nuevamente.",
+                description: (error as ErrorWithMessage).message || "No pudimos crear el espacio. Intenta nuevamente.",
                 variant: "destructive"
             });
             setLoading(false);
