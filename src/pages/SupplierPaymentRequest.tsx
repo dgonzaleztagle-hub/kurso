@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { BankCombobox } from "@/components/BankCombobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,29 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { CHILEAN_ACCOUNT_TYPES } from "@/lib/banking";
+import { resolveBranding } from "@/lib/branding";
 import { toast } from "sonner";
 import { Upload } from "lucide-react";
-import logoSantaCruz from "@/assets/logo-santa-cruz.png";
-
-const BANKS = [
-  "Banco de Chile",
-  "Banco Estado",
-  "Banco Santander",
-  "BCI",
-  "Scotiabank",
-  "Banco Itaú",
-  "Banco Security",
-  "Banco Falabella",
-  "Banco Ripley",
-  "Banco Consorcio",
-  "Banco BICE",
-  "BBVA",
-  "Coopeuch",
-  "Otro"
-];
 
 export default function SupplierPaymentRequest() {
-  const navigate = useNavigate();
+  const branding = resolveBranding();
   const signedToken = new URLSearchParams(window.location.search).get("token");
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -67,7 +51,16 @@ export default function SupplierPaymentRequest() {
       }
 
       // Validaciones
-      if (!formData.supplier_name || !formData.amount || !formData.subject) {
+      if (
+        !formData.supplier_name ||
+        !formData.bank ||
+        !formData.account_type ||
+        !formData.account_number ||
+        !formData.holder_name ||
+        !formData.holder_rut ||
+        !formData.amount ||
+        !formData.subject
+      ) {
         toast.error("Por favor complete todos los campos obligatorios");
         setLoading(false);
         return;
@@ -147,12 +140,14 @@ export default function SupplierPaymentRequest() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-3 md:py-8 px-3 md:px-4">
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-4 md:mb-8">
-          <img src={logoSantaCruz} alt="Logo" className="h-14 md:h-20 mx-auto mb-2 md:mb-4" />
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.appName} className="h-14 md:h-20 mx-auto mb-2 md:mb-4 object-contain" />
+          ) : null}
           <h1 className="text-xl md:text-3xl font-bold text-foreground mb-1 md:mb-2">
             Solicitud de Pago a Proveedor
           </h1>
           <p className="text-sm md:text-base text-muted-foreground">
-            Portal externo de proveedores
+            {branding.supplierPortalSubtitle}
           </p>
         </div>
 
@@ -217,21 +212,13 @@ export default function SupplierPaymentRequest() {
                 
                 <div className="space-y-1.5">
                   <Label htmlFor="bank" className="text-sm">Banco *</Label>
-                  <Select
-                    value={formData.bank}
-                    onValueChange={(value) => setFormData({ ...formData, bank: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione un banco" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BANKS.map((bank) => (
-                        <SelectItem key={bank} value={bank}>
-                          {bank}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div id="bank">
+                    <BankCombobox
+                      value={formData.bank}
+                      onValueChange={(value) => setFormData({ ...formData, bank: value })}
+                      placeholder="Seleccione un banco"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
@@ -245,10 +232,11 @@ export default function SupplierPaymentRequest() {
                         <SelectValue placeholder="Seleccione tipo" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Cuenta Corriente">Cuenta Corriente</SelectItem>
-                        <SelectItem value="Cuenta Vista">Cuenta Vista</SelectItem>
-                        <SelectItem value="Cuenta de Ahorro">Cuenta de Ahorro</SelectItem>
-                        <SelectItem value="Cuenta RUT">Cuenta RUT</SelectItem>
+                        {CHILEAN_ACCOUNT_TYPES.map((accountType) => (
+                          <SelectItem key={accountType} value={accountType}>
+                            {accountType}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

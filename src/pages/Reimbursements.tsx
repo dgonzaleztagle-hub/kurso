@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
+import { BankCombobox } from "@/components/BankCombobox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CHILEAN_ACCOUNT_TYPES } from "@/lib/banking";
 import { toast } from "sonner";
 import { FileText, Download, CheckCircle, XCircle, Clock, Check, X, Share2, Copy } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -192,6 +195,14 @@ export default function Reimbursements() {
     const resolvedTenantId = currentTenant?.id || localStorage.getItem("kurso_last_tenant");
     if (!resolvedTenantId) {
       toast.error("No se pudo detectar el curso activo");
+      return;
+    }
+
+    const hasBankData = bank && accountType && accountNumber && holderName;
+    const hasSupplierData = type === "supplier_payment" ? supplierName && supplierRut : true;
+
+    if (!amount || !subject || !hasBankData || !hasSupplierData) {
+      toast.error("Complete todos los campos requeridos antes de continuar");
       return;
     }
 
@@ -843,31 +854,36 @@ export default function Reimbursements() {
 
           <div>
             <Label htmlFor="bank">Banco</Label>
-            <Input
-              id="bank"
-              placeholder="Nombre del banco"
-              value={bank}
-              onChange={(e) => setBank(e.target.value)}
-              required
-            />
+            <div id="bank">
+              <BankCombobox
+                value={bank}
+                onValueChange={setBank}
+                placeholder="Seleccione un banco"
+              />
+            </div>
           </div>
 
           <div>
             <Label htmlFor="accountType">Tipo de Cuenta</Label>
-            <Input
-              id="accountType"
-              placeholder="Corriente, Vista, etc."
-              value={accountType}
-              onChange={(e) => setAccountType(e.target.value)}
-              required
-            />
+            <Select value={accountType} onValueChange={setAccountType}>
+              <SelectTrigger id="accountType">
+                <SelectValue placeholder="Seleccione tipo de cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {CHILEAN_ACCOUNT_TYPES.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
-            <Label htmlFor="accountNumber">Número de Cuenta</Label>
+            <Label htmlFor="accountNumber">Numero de Cuenta</Label>
             <Input
               id="accountNumber"
-              placeholder="Número de cuenta"
+              placeholder="Numero de cuenta"
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
               required
@@ -913,31 +929,36 @@ export default function Reimbursements() {
 
           <div>
             <Label htmlFor="bank">Banco</Label>
-            <Input
-              id="bank"
-              placeholder="Nombre del banco"
-              value={bank}
-              onChange={(e) => setBank(e.target.value)}
-              required
-            />
+            <div id="bank">
+              <BankCombobox
+                value={bank}
+                onValueChange={setBank}
+                placeholder="Seleccione un banco"
+              />
+            </div>
           </div>
 
           <div>
             <Label htmlFor="accountType">Tipo de Cuenta</Label>
-            <Input
-              id="accountType"
-              placeholder="Corriente, Vista, etc."
-              value={accountType}
-              onChange={(e) => setAccountType(e.target.value)}
-              required
-            />
+            <Select value={accountType} onValueChange={setAccountType}>
+              <SelectTrigger id="accountType">
+                <SelectValue placeholder="Seleccione tipo de cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {CHILEAN_ACCOUNT_TYPES.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
-            <Label htmlFor="accountNumber">Número de Cuenta</Label>
+            <Label htmlFor="accountNumber">Numero de Cuenta</Label>
             <Input
               id="accountNumber"
-              placeholder="Número de cuenta"
+              placeholder="Numero de cuenta"
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
               required
