@@ -1,10 +1,20 @@
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, ArrowRight, MessageCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { resolveBranding } from "@/lib/branding";
 
-export const ServiceLayout = ({ children, title, subtitle, icon: Icon, colorClass }: any) => {
+interface ServiceLayoutProps {
+    children: ReactNode;
+    title: string;
+    subtitle: string;
+    icon: LucideIcon;
+    colorClass: string;
+}
+
+export const ServiceLayout = ({ children, title, subtitle, icon: Icon, colorClass }: ServiceLayoutProps) => {
     const branding = resolveBranding();
     const navigate = useNavigate();
 

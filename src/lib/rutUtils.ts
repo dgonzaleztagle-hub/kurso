@@ -1,7 +1,7 @@
 export function formatRut(rut: string): string {
     if (!rut) return "";
     // Limpiar caracteres no válidos
-    let value = rut.replace(/[^0-9kK]/g, "");
+    const value = rut.replace(/[^0-9kK]/g, "");
 
     if (value.length <= 1) return value;
 
