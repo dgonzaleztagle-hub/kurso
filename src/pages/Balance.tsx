@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { PostgrestError } from "@supabase/supabase-js";
+import type { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -43,6 +45,11 @@ interface OpeningBalance {
 const normalizeConcept = (value?: string | null, fallback = "Sin concepto") =>
   (value && value.trim()) || fallback;
 
+type PaymentRow = Tables<"payments">;
+type ExpenseRow = Tables<"expenses">;
+type OpeningBalanceRow = OpeningBalance;
+type QueryResult<T> = Promise<{ data: T[] | null; error: PostgrestError | null }>;
+
 export default function Balance() {
   const { currentTenant } = useTenant();
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -54,34 +61,32 @@ export default function Balance() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [openingBalances, setOpeningBalances] = useState<OpeningBalance[]>([]);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadData();
-    }
-  }, [currentTenant?.id]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!currentTenant?.id) return;
     try {
       setLoading(true);
       const [paymentsResult, expensesResult, openingResult] = await Promise.all([
-        supabase.from("payments" as any).select("*").eq("tenant_id", currentTenant.id),
-        supabase.from("expenses" as any).select("*").eq("tenant_id", currentTenant.id),
-        supabase.from("tenant_opening_balances" as any).select("*").eq("tenant_id", currentTenant.id).eq("status", "active"),
+        supabase.from("payments").select("*").eq("tenant_id", currentTenant.id) as QueryResult<PaymentRow>,
+        supabase.from("expenses").select("*").eq("tenant_id", currentTenant.id) as QueryResult<ExpenseRow>,
+        supabase
+          .from("tenant_opening_balances" as never)
+          .select("*")
+          .eq("tenant_id", currentTenant.id)
+          .eq("status", "active") as QueryResult<OpeningBalanceRow>,
       ]);
 
       if (paymentsResult.error) throw paymentsResult.error;
       if (expensesResult.error) throw expensesResult.error;
       if (openingResult.error) throw openingResult.error;
 
-      const normalizedPayments: Payment[] = (paymentsResult.data || []).map((row: any) => ({
+      const normalizedPayments: Payment[] = ((paymentsResult.data as PaymentRow[] | null) || []).map((row) => ({
         id: row.id,
         concept: normalizeConcept(row.concept ?? row.description, "Sin concepto de ingreso"),
         amount: Number(row.amount || 0),
         payment_date: row.payment_date || new Date().toISOString().split("T")[0],
       }));
 
-      const normalizedExpenses: Expense[] = (expensesResult.data || []).map((row: any) => ({
+      const normalizedExpenses: Expense[] = ((expensesResult.data as ExpenseRow[] | null) || []).map((row) => ({
         id: row.id,
         concept: normalizeConcept(row.concept ?? row.description, "Sin concepto de egreso"),
         amount: Number(row.amount || 0),
@@ -90,14 +95,20 @@ export default function Balance() {
 
       setPayments(normalizedPayments);
       setExpenses(normalizedExpenses);
-      setOpeningBalances((openingResult.data || []) as OpeningBalance[]);
-    } catch (error) {
+      setOpeningBalances((openingResult.data as OpeningBalanceRow[] | null) || []);
+    } catch (error: unknown) {
       console.error("Error loading data:", error);
       toast.error("Error al cargar datos");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadData();
+    }
+  }, [currentTenant?.id, loadData]);
 
   // Calculate detailed balance (grouped by concept)
   const calculateDetailed = () => {
@@ -576,7 +587,7 @@ export default function Balance() {
         <CardContent>
           <div className="space-y-2">
             <Label>Seleccione el tipo de detalle</Label>
-            <Select value={viewType} onValueChange={(value: any) => setViewType(value)}>
+            <Select value={viewType} onValueChange={(value: "detailed" | "summary") => setViewType(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

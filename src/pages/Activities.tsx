@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,8 @@ interface Activity {
   can_redirect_to_fees: boolean;
 }
 
+type ActivityRow = Tables<"activities">;
+
 export default function Activities() {
   const { currentTenant } = useTenant();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -32,13 +35,7 @@ export default function Activities() {
     can_redirect_to_fees: false,
   });
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadActivities();
-    }
-  }, [currentTenant?.id]);
-
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("activities")
@@ -47,14 +44,20 @@ export default function Activities() {
         .order("activity_date", { ascending: false });
 
       if (error) throw error;
-      setActivities(data || []);
-    } catch (error) {
+      setActivities((data as ActivityRow[] | null) || []);
+    } catch (error: unknown) {
       console.error("Error loading activities:", error);
       toast.error("Error al cargar actividades");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadActivities();
+    }
+  }, [currentTenant?.id, loadActivities]);
 
   const handleAddActivity = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,10 +87,10 @@ export default function Activities() {
       toast.success("Actividad agregada exitosamente");
       setNewActivity({ name: "", amount: "", activity_date: "", can_redirect_to_fees: false });
       setOpen(false);
-      loadActivities();
-    } catch (error) {
+      await loadActivities();
+    } catch (error: unknown) {
       console.error("Error adding activity:", error);
-      toast.error((error as any)?.message || "Error al agregar actividad");
+      toast.error(error instanceof Error ? error.message : "Error al agregar actividad");
     }
   };
 
@@ -117,8 +120,8 @@ export default function Activities() {
       toast.success("Actividad actualizada exitosamente");
       setEditingActivity(null);
       setOpen(false);
-      loadActivities();
-    } catch (error) {
+      await loadActivities();
+    } catch (error: unknown) {
       console.error("Error updating activity:", error);
       toast.error("Error al actualizar actividad");
     }
@@ -154,8 +157,8 @@ export default function Activities() {
       if (error) throw error;
 
       toast.success("Actividad eliminada");
-      loadActivities();
-    } catch (error) {
+      await loadActivities();
+    } catch (error: unknown) {
       console.error("Error deleting activity:", error);
       toast.error("Error al eliminar actividad");
     }
