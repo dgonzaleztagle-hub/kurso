@@ -314,6 +314,12 @@ export default function FormResponses() {
   };
 
   const pendingStudents = getStudentsWithoutResponse();
+  const respondedStudentIds = new Set(
+    responses
+      .filter(r => r.student_id !== null)
+      .map(r => String(r.student_id))
+  );
+  const respondedStudentsCount = respondedStudentIds.size;
 
   // Obtener estudiantes que pueden ser excluidos (no han respondido y no están excluidos)
   const getAvailableForExclusion = () => {
@@ -334,13 +340,13 @@ export default function FormResponses() {
       reason: e.reason || undefined
     }));
 
-    await generatePendingFormReport({
-      formTitle: form.title,
-      pendingStudents: pendingStudents.map(s => ({ name: s.name })),
-      excludedStudents: excludedWithNames,
-      totalStudents: allStudents.length,
-      respondedCount: responses.filter(r => r.student_id !== null).length
-    }, currentTenant);
+      await generatePendingFormReport({
+        formTitle: form.title,
+        pendingStudents: pendingStudents.map(s => ({ name: s.name })),
+        excludedStudents: excludedWithNames,
+        totalStudents: allStudents.length,
+        respondedCount: respondedStudentsCount
+      }, currentTenant);
 
     toast.success('Informe PDF generado');
   };
@@ -480,7 +486,7 @@ export default function FormResponses() {
                 <p className="text-xs text-muted-foreground text-center">Total</p>
               </Card>
               <Card className="p-3 bg-green-50 dark:bg-green-950/30">
-                <p className="text-xl md:text-2xl font-bold text-center text-green-600">{responses.filter(r => r.student_id !== null).length}</p>
+                <p className="text-xl md:text-2xl font-bold text-center text-green-600">{respondedStudentsCount}</p>
                 <p className="text-xs text-muted-foreground text-center">Respondieron</p>
               </Card>
               <Card className="p-3 bg-yellow-50 dark:bg-yellow-950/30">

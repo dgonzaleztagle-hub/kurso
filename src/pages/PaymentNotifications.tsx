@@ -136,13 +136,6 @@ export default function PaymentNotifications() {
       console.log('Payment details:', JSON.stringify(paymentDetails, null, 2));
       console.log('Selected debts to process:', selectedDebts.length);
 
-      // Obtener el siguiente folio
-      const { data: folioData } = await supabase.rpc('get_next_payment_folio_for_tenant' as any, {
-        target_tenant_id: currentTenant.id,
-      });
-      let currentFolio = folioData || 1;
-      const configuredFee = Number((currentTenant.settings as any)?.monthly_fee);
-      const monthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
       const normalizeMonthName = (value: string) => String(value).trim().toUpperCase().split(' ')[0];
 
       // Legacy notifications don't store payment_details. In that case we allocate
@@ -173,6 +166,12 @@ export default function PaymentNotifications() {
 
       const activityDebts = selectedDebts.filter((debt: any) => debt.type === 'activity');
       const monthlyFeeDebts = selectedDebts.filter((debt: any) => debt.type === 'monthly_fee');
+      const requiredFolios = activityDebts.length + (monthlyFeeDebts.length > 0 ? 1 : 0);
+      const { data: folioData } = await supabase.rpc('reserve_payment_folios_for_tenant' as any, {
+        target_tenant_id: currentTenant.id,
+        requested_count: Math.max(requiredFolios, 1),
+      });
+      let currentFolio = folioData || 1;
 
       // Registrar pagos según la distribución
       for (const debt of activityDebts) {

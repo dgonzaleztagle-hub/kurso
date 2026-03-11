@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStudentDashboardData } from "@/hooks/useStudentDashboardData";
 import { formatDateForDisplay, parseDateFromDB } from "@/lib/dateUtils";
+import { getVisibleUpcomingActivities } from "@/lib/studentDashboardUtils";
 import { AlertCircle, Calendar, CreditCard, DollarSign, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -30,9 +31,7 @@ export default function MobileBoard() {
       currency: "CLP",
     }).format(amount);
 
-  const visibleActivities = (activities.length > 0 ? activities : upcomingActivities)
-    .filter((activity) => !activity.completed)
-    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
+  const visibleActivities = getVisibleUpcomingActivities(activities, upcomingActivities);
 
   if (loading) {
     return (

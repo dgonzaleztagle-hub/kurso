@@ -25,6 +25,7 @@ export interface StudentDashboardScheduledActivity {
   name: string;
   scheduled_date: string;
   completed: boolean;
+  source?: "scheduled" | "activity";
 }
 
 export interface StudentDashboardNotification {
@@ -124,10 +125,36 @@ export async function fetchStudentDashboardDataForPeriod(
       name: activity.name,
       scheduled_date: activity.scheduled_date,
       completed: false,
+      source: "scheduled",
     });
   });
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const activity of activitiesResult.data || []) {
+    if (!activity.activity_date) continue;
+
+    const activityDate = new Date(activity.activity_date);
+    activityDate.setHours(0, 0, 0, 0);
+    if (activityDate < today) continue;
+
+    const mergedKey = `activity-${activity.id}`;
+    activeActivitiesMap.set(mergedKey, {
+      id: mergedKey,
+      name: activity.name,
+      scheduled_date: activity.activity_date,
+      completed: false,
+      source: "activity",
+    });
+  }
+
   const activeActivities = Array.from(activeActivitiesMap.values())
+    .filter((activity) => {
+      const activityDate = new Date(activity.scheduled_date);
+      activityDate.setHours(0, 0, 0, 0);
+      return activityDate >= today;
+    })
     .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
 
   const donationsMap: { [activityId: string]: StudentDashboardDonation[] } = {};
@@ -196,8 +223,6 @@ export async function fetchStudentDashboardDataForPeriod(
     if (!activity.activity_date) continue;
 
     const activityDate = new Date(activity.activity_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     if (activityDate > today) continue;
     if (exclusionsSet.has(activity.id)) continue;

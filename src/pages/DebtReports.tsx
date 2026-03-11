@@ -75,6 +75,12 @@ export default function DebtReports() {
     }
   }, [currentTenant?.id]);
 
+  useEffect(() => {
+    setShowPreview(false);
+    setPreviewMonthlyDebts([]);
+    setPreviewActivityDebts([]);
+  }, [reportType, scope, selectedStudent, selectedActivity, monthlyDetailType, monthlyPeriod]);
+
   const loadData = async () => {
     if (!currentTenant?.id) return;
 
@@ -212,6 +218,15 @@ export default function DebtReports() {
           return [];
         }
 
+        if (activity.activity_date) {
+          const activityDate = parseDateFromDB(activity.activity_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (activityDate > today) {
+            return [];
+          }
+        }
+
         const relatedPayments = payments.filter((payment) =>
           sameId(payment.student_id, student.id)
           && (
@@ -285,6 +300,17 @@ export default function DebtReports() {
     return studentsWithDebt;
   };
 
+  const getReportSnapshot = async () => {
+    if (showPreview) {
+      return {
+        monthlyDebts: previewMonthlyDebts,
+        activityDebts: previewActivityDebts,
+      };
+    }
+
+    return calculateReportData();
+  };
+
   const handleConsultDebts = async () => {
     if (!currentTenant?.id) {
       toast.error("Error: No se ha identificado el curso actual");
@@ -309,7 +335,7 @@ export default function DebtReports() {
   const generatePDF = async () => {
     try {
       setLoading(true);
-      const { monthlyDebts, activityDebts } = await calculateReportData();
+      const { monthlyDebts, activityDebts } = await getReportSnapshot();
       const doc = new jsPDF();
       const pdfBranding = getPdfBranding(currentTenant);
       const logoImg = await loadImageElement(pdfBranding.logoUrl);
@@ -554,7 +580,7 @@ export default function DebtReports() {
   const handleGenerateDebtCertificates = async () => {
     try {
       setLoading(true);
-      const { monthlyDebts, activityDebts } = await calculateReportData();
+      const { monthlyDebts, activityDebts } = await getReportSnapshot();
       const studentsWithDebt = buildStudentsWithDebt(monthlyDebts, activityDebts);
 
       if (studentsWithDebt.size === 0) {
