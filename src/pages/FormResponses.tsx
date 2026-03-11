@@ -23,7 +23,7 @@ import { useTenant } from '@/contexts/TenantContext';
 
 interface FormExclusion {
   id: string;
-  student_id: number;
+  student_id: string | number;
   reason: string | null;
 }
 
@@ -37,8 +37,8 @@ export default function FormResponses() {
   const [form, setForm] = useState<Form | null>(null);
   const [fields, setFields] = useState<FormField[]>([]);
   const [responses, setResponses] = useState<FormResponse[]>([]);
-  const [students, setStudents] = useState<Record<number, string>>({});
-  const [allStudents, setAllStudents] = useState<{ id: number; name: string }[]>([]);
+  const [students, setStudents] = useState<Record<string, string>>({});
+  const [allStudents, setAllStudents] = useState<Array<{ id: string | number; name: string }>>([]);
   const [selectedResponse, setSelectedResponse] = useState<FormResponse | null>(null);
   const [exclusions, setExclusions] = useState<FormExclusion[]>([]);
   const [exclusionsDialogOpen, setExclusionsDialogOpen] = useState(false);
@@ -73,7 +73,7 @@ export default function FormResponses() {
         .from('form_exclusions')
         .insert({
           form_id: id,
-          student_id: parseInt(newExclusionStudentId),
+          student_id: /^\d+$/.test(newExclusionStudentId) ? Number(newExclusionStudentId) : newExclusionStudentId,
           reason: newExclusionReason.trim() || null,
           created_by: user?.id || null,
         });
@@ -145,10 +145,10 @@ export default function FormResponses() {
         : { data: [], error: null };
 
       if (!studentsRes.error && studentsRes.data) {
-        const studentMap: Record<number, string> = {};
+        const studentMap: Record<string, string> = {};
         const mappedStudents = studentsRes.data.map(s => {
           const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre';
-          studentMap[s.id] = fullName;
+          studentMap[String(s.id)] = fullName;
           return { id: s.id, name: fullName };
         });
         setStudents(studentMap);
@@ -258,7 +258,7 @@ export default function FormResponses() {
     const data = responses.map(response => {
       const row: Record<string, any> = {
         'Fecha': format(new Date(response.submitted_at), 'dd/MM/yyyy HH:mm', { locale: es }),
-        'Estudiante': response.student_id ? students[response.student_id] || '-' : '-'
+        'Estudiante': response.student_id ? students[String(response.student_id)] || '-' : '-'
       };
 
       fields.forEach(field => {
@@ -330,7 +330,7 @@ export default function FormResponses() {
     if (!form) return;
 
     const excludedWithNames = exclusions.map(e => ({
-      name: students[e.student_id] || `ID: ${e.student_id}`,
+      name: students[String(e.student_id)] || `ID: ${e.student_id}`,
       reason: e.reason || undefined
     }));
 
@@ -422,7 +422,7 @@ export default function FormResponses() {
                                 {format(new Date(response.submitted_at), 'd/MM/yy HH:mm', { locale: es })}
                               </TableCell>
                               <TableCell>
-                                {response.student_id ? students[response.student_id] || '-' : '-'}
+                                {response.student_id ? students[String(response.student_id)] || '-' : '-'}
                               </TableCell>
                               {previewValues.map((val, idx) => (
                                 <TableCell key={idx} className="max-w-[200px] truncate">
@@ -600,9 +600,9 @@ export default function FormResponses() {
                 <div className="text-sm text-muted-foreground">
                   Enviada el {format(new Date(selectedResponse.submitted_at), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
                 </div>
-                {selectedResponse.student_id && students[selectedResponse.student_id] && (
+                {selectedResponse.student_id && students[String(selectedResponse.student_id)] && (
                   <div className="text-sm">
-                    <strong>Estudiante:</strong> {students[selectedResponse.student_id]}
+                    <strong>Estudiante:</strong> {students[String(selectedResponse.student_id)]}
                   </div>
                 )}
                 <div className="space-y-4 pt-4 border-t">
@@ -703,7 +703,7 @@ export default function FormResponses() {
                     >
                       <div>
                         <p className="text-sm font-medium">
-                          {students[exclusion.student_id] || `ID: ${exclusion.student_id}`}
+                          {students[String(exclusion.student_id)] || `ID: ${exclusion.student_id}`}
                         </p>
                         {exclusion.reason && (
                           <p className="text-xs text-muted-foreground">{exclusion.reason}</p>

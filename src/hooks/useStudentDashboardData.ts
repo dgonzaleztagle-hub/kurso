@@ -113,10 +113,21 @@ export async function fetchStudentDashboardDataForPeriod(
   if (notificationsResult.error) throw notificationsResult.error;
 
   const fullName = `${studentResult.data.first_name || ""} ${studentResult.data.last_name || ""}`.trim() || "Sin Nombre";
-  const scheduledActivities = scheduledActivitiesResult.data || [];
+  const scheduledActivities = (scheduledActivitiesResult.data || [])
+    .filter((activity) => Boolean(activity.id) && Boolean(activity.name) && Boolean(activity.scheduled_date));
 
-  const activeActivities = scheduledActivities
-    .filter((act) => !act.completed)
+  const activeActivitiesMap = new Map<string, StudentDashboardScheduledActivity>();
+  scheduledActivities.forEach((activity) => {
+    if (activity.completed === true) return;
+    activeActivitiesMap.set(String(activity.id), {
+      id: String(activity.id),
+      name: activity.name,
+      scheduled_date: activity.scheduled_date,
+      completed: false,
+    });
+  });
+
+  const activeActivities = Array.from(activeActivitiesMap.values())
     .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
 
   const donationsMap: { [activityId: string]: StudentDashboardDonation[] } = {};
