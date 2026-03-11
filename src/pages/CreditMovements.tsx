@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { ComponentProps } from "react";
+import type { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,12 @@ interface CreditMovement {
   creator_name?: string;
 }
 
+type CreditMovementRow = Tables<"credit_movements"> & {
+  students: { first_name: string | null; last_name: string | null } | null;
+};
+type UserRoleRow = { user_id: string; user_name: string | null };
+type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+
 export default function CreditMovements() {
   const { appUser } = useAuth();
   const { currentTenant } = useTenant();
@@ -45,15 +53,33 @@ export default function CreditMovements() {
   const [reverseReason, setReverseReason] = useState("");
   const [reversing, setReversing] = useState(false);
 
-  useEffect(() => {
-    loadMovements();
-  }, []);
+  const filterMovements = useCallback(() => {
+    let filtered = [...movements];
 
-  useEffect(() => {
-    filterMovements();
-  }, [movements, searchTerm, dateFrom, dateTo]);
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(movement =>
+        movement.student_name?.toLowerCase().includes(term) ||
+        (movement.description || "").toLowerCase().includes(term)
+      );
+    }
 
-  const loadMovements = async () => {
+    if (dateFrom) {
+      filtered = filtered.filter(movement =>
+        new Date(movement.created_at) >= new Date(dateFrom)
+      );
+    }
+
+    if (dateTo) {
+      filtered = filtered.filter(movement =>
+        new Date(movement.created_at) <= new Date(dateTo + 'T23:59:59')
+      );
+    }
+
+    setFilteredMovements(filtered);
+  }, [dateFrom, dateTo, movements, searchTerm]);
+
+  const loadMovements = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -72,7 +98,8 @@ export default function CreditMovements() {
       if (movementsError) throw movementsError;
 
       // Get unique creator IDs
-      const creatorIds = [...new Set(movementsData?.map(m => m.created_by).filter(Boolean))];
+      const typedMovements = (movementsData as CreditMovementRow[] | null) || [];
+      const creatorIds = [...new Set(typedMovements.map((movement) => movement.created_by).filter((value): value is string => Boolean(value)))];
 
       // Fetch creator names
       const { data: creatorsData } = await supabase
@@ -81,57 +108,37 @@ export default function CreditMovements() {
         .in("user_id", creatorIds);
 
       const creatorsMap = new Map(
-        creatorsData?.map(c => [c.user_id, c.user_name]) || []
+        ((creatorsData as UserRoleRow[] | null) || []).map((creator) => [creator.user_id, creator.user_name])
       );
 
-      const enrichedMovements: CreditMovement[] = movementsData?.map(m => {
-        const student = m.students as any;
+      const enrichedMovements: CreditMovement[] = typedMovements.map((movement) => {
+        const student = movement.students;
         const studentName = student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'Sin Nombre';
 
         return {
-          ...m,
+          ...movement,
           student_name: studentName,
-          creator_name: creatorsMap.get(m.created_by) || 'Sistema',
-          details: Array.isArray(m.details) ? m.details as Array<{ concept: string; amount: number }> : []
+          creator_name: creatorsMap.get(movement.created_by || "") || 'Sistema',
+          details: Array.isArray(movement.details) ? movement.details as Array<{ concept: string; amount: number }> : []
         };
-      }) || [];
+      });
 
       setMovements(enrichedMovements);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading movements:", error);
       toast.error("Error al cargar movimientos de crédito");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterMovements = () => {
-    let filtered = [...movements];
+  useEffect(() => {
+    void loadMovements();
+  }, [loadMovements]);
 
-    // Filter by search term (student name or description)
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(m =>
-        m.student_name?.toLowerCase().includes(term) ||
-        (m.description || "").toLowerCase().includes(term)
-      );
-    }
-
-    // Filter by date range
-    if (dateFrom) {
-      filtered = filtered.filter(m =>
-        new Date(m.created_at) >= new Date(dateFrom)
-      );
-    }
-
-    if (dateTo) {
-      filtered = filtered.filter(m =>
-        new Date(m.created_at) <= new Date(dateTo + 'T23:59:59')
-      );
-    }
-
-    setFilteredMovements(filtered);
-  };
+  useEffect(() => {
+    filterMovements();
+  }, [filterMovements]);
 
   const getTypeLabel = (type: string) => {
     const labels = {
@@ -247,9 +254,9 @@ export default function CreditMovements() {
       toast.success("Reversa registrada");
       setShowReverseDialog(false);
       await loadMovements();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error reversing credit movement:", error);
-      toast.error(error?.message || "No se pudo reversar el movimiento");
+      toast.error(error instanceof Error ? error.message : "No se pudo reversar el movimiento");
     } finally {
       setReversing(false);
     }
@@ -408,7 +415,7 @@ export default function CreditMovements() {
                       </TableCell>
                       <TableCell className="px-2 sm:px-4">{movement.student_name}</TableCell>
                       <TableCell className="px-2 sm:px-4">
-                        <Badge variant={getTypeColor(movement.type) as any} className="text-xs">
+                        <Badge variant={getTypeColor(movement.type) as BadgeVariant} className="text-xs">
                           {getTypeLabel(movement.type)}
                         </Badge>
                       </TableCell>

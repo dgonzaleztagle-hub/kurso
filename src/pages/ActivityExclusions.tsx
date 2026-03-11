@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -33,8 +33,14 @@ interface Exclusion {
   activities: { name: string; activity_date?: string };
 }
 
+type StudentRow = Pick<Tables<"students">, "id" | "first_name" | "last_name">;
+type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "activity_date">;
+type ExclusionRow = Pick<Tables<"activity_exclusions">, "id" | "student_id" | "activity_id"> & {
+  students: { first_name: string | null; last_name: string | null } | null;
+  activities: { name: string | null; activity_date: string | null } | null;
+};
+
 export default function ActivityExclusions() {
-  const navigate = useNavigate();
   const { userRole, hasPermission, loading: authLoading } = useAuth();
   const { currentTenant } = useTenant();
   const isMobile = useIsMobile();
@@ -48,13 +54,7 @@ export default function ActivityExclusions() {
     activity_id: "",
   });
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadData();
-    }
-  }, [currentTenant?.id]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [exclusionsRes, studentsRes, activitiesRes] = await Promise.all([
         supabase
@@ -71,39 +71,44 @@ export default function ActivityExclusions() {
       if (activitiesRes.error) throw activitiesRes.error;
 
       // Mapear exclusiones
-      const mappedExclusions: Exclusion[] = (exclusionsRes.data || []).map(e => ({
-        id: e.id,
-        student_id: e.student_id,
-        activity_id: e.activity_id,
+      const mappedExclusions: Exclusion[] = (((exclusionsRes.data as ExclusionRow[] | null) || []).map((exclusion) => ({
+        id: exclusion.id,
+        student_id: exclusion.student_id,
+        activity_id: exclusion.activity_id,
         students: {
-          name: `${e.students?.first_name || ''} ${e.students?.last_name || ''}`.trim() || 'Sin Nombre'
+          name: `${exclusion.students?.first_name || ''} ${exclusion.students?.last_name || ''}`.trim() || 'Sin Nombre'
         },
         activities: {
-          name: e.activities?.name || 'Actividad Desconocida',
-          activity_date: e.activities?.activity_date
+          name: exclusion.activities?.name || 'Actividad Desconocida',
+          activity_date: exclusion.activities?.activity_date || undefined
         }
-      }));
+      })));
 
-      // Mapear actividades
-      const mappedActivities: Activity[] = (activitiesRes.data || []).map(a => ({
-        id: a.id,
-        name: a.name,
-        activity_date: a.activity_date
-      }));
+      const mappedActivities: Activity[] = (((activitiesRes.data as ActivityRow[] | null) || []).map((activity) => ({
+        id: activity.id,
+        name: activity.name,
+        activity_date: activity.activity_date || undefined
+      })));
 
       setExclusions(mappedExclusions);
-      setStudents((studentsRes.data || []).map(s => ({
-        id: s.id,
-        name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
-      })));
+      setStudents((((studentsRes.data as StudentRow[] | null) || []).map((student) => ({
+        id: student.id,
+        name: `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Sin Nombre'
+      }))));
       setActivities(mappedActivities);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading data:", error);
       toast.error("Error al cargar datos");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadData();
+    }
+  }, [currentTenant?.id, loadData]);
 
   const handleAddExclusion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,11 +123,11 @@ export default function ActivityExclusions() {
     }
 
     try {
-      const coerceId = (value: string) => (/^\d+$/.test(value) ? Number(value) : value);
+      const coerceId = (value: string) => Number(value);
       const { error } = await supabase.from("activity_exclusions").insert({
         tenant_id: currentTenant.id,
-        student_id: coerceId(newExclusion.student_id) as any,
-        activity_id: coerceId(newExclusion.activity_id) as any,
+        student_id: coerceId(newExclusion.student_id),
+        activity_id: coerceId(newExclusion.activity_id),
       });
 
       if (error) {
@@ -137,8 +142,8 @@ export default function ActivityExclusions() {
       toast.success("Exclusión agregada exitosamente");
       setNewExclusion({ student_id: "", activity_id: "" });
       setOpen(false);
-      loadData();
-    } catch (error) {
+      await loadData();
+    } catch (error: unknown) {
       console.error("Error adding exclusion:", error);
       toast.error("Error al agregar exclusión");
     }
@@ -156,13 +161,13 @@ export default function ActivityExclusions() {
         .from("activity_exclusions")
         .delete()
         .eq("tenant_id", currentTenant.id)
-        .eq("id", id as any);
+        .eq("id", id);
 
       if (error) throw error;
 
       toast.success("Exclusión eliminada");
-      loadData();
-    } catch (error) {
+      await loadData();
+    } catch (error: unknown) {
       console.error("Error deleting exclusion:", error);
       toast.error("Error al eliminar exclusión");
     }
