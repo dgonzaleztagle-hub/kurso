@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,15 @@ type DebtOption = ActivityDebtOption | MonthlyDebtOption;
 
 const DEFAULT_MONTHLY_FEE = 3000;
 
+type StudentRow = Pick<Tables<"students">, "id" | "first_name" | "last_name">;
+type CreditRow = Pick<Tables<"student_credits">, "student_id" | "amount">;
+type PaymentRow = Pick<Tables<"payments">, "id" | "folio" | "payment_date" | "student_id" | "student_name" | "concept" | "amount" | "activity_id" | "redirected_amount" | "redirect_status" | "redirect_locked">;
+type StudentDebtRow = Pick<Tables<"students">, "id" | "enrollment_date">;
+type DebtPaymentRow = Pick<Tables<"payments">, "amount" | "redirected_amount" | "concept" | "activity_id" | "month_period">;
+type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "amount" | "activity_date">;
+type ExclusionRow = Pick<Tables<"activity_exclusions">, "activity_id">;
+type CreditApplicationRow = Pick<Tables<"credit_applications">, "amount" | "reversed_amount" | "target_type" | "target_month" | "target_activity_id">;
+
 export default function CreditManagement() {
   const { appUser } = useAuth();
   const { currentTenant } = useTenant();
@@ -89,17 +99,11 @@ export default function CreditManagement() {
   const [applying, setApplying] = useState(false);
 
   const monthlyFee = useMemo(() => {
-    const configured = Number((currentTenant?.settings as any)?.monthly_fee);
+    const configured = Number(currentTenant?.settings?.monthly_fee);
     return Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_MONTHLY_FEE;
   }, [currentTenant?.settings]);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      void loadData();
-    }
-  }, [currentTenant?.id]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!currentTenant?.id) return;
 
     try {
@@ -129,33 +133,41 @@ export default function CreditManagement() {
       if (paymentsResult.error) throw paymentsResult.error;
 
       const creditMap = new Map<string, number>();
-      (creditsResult.data || []).forEach((credit) => {
+      ((creditsResult.data as CreditRow[] | null) || []).forEach((credit) => {
         creditMap.set(String(credit.student_id), toSafeNumber(credit.amount));
       });
 
       setStudents(
-        (studentsResult.data || []).map((student) => ({
-          id: student.id,
+        (((studentsResult.data as StudentRow[] | null) || []).map((student) => ({
+          id: String(student.id),
           name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
           credit_amount: creditMap.get(String(student.id)) || 0,
-        })),
+        }))),
       );
 
       setPayments(
-        (paymentsResult.data || []).map((payment) => ({
+        (((paymentsResult.data as PaymentRow[] | null) || []).map((payment) => ({
           ...payment,
+          student_id: payment.student_id === null ? null : String(payment.student_id),
+          activity_id: payment.activity_id === null ? null : String(payment.activity_id),
           redirected_amount: toSafeNumber(payment.redirected_amount),
           redirect_status: payment.redirect_status || "available",
           redirect_locked: !!payment.redirect_locked,
-        })),
+        }))),
       );
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading credit data:", error);
       toast.error("Error al cargar datos de créditos");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadData();
+    }
+  }, [currentTenant?.id, loadData]);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("es-CL", {
@@ -202,9 +214,9 @@ export default function CreditManagement() {
       toast.success("Crédito generado y pago bloqueado para nuevas redirecciones");
       setShowRedirectDialog(false);
       await loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error redirecting payment:", error);
-      toast.error(error?.message || "No se pudo redirigir el pago");
+      toast.error(error instanceof Error ? error.message : "No se pudo redirigir el pago");
     } finally {
       setRedirecting(false);
     }
@@ -252,8 +264,10 @@ export default function CreditManagement() {
       if (applicationsResult.error) throw applicationsResult.error;
 
       const enrollmentDate = studentResult.data.enrollment_date;
-      const paymentsData = paymentsResult.data || [];
-      const applicationsData = applicationsResult.data || [];
+      const paymentsData = (paymentsResult.data as DebtPaymentRow[] | null) || [];
+      const activitiesData = (activitiesResult.data as ActivityRow[] | null) || [];
+      const exclusionsData = (exclusionsResult.data as ExclusionRow[] | null) || [];
+      const applicationsData = (applicationsResult.data as CreditApplicationRow[] | null) || [];
 
       const monthlyDebtOptions = calculateMonthlyDebtItems({
         enrollmentDate,
@@ -273,9 +287,9 @@ export default function CreditManagement() {
           targetMonth: month.key,
         }));
 
-      const exclusions = new Set((exclusionsResult.data || []).map((item) => item.activity_id));
+      const exclusions = new Set(exclusionsData.map((item) => item.activity_id));
       const studentEnrollment = parseDateFromDB(enrollmentDate);
-      const activityDebtOptions = (activitiesResult.data || [])
+      const activityDebtOptions = activitiesData
         .filter((activity) => {
           if (!activity.activity_date) return false;
           if (exclusions.has(activity.id)) return false;
@@ -313,7 +327,7 @@ export default function CreditManagement() {
       setStudentDebtOptions(allOptions);
       setSelectedDebtOptionId(allOptions[0]?.id || "");
       setApplyAmount(allOptions[0] ? String(allOptions[0].due) : "");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading student debts:", error);
       toast.error("No se pudieron cargar las deudas del alumno");
       setStudentDebtOptions([]);
@@ -368,9 +382,9 @@ export default function CreditManagement() {
       toast.success("Crédito aplicado manualmente");
       setShowApplyDialog(false);
       await loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error applying credit:", error);
-      toast.error(error?.message || "No se pudo aplicar el crédito");
+      toast.error(error instanceof Error ? error.message : "No se pudo aplicar el crédito");
     } finally {
       setApplying(false);
     }

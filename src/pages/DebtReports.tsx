@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import jsPDF from "jspdf";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useTenant } from "@/contexts/TenantContext";
 import { parseDateFromDB } from "@/lib/dateUtils";
 import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
@@ -50,6 +51,13 @@ interface StudentDebtCertificate {
   activities: Array<{ id: number; name: string; amount: number }>;
 }
 
+type StudentRow = Pick<Tables<"students">, "id" | "first_name" | "last_name" | "enrollment_date">;
+type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "amount" | "activity_date">;
+type PaymentRow = Pick<Tables<"payments">, "student_id" | "concept" | "amount" | "activity_id" | "redirected_amount" | "month_period">;
+type MonthlyApplicationRow = Pick<Tables<"credit_applications">, "student_id" | "amount" | "reversed_amount" | "target_type" | "target_month">;
+type ActivityApplicationRow = Pick<Tables<"credit_applications">, "student_id" | "amount" | "reversed_amount" | "target_type" | "target_activity_id">;
+type ExclusionRow = Pick<Tables<"activity_exclusions">, "student_id" | "activity_id">;
+
 export default function DebtReports() {
   const { currentTenant } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
@@ -65,15 +73,9 @@ export default function DebtReports() {
   const [previewActivityDebts, setPreviewActivityDebts] = useState<ActivityDebt[]>([]);
   const [showPreview, setShowPreview] = useState(false);
 
-  const monthlyFee = Number((currentTenant?.settings as any)?.monthly_fee) > 0
-    ? Number((currentTenant?.settings as any)?.monthly_fee)
+  const monthlyFee = Number(currentTenant?.settings?.monthly_fee) > 0
+    ? Number(currentTenant?.settings?.monthly_fee)
     : 3000;
-
-  useEffect(() => {
-    if (currentTenant?.id) {
-      void loadData();
-    }
-  }, [currentTenant?.id]);
 
   useEffect(() => {
     setShowPreview(false);
@@ -81,18 +83,18 @@ export default function DebtReports() {
     setPreviewActivityDebts([]);
   }, [reportType, scope, selectedStudent, selectedActivity, monthlyDetailType, monthlyPeriod]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!currentTenant?.id) return;
 
     try {
       const [studentsResult, activitiesResult] = await Promise.all([
         supabase
-          .from("students" as any)
+          .from("students")
           .select("id, first_name, last_name, enrollment_date")
           .eq("tenant_id", currentTenant.id)
           .order("last_name"),
         supabase
-          .from("activities" as any)
+          .from("activities")
           .select("id, name, amount, activity_date")
           .eq("tenant_id", currentTenant.id)
           .order("name"),
@@ -102,18 +104,24 @@ export default function DebtReports() {
       if (activitiesResult.error) throw activitiesResult.error;
 
       setStudents(
-        (studentsResult.data || []).map((student) => ({
+        (((studentsResult.data as StudentRow[] | null) || []).map((student) => ({
           id: student.id,
           enrollment_date: student.enrollment_date,
           name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
-        })),
+        }))),
       );
-      setActivities(activitiesResult.data || []);
-    } catch (error) {
+      setActivities((activitiesResult.data as ActivityRow[] | null) || []);
+    } catch (error: unknown) {
       console.error("Error loading debt report data:", error);
       toast.error("Error al cargar datos");
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadData();
+    }
+  }, [currentTenant?.id, loadData]);
 
   const getStudentsToProcess = () =>
     scope === "individual" && selectedStudent
@@ -136,23 +144,26 @@ export default function DebtReports() {
         .from("payments")
         .select("student_id, concept, amount, activity_id, redirected_amount, month_period")
         .eq("tenant_id", currentTenant?.id)
-        .in("student_id", studentIds as any),
+        .in("student_id", studentIds),
       supabase
         .from("credit_applications")
         .select("student_id, amount, reversed_amount, target_type, target_month")
         .eq("tenant_id", currentTenant?.id)
-        .in("student_id", studentIds as any),
+        .in("student_id", studentIds),
     ]);
 
     if (paymentsResult.error) throw paymentsResult.error;
     if (applicationsResult.error) throw applicationsResult.error;
 
+    const payments = (paymentsResult.data as PaymentRow[] | null) || [];
+    const applications = (applicationsResult.data as MonthlyApplicationRow[] | null) || [];
+
     return studentsToProcess.flatMap((student) => {
       const monthItems = calculateMonthlyDebtItems({
         enrollmentDate: student.enrollment_date,
         monthlyFee,
-        payments: (paymentsResult.data || []).filter((payment) => sameId(payment.student_id, student.id)),
-        applications: (applicationsResult.data || []).filter((application) => sameId(application.student_id, student.id)),
+        payments: payments.filter((payment) => sameId(payment.student_id, student.id)),
+        applications: applications.filter((application) => sameId(application.student_id, student.id)),
         period: monthlyPeriod,
       });
 
@@ -182,27 +193,27 @@ export default function DebtReports() {
         .from("payments")
         .select("student_id, concept, amount, activity_id, redirected_amount")
         .eq("tenant_id", currentTenant?.id)
-        .in("student_id", studentIds as any),
+        .in("student_id", studentIds),
       supabase
         .from("activity_exclusions")
         .select("student_id, activity_id")
         .eq("tenant_id", currentTenant?.id)
-        .in("student_id", studentIds as any),
+        .in("student_id", studentIds),
       supabase
         .from("credit_applications")
         .select("student_id, amount, reversed_amount, target_type, target_activity_id")
         .eq("tenant_id", currentTenant?.id)
         .eq("target_type", "activity")
-        .in("student_id", studentIds as any),
+        .in("student_id", studentIds),
     ]);
 
     if (paymentsResult.error) throw paymentsResult.error;
     if (exclusionsResult.error) throw exclusionsResult.error;
     if (applicationsResult.error) throw applicationsResult.error;
 
-    const payments = paymentsResult.data || [];
-    const exclusions = exclusionsResult.data || [];
-    const applications = applicationsResult.data || [];
+    const payments = (paymentsResult.data as PaymentRow[] | null) || [];
+    const exclusions = (exclusionsResult.data as ExclusionRow[] | null) || [];
+    const applications = (applicationsResult.data as ActivityApplicationRow[] | null) || [];
     const exclusionMap = new Set(exclusions.map((item) => `${item.student_id}-${item.activity_id}`));
 
     return studentsToProcess.flatMap((student) =>
