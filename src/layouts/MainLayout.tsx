@@ -4,7 +4,7 @@ import { HojaceroSignature } from "@/components/HojaceroSignature";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { School, LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
     DropdownMenu,
@@ -90,11 +90,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-14 items-center px-4">
                     <div className="flex items-center gap-2">
-                        {branding.logoUrl ? (
-                            <img src={branding.logoUrl} alt={branding.appName} className="h-7 w-7 rounded object-contain" />
-                        ) : (
-                            <School className="h-5 w-5 text-primary" />
-                        )}
+                        <img src={branding.logoUrl} alt={branding.appName} className="h-7 w-7 rounded object-contain" />
                         <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
                             <span className="text-sm font-medium hidden sm:inline-block">{branding.appName}</span>
                             {institutionName && (

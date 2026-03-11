@@ -24,7 +24,9 @@ export default function PublicForm() {
   const [fields, setFields] = useState<FormField[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const branding = resolveBranding();
+  const [brandingSettings, setBrandingSettings] = useState<Record<string, unknown> | null>(null);
+  const [brandingTenantName, setBrandingTenantName] = useState<string | null>(null);
+  const branding = resolveBranding(brandingSettings, brandingTenantName);
 
   // Wait for auth to fully load before checking form
   useEffect(() => {
@@ -85,6 +87,15 @@ export default function PublicForm() {
       }
       
       setForm(formData);
+
+      const { data: brandingData, error: brandingError } = await supabase.functions.invoke("public-branding", {
+        body: { formId: id },
+      });
+
+      if (!brandingError && brandingData?.success) {
+        setBrandingSettings((brandingData.settings as Record<string, unknown>) || {});
+        setBrandingTenantName(typeof brandingData.tenantName === "string" ? brandingData.tenantName : null);
+      }
       
       const { data: fieldsData, error: fieldsError } = await supabase
         .from('form_fields')
@@ -364,9 +375,7 @@ export default function PublicForm() {
       </Helmet>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center">
-          {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.appName} className="h-16 mx-auto mb-4 object-contain" />
-          ) : null}
+          <img src={branding.logoUrl} alt={branding.appName} className="h-16 mx-auto mb-4 object-contain" />
         </div>
         
         <Card>

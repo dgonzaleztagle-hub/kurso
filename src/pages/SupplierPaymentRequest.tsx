@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BankCombobox } from "@/components/BankCombobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,11 @@ import { toast } from "sonner";
 import { Upload } from "lucide-react";
 
 export default function SupplierPaymentRequest() {
-  const branding = resolveBranding();
   const signedToken = new URLSearchParams(window.location.search).get("token");
   const [loading, setLoading] = useState(false);
+  const [brandingSettings, setBrandingSettings] = useState<Record<string, unknown> | null>(null);
+  const [brandingTenantName, setBrandingTenantName] = useState<string | null>(null);
+  const branding = resolveBranding(brandingSettings, brandingTenantName);
   const [formData, setFormData] = useState({
     supplier_name: "",
     rut: "",
@@ -30,6 +32,23 @@ export default function SupplierPaymentRequest() {
     subject: "",
   });
   const [files, setFiles] = useState<File[]>([]);
+
+  useEffect(() => {
+    const loadBranding = async () => {
+      if (!signedToken) return;
+
+      const { data, error } = await supabase.functions.invoke("public-branding", {
+        body: { supplierToken: signedToken },
+      });
+
+      if (error || !data?.success) return;
+
+      setBrandingSettings((data.settings as Record<string, unknown>) || {});
+      setBrandingTenantName(typeof data.tenantName === "string" ? data.tenantName : null);
+    };
+
+    void loadBranding();
+  }, [signedToken]);
 
   const fileToDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -140,9 +159,7 @@ export default function SupplierPaymentRequest() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-3 md:py-8 px-3 md:px-4">
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-4 md:mb-8">
-          {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.appName} className="h-14 md:h-20 mx-auto mb-2 md:mb-4 object-contain" />
-          ) : null}
+          <img src={branding.logoUrl} alt={branding.appName} className="h-14 md:h-20 mx-auto mb-2 md:mb-4 object-contain" />
           <h1 className="text-xl md:text-3xl font-bold text-foreground mb-1 md:mb-2">
             Solicitud de Pago a Proveedor
           </h1>

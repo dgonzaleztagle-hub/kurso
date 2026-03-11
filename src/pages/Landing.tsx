@@ -142,11 +142,7 @@ const Landing = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-20">
                         <div className="flex items-center">
-                            {branding.logoUrl ? (
-                                <img src={branding.logoUrl} alt={branding.appName} className="h-[60px] w-auto object-contain mt-2" />
-                            ) : (
-                                <span className="text-2xl font-bold tracking-tight">{branding.appName}</span>
-                            )}
+                            <img src={branding.logoUrl} alt={branding.appName} className="h-[60px] w-auto object-contain mt-2" />
                         </div>
                         <div className="flex items-center space-x-4">
                             <Button
@@ -178,9 +174,7 @@ const Landing = () => {
                 </div>
 
                 <div className="absolute left-1/2 top-20 -translate-x-1/2 pointer-events-none select-none z-0">
-                    {branding.logoUrl ? (
-                        <img src={branding.logoUrl} alt="" className="h-[500px] md:h-[700px] w-auto max-w-none opacity-10 object-contain" />
-                    ) : null}
+                    <img src={branding.logoUrl} alt="" aria-hidden="true" className="h-[500px] md:h-[700px] w-auto max-w-none opacity-10 object-contain" />
                 </div>
 
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
@@ -314,13 +308,7 @@ const Landing = () => {
                             </div>
                         </div>
                         <div className="flex-1 flex justify-center">
-                            {branding.iconUrl ? (
-                                <img src={branding.iconUrl} alt={branding.appName} className="relative w-48 h-48 drop-shadow-2xl object-contain" />
-                            ) : (
-                                <div className="flex h-48 w-48 items-center justify-center rounded-full border border-primary/20 bg-white/70 text-4xl font-black text-primary shadow-2xl">
-                                    K
-                                </div>
-                            )}
+                            <img src={branding.iconUrl} alt={branding.appName} className="relative w-48 h-48 drop-shadow-2xl object-contain" />
                         </div>
                     </div>
                 </div>
@@ -359,13 +347,7 @@ const Landing = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col justify-between items-center gap-6">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6 w-full">
                         <div className="flex items-center space-x-2">
-                            {branding.iconUrl ? (
-                                <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 grayscale opacity-50 object-contain" />
-                            ) : (
-                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                                    K
-                                </span>
-                            )}
+                            <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 grayscale opacity-50 object-contain" />
                             <span className="text-sm text-muted-foreground">© {new Date().getFullYear()} Kurso. Todos los derechos reservados.</span>
                         </div>
                         <div className="flex gap-6 text-sm text-muted-foreground">

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Eye, EyeOff, KeyRound, ArrowLeft, Mail, School } from "lucide-react";
+import { Eye, EyeOff, KeyRound, ArrowLeft, Mail } from "lucide-react";
 import { resolveBranding } from "@/lib/branding";
 import { validateRut, generateRutEmail } from "@/lib/rutUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -254,11 +254,7 @@ export default function Auth() {
           </div>
             <div className="text-center space-y-2">
               <div className="flex items-center justify-center gap-2">
-              {branding.iconUrl ? (
                 <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 object-contain" />
-              ) : (
-                <School className="h-6 w-6 text-primary" />
-              )}
               <CardTitle className="text-2xl">{branding.appName}</CardTitle>
             </div>
             <CardDescription>

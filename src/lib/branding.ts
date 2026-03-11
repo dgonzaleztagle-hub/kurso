@@ -1,4 +1,6 @@
 const DEFAULT_PLATFORM_NAME = "Kurso";
+const DEFAULT_LOGO_URL = "/kurso-logo-full.png";
+const DEFAULT_ICON_URL = "/kurso-icon.png";
 type RawSettings = Record<string, unknown> | null | undefined;
 
 const readSetting = (value: unknown): string | null => {
@@ -16,13 +18,14 @@ export const resolveBranding = (settings?: RawSettings, tenantName?: string | nu
     DEFAULT_PLATFORM_NAME;
 
   const adminTitle = readSetting(settings?.admin_title) || `${appName} Admin`;
-  const logoUrl =
+  const customLogoUrl =
     readSetting(settings?.logo_url) ||
     readSetting(settings?.brand_logo_url);
-  const iconUrl =
+  const customIconUrl =
     readSetting(settings?.icon_url) ||
-    readSetting(settings?.brand_icon_url) ||
-    logoUrl;
+    readSetting(settings?.brand_icon_url);
+  const logoUrl = customLogoUrl || DEFAULT_LOGO_URL;
+  const iconUrl = customIconUrl || customLogoUrl || DEFAULT_ICON_URL;
 
   return {
     appName,

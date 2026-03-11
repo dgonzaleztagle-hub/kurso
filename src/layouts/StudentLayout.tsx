@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { resolveBranding } from "@/lib/branding";
-import { School, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { studentNavigation } from "@/config/navigation";
 import { HojaceroSignature } from "@/components/HojaceroSignature";
@@ -45,11 +45,7 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
             <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
                 <div className="flex h-14 md:h-16 items-center gap-2 md:gap-4 px-3 md:px-4">
                     <Link to="/" className="flex items-center gap-1.5 md:gap-2 hover:opacity-80 transition-opacity">
-                        {branding.logoUrl ? (
-                            <img src={branding.logoUrl} alt={branding.appName} className="h-6 w-6 md:h-7 md:w-7 rounded object-contain" />
-                        ) : (
-                            <School className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                        )}
+                        <img src={branding.logoUrl} alt={branding.appName} className="h-6 w-6 md:h-7 md:w-7 rounded object-contain" />
                         <span className="text-base md:text-xl font-bold text-foreground truncate">{branding.appName}</span>
                     </Link>
                     <div className="ml-auto flex items-center gap-2 md:gap-4">

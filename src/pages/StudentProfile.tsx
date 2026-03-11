@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
-import { DollarSign, AlertCircle, Calendar, FileText, ChevronDown, ChevronUp, User, School } from "lucide-react";
+import { DollarSign, AlertCircle, Calendar, FileText, ChevronDown, ChevronUp, User } from "lucide-react";
 import { resolveBranding } from "@/lib/branding";
 import { formatDateForDisplay, parseDateFromDB } from "@/lib/dateUtils";
 import { format } from "date-fns";
@@ -261,17 +261,11 @@ export default function StudentProfile() {
       <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center space-y-2 sm:space-y-4">
-          {branding.logoUrl ? (
-            <img
-              src={branding.logoUrl}
-              alt={branding.appName}
-              className="h-16 sm:h-20 mx-auto object-contain"
-            />
-          ) : (
-            <div className="h-16 w-16 sm:h-20 sm:w-20 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
-              <School className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
-            </div>
-          )}
+          <img
+            src={branding.logoUrl}
+            alt={branding.appName}
+            className="h-16 sm:h-20 mx-auto object-contain"
+          />
           <div>
             <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white capitalize">
               {branding.institutionName || currentTenant.name}

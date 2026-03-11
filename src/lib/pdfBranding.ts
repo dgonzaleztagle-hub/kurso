@@ -29,7 +29,6 @@ export const getPdfBranding = (tenant?: TenantLike) => {
 
   return {
     ...branding,
-    logoUrl: branding.logoUrl || null,
     reportSubtitle: branding.institutionName || branding.appName,
     signatureCourseLine: tenant?.name ? `Directiva ${tenant.name}` : "Directiva",
     signatureInstitutionLine: branding.institutionName || branding.appName,

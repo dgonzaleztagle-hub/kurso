@@ -43,11 +43,7 @@ export const AdminLayout = () => {
                 )}
             >
                 <div className="p-6 border-b flex items-center gap-2">
-                    {branding.iconUrl ? (
-                        <img src={branding.iconUrl} className="h-8 w-8 object-contain" alt={branding.appName} />
-                    ) : (
-                        <Settings className="h-8 w-8 text-primary" />
-                    )}
+                    <img src={branding.iconUrl} className="h-8 w-8 object-contain" alt={branding.appName} />
                     <div>
                         <h2 className="font-bold text-lg">{branding.adminTitle}</h2>
                         <span className="text-xs text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-full">SuperAdmin</span>

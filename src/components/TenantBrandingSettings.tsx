@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useState } from "react";
-import { Building2, ImagePlus, School, Upload } from "lucide-react";
+import { Building2, ImagePlus, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -120,11 +120,7 @@ export function TenantBrandingSettings() {
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div className="flex flex-col items-center gap-3">
             <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border bg-muted/30">
-              {branding.logoUrl ? (
-                <img src={branding.logoUrl} alt={branding.appName} className="h-full w-full object-contain" />
-              ) : (
-                <School className="h-10 w-10 text-muted-foreground" />
-              )}
+              <img src={branding.logoUrl} alt={branding.appName} className="h-full w-full object-contain" />
             </div>
             <Label
               htmlFor="tenant-logo"
