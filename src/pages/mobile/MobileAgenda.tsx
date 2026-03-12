@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Calendar, MapPin, Clock, ArrowRight } from "lucide-react";
@@ -26,13 +26,7 @@ export default function MobileAgenda() {
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (currentTenant) {
-            fetchActivities();
-        }
-    }, [currentTenant]);
-
-    const fetchActivities = async () => {
+    const fetchActivities = useCallback(async () => {
         try {
             const { data, error } = await supabase
                 .from("activities")
@@ -48,7 +42,13 @@ export default function MobileAgenda() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentTenant?.id]);
+
+    useEffect(() => {
+        if (currentTenant) {
+            void fetchActivities();
+        }
+    }, [currentTenant, fetchActivities]);
 
     if (loading) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-600" /></div>;

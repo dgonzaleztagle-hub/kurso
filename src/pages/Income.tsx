@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -79,37 +79,7 @@ export default function Income() {
   const [deletingPayment, setDeletingPayment] = useState<GroupedPayment | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadPayments();
-    }
-
-    // Suscripción a cambios en tiempo real
-    const channel = supabase
-      .channel('payments-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'payments'
-        },
-        () => {
-          loadPayments();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentTenant?.id]);
-
-  useEffect(() => {
-    applyFilters();
-  }, [payments, searchStudent, searchConcept, searchFolio, startDate, endDate]);
-
-  const loadPayments = async () => {
+  const loadPayments = useCallback(async () => {
     if (!currentTenant?.id) return;
     try {
       setLoading(true);
@@ -133,9 +103,9 @@ export default function Income() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...payments];
 
     // Filtro por estudiante
@@ -177,7 +147,36 @@ export default function Income() {
     // Recalcular total filtrado
     const total = filtered.reduce((sum, payment) => sum + payment.amount, 0);
     setTotalIncome(total);
-  };
+  }, [payments, searchStudent, searchConcept, searchFolio, startDate, endDate]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadPayments();
+    }
+
+    const channel = supabase
+      .channel('payments-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payments'
+        },
+        () => {
+          void loadPayments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentTenant?.id, loadPayments]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const clearFilters = () => {
     setSearchStudent("");
@@ -303,7 +302,7 @@ export default function Income() {
       toast.success("Pago actualizado exitosamente");
       setShowEditDialog(false);
       setEditingPayment(null);
-      loadPayments();
+      void loadPayments();
     } catch (error) {
       console.error("Error updating payment:", error);
       toast.error("Error al actualizar el pago");
@@ -333,7 +332,7 @@ export default function Income() {
       toast.success("Pago eliminado exitosamente");
       setShowDeleteDialog(false);
       setDeletingPayment(null);
-      loadPayments();
+      void loadPayments();
     } catch (error) {
       console.error("Error deleting payment:", error);
       toast.error("Error al eliminar el pago");

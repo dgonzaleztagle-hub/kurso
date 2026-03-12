@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, FileText, ChevronDown, ChevronUp, CalendarDays } from "lucide-react";
@@ -21,13 +21,7 @@ export default function MobileActas() {
     const [loading, setLoading] = useState(true);
     const [openItems, setOpenItems] = useState<string[]>([]);
 
-    useEffect(() => {
-        if (currentTenant) {
-            fetchMinutes();
-        }
-    }, [currentTenant]);
-
-    const fetchMinutes = async () => {
+    const fetchMinutes = useCallback(async () => {
         try {
             const { data, error } = await supabase
                 .from("meeting_minutes")
@@ -42,7 +36,13 @@ export default function MobileActas() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentTenant?.id]);
+
+    useEffect(() => {
+        if (currentTenant) {
+            void fetchMinutes();
+        }
+    }, [currentTenant, fetchMinutes]);
 
     const toggleItem = (id: string) => {
         if (openItems.includes(id)) {
