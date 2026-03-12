@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cl.mikurso.app",
+      "sha256_cert_fingerprints": [
+        "07:41:95:7D:8A:F3:12:60:8A:C0:8B:68:3A:5C:FA:C1:58:0D:E7:40:AA:B2:82:2C:37:1E:E9:D7:B4:A0:C5:7A"
+      ]
+    }
+  }
+]

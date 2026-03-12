@@ -28,26 +28,13 @@ npm run android:build:debug
 
 ## Digital Asset Links
 
-Si se usan App Links o una futura TWA, publicar:
+Para TWA y App Links, publicar:
 
 - `https://mikurso.cl/.well-known/assetlinks.json`
 
-Contenido base:
+El repo ya incluye esa ruta en `public/.well-known/assetlinks.json`.
 
-```json
-[
-  {
-    "relation": ["delegate_permission/common.handle_all_urls"],
-    "target": {
-      "namespace": "android_app",
-      "package_name": "cl.mikurso.app",
-      "sha256_cert_fingerprints": [
-        "REEMPLAZAR_CON_SHA256_DEL_CERTIFICADO_DE_RELEASE"
-      ]
-    }
-  }
-]
-```
+Si cambia la clave de firma de release, actualizar el fingerprint `SHA-256`.
 
 ## Criterios de mantenimiento
 
@@ -55,3 +42,4 @@ Contenido base:
 - No cambiar la keystore de release una vez publicada la app.
 - Versionar cambios Android nativos junto con el codigo web que los requiera.
 - Preferir Capacitor para integraciones futuras antes que wrappers externos de una sola vez.
+- No exponer `keystore`, passwords, `apk`, `aab` ni source zips dentro de `public/`.
