@@ -50,6 +50,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { isStaffRole } from "@/lib/roles";
 
 interface Reimbursement {
   id: string;
@@ -121,6 +122,9 @@ const normalizeStoredFiles = (files: StoredReimbursementFile[] | null | undefine
     .map(normalizeStoredFile)
     .filter((file): file is ReimbursementFile => file !== null);
 
+const formatFolio = (folio: number | null | undefined) =>
+  Number.isFinite(folio) ? `#${Number(folio)}` : "Sin folio";
+
 export default function Reimbursements() {
   const { user, userRole } = useAuth();
   const { roleInCurrentTenant, currentTenant } = useTenant();
@@ -152,7 +156,7 @@ export default function Reimbursements() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const effectiveRole = roleInCurrentTenant || userRole;
-  const canProcessReimbursements = ['master', 'owner', 'admin'].includes(effectiveRole || '');
+  const canProcessReimbursements = isStaffRole(effectiveRole);
 
   const fetchReimbursements = useCallback(async () => {
     if (!currentTenant?.id) return;
@@ -545,7 +549,7 @@ export default function Reimbursements() {
         <div className="flex justify-between items-start gap-2 mb-2">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm truncate">
-              {reimbursement.type === 'supplier_payment' ? 'Pago' : 'Rend'} #{reimbursement.folio}
+              {reimbursement.type === 'supplier_payment' ? 'Pago' : 'Rend'} {formatFolio(reimbursement.folio)}
             </p>
             <p className="text-xs text-muted-foreground truncate">
               {reimbursement.user_display_name || 'Usuario desconocido'}
@@ -569,7 +573,7 @@ export default function Reimbursements() {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs font-semibold text-muted-foreground">Folio</Label>
-          <p className="text-sm font-medium">#{reimbursement.folio}</p>
+          <p className="text-sm font-medium">{formatFolio(reimbursement.folio)}</p>
         </div>
         <div>
           <Label className="text-xs font-semibold text-muted-foreground">Estado</Label>
@@ -1166,7 +1170,7 @@ export default function Reimbursements() {
               <TableBody>
                 {reimbursements.map((reimbursement) => (
                   <TableRow key={reimbursement.id}>
-                    <TableCell>#{reimbursement.folio}</TableCell>
+                    <TableCell>{formatFolio(reimbursement.folio)}</TableCell>
                     <TableCell>
                       {reimbursement.type === 'supplier_payment' ? 'Pago a Proveedor' : 'Rendición'}
                     </TableCell>
