@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json, TablesInsert } from "@/integrations/supabase/types";
 import { BankCombobox } from "@/components/BankCombobox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,9 +56,9 @@ interface Reimbursement {
   created_at: string;
   amount: number;
   subject: string;
-  account_info: any;
+  account_info: ReimbursementAccountInfo | null;
   status: 'pending' | 'approved' | 'rejected';
-  attachments: any;
+  attachments: ReimbursementFile[] | null;
   rejection_reason?: string | null;
   user_id: string;
   processed_by?: string | null;
@@ -65,7 +66,7 @@ interface Reimbursement {
   folio?: number | null;
   type: 'reimbursement' | 'supplier_payment';
   supplier_name?: string | null;
-  payment_proof?: any;
+  payment_proof?: ReimbursementFile[] | ReimbursementFile | null;
   expense_folio?: number | null;
 }
 
@@ -73,6 +74,26 @@ interface ReimbursementWithUser extends Reimbursement {
   user_display_name?: string;
   user_email?: string;
 }
+
+type ReimbursementFile = {
+  name: string;
+  path: string;
+  uploaded_at?: string;
+};
+
+type ReimbursementAccountInfo = {
+  bank?: string;
+  account_type?: string;
+  account_number?: string;
+  holder_name?: string;
+  supplier_rut?: string;
+};
+
+type ReimbursementInsert = TablesInsert<"reimbursements">;
+type ExpenseInsert = TablesInsert<"expenses">;
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Ocurrió un error inesperado";
 
 export default function Reimbursements() {
   const { user, userRole } = useAuth();
@@ -107,18 +128,14 @@ export default function Reimbursements() {
   const effectiveRole = roleInCurrentTenant || userRole;
   const canProcessReimbursements = ['master', 'owner', 'admin'].includes(effectiveRole || '');
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      fetchReimbursements();
-    }
-  }, [currentTenant?.id]);
+  const fetchReimbursements = useCallback(async () => {
+    if (!currentTenant?.id) return;
 
-  const fetchReimbursements = async () => {
     try {
       const { data: reimbursementsData, error } = await supabase
         .from('reimbursements')
         .select('*')
-        .eq('tenant_id', currentTenant?.id as string)
+        .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -148,13 +165,19 @@ export default function Reimbursements() {
       });
 
       setReimbursements(reimbursementsWithUsers);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error:', error);
-      toast.error("Error al cargar las rendiciones");
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void fetchReimbursements();
+    }
+  }, [currentTenant?.id, fetchReimbursements]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -162,10 +185,10 @@ export default function Reimbursements() {
     }
   };
 
-  const uploadFiles = async (reimbursementId: string): Promise<any[]> => {
+  const uploadFiles = async (reimbursementId: string): Promise<ReimbursementFile[]> => {
     if (files.length === 0) return [];
 
-    const uploadedFiles = [];
+    const uploadedFiles: ReimbursementFile[] = [];
 
     for (const file of files) {
       const fileExt = file.name.split('.').pop();
@@ -209,22 +232,22 @@ export default function Reimbursements() {
     setUploading(true);
 
     try {
-      const { data: folioData } = await supabase.rpc('get_next_reimbursement_folio_for_tenant' as any, {
+      const { data: folioData } = await supabase.rpc('get_next_reimbursement_folio_for_tenant', {
         target_tenant_id: resolvedTenantId,
       });
 
-      const accountInfo = {
+      const accountInfo: ReimbursementAccountInfo = {
         bank,
         account_type: accountType,
         account_number: accountNumber,
         holder_name: holderName,
       };
 
-      const reimbursementData: any = {
+      const reimbursementData: ReimbursementInsert = {
         tenant_id: resolvedTenantId,
         amount: parseFloat(amount),
         subject,
-        account_info: accountInfo,
+        account_info: accountInfo as Json,
         attachments: [],
         status: 'pending',
         user_id: user.id,
@@ -238,7 +261,7 @@ export default function Reimbursements() {
         reimbursementData.account_info = {
           ...accountInfo,
           supplier_rut: supplierRut,
-        };
+        } as Json;
       }
 
       const { data, error: insertError } = await supabase
@@ -264,10 +287,10 @@ export default function Reimbursements() {
       toast.success(type === 'supplier_payment' ? "Pago a proveedor creado exitosamente" : "Rendición creada exitosamente");
       setOpen(false);
       resetForm();
-      fetchReimbursements();
-    } catch (error: any) {
+      void fetchReimbursements();
+    } catch (error: unknown) {
       console.error('Error:', error);
-      toast.error("Error al crear: " + error.message);
+      toast.error(`Error al crear: ${getErrorMessage(error)}`);
     } finally {
       setUploading(false);
     }
@@ -286,10 +309,10 @@ export default function Reimbursements() {
     setProofFiles([]);
   };
 
-  const uploadProofs = async (reimbursementId: string): Promise<any[]> => {
+  const uploadProofs = async (reimbursementId: string): Promise<ReimbursementFile[]> => {
     if (proofFiles.length === 0) return [];
 
-    const uploadedProofs = [];
+    const uploadedProofs: ReimbursementFile[] = [];
 
     for (const file of proofFiles) {
       const fileExt = file.name.split('.').pop();
@@ -313,8 +336,8 @@ export default function Reimbursements() {
     return uploadedProofs;
   };
 
-  const buildExpensePayload = async (reimbursement: ReimbursementWithUser) => {
-    const { data: folioData, error: folioError } = await supabase.rpc('get_next_expense_folio_for_tenant' as any, {
+  const buildExpensePayload = async (reimbursement: ReimbursementWithUser): Promise<ExpenseInsert> => {
+    const { data: folioData, error: folioError } = await supabase.rpc('get_next_expense_folio_for_tenant', {
       target_tenant_id: currentTenant!.id,
     });
     if (folioError) throw folioError;
@@ -341,7 +364,7 @@ export default function Reimbursements() {
 
   const createExpenseForReimbursement = async (reimbursement: ReimbursementWithUser) => {
     const insertPayload = await buildExpensePayload(reimbursement);
-    const { error } = await supabase.from('expenses').insert(insertPayload as any);
+    const { error } = await supabase.from('expenses').insert(insertPayload);
 
     if (error) throw error;
     return insertPayload.folio;
@@ -366,7 +389,7 @@ export default function Reimbursements() {
 
     setUploadingProof(true);
     try {
-      let paymentProofs = [];
+      let paymentProofs: ReimbursementFile[] = [];
       let expenseFolio = selectedReimbursement.expense_folio ?? null;
 
       if (proofFiles.length > 0) {
@@ -386,7 +409,7 @@ export default function Reimbursements() {
           payment_proof: paymentProofs.length > 0 ? paymentProofs : null,
           expense_folio: expenseFolio,
         })
-        .eq('tenant_id', currentTenant?.id as string)
+        .eq('tenant_id', currentTenant.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) {
@@ -422,9 +445,9 @@ export default function Reimbursements() {
       setShowApproveDialog(false);
       setSelectedReimbursement(null);
       setProofFiles([]);
-      fetchReimbursements();
-    } catch (error: any) {
-      toast.error("Error: " + error.message);
+      void fetchReimbursements();
+    } catch (error: unknown) {
+      toast.error(`Error: ${getErrorMessage(error)}`);
     } finally {
       setUploadingProof(false);
     }
@@ -449,7 +472,7 @@ export default function Reimbursements() {
           processed_at: new Date().toISOString(),
           rejection_reason: rejectionReason,
         })
-        .eq('tenant_id', currentTenant?.id as string)
+        .eq('tenant_id', currentTenant.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -481,9 +504,9 @@ export default function Reimbursements() {
       setShowRejectDialog(false);
       setSelectedReimbursement(null);
       setRejectionReason("");
-      fetchReimbursements();
-    } catch (error: any) {
-      toast.error("Error: " + error.message);
+      void fetchReimbursements();
+    } catch (error: unknown) {
+      toast.error(`Error: ${getErrorMessage(error)}`);
     }
   };
 
@@ -509,7 +532,7 @@ export default function Reimbursements() {
           payment_proof: null,
           expense_folio: null,
         })
-        .eq('tenant_id', currentTenant?.id as string)
+        .eq('tenant_id', currentTenant.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -517,9 +540,9 @@ export default function Reimbursements() {
       toast.success(selectedReimbursement.type === 'supplier_payment' ? "Pago reabierto" : "Rendición reabierta");
       setShowReopenDialog(false);
       setSelectedReimbursement(null);
-      fetchReimbursements();
-    } catch (error: any) {
-      toast.error("Error: " + error.message);
+      void fetchReimbursements();
+    } catch (error: unknown) {
+      toast.error(`Error: ${getErrorMessage(error)}`);
     }
   };
 
@@ -536,7 +559,7 @@ export default function Reimbursements() {
         const { error: expenseError } = await supabase
           .from('expenses')
           .delete()
-          .eq('tenant_id', currentTenant?.id as string)
+          .eq('tenant_id', currentTenant.id)
           .eq('folio', selectedReimbursement.expense_folio);
 
         if (expenseError) {
@@ -549,7 +572,7 @@ export default function Reimbursements() {
       const { error } = await supabase
         .from('reimbursements')
         .delete()
-        .eq('tenant_id', currentTenant?.id as string)
+        .eq('tenant_id', currentTenant.id)
         .eq('id', selectedReimbursement.id);
 
       if (error) throw error;
@@ -562,9 +585,9 @@ export default function Reimbursements() {
       setShowDeleteDialog(false);
       setDetailsOpen(false);
       setSelectedReimbursement(null);
-      fetchReimbursements();
-    } catch (error: any) {
-      toast.error("Error al eliminar: " + error.message);
+      void fetchReimbursements();
+    } catch (error: unknown) {
+      toast.error(`Error al eliminar: ${getErrorMessage(error)}`);
     }
   };
 
@@ -584,7 +607,7 @@ export default function Reimbursements() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Error al descargar el archivo");
     }
   };
@@ -694,7 +717,7 @@ export default function Reimbursements() {
         <div>
           <Label className="text-xs font-semibold text-muted-foreground">Cotización/Respaldos</Label>
           <div className="space-y-1.5 mt-1.5">
-            {reimbursement.attachments.map((file: any, idx: number) => (
+            {reimbursement.attachments.map((file, idx: number) => (
               <Button
                 key={idx}
                 variant="outline"
@@ -715,7 +738,7 @@ export default function Reimbursements() {
           <Label className="text-xs font-semibold text-muted-foreground">Comprobante(s)</Label>
           {Array.isArray(reimbursement.payment_proof) ? (
             <div className="space-y-1.5 mt-1.5">
-              {reimbursement.payment_proof.map((proof: any, idx: number) => (
+              {reimbursement.payment_proof.map((proof, idx: number) => (
                 <Button
                   key={idx}
                   variant="outline"
