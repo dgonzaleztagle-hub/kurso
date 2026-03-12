@@ -13,6 +13,9 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "generate-accounts": "tsx scripts/generate_accounts.ts",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:build:debug": "npx cap sync android && cd android && gradlew.bat assembleDebug",
     "supa": "supabase",
     "supa:link": "supabase link --project-ref euhmpuhkwbxorfzrxemp",
     "supa:push": "supabase db push"

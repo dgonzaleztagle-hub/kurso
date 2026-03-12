@@ -1,4 +1,4 @@
-package io.kurso.stitch;
+package cl.mikurso.app;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package cl.mikurso.app;
 
 import static org.junit.Assert.*;
 

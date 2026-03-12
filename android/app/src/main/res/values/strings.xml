@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Stitch</string>
-    <string name="title_activity_main">Stitch</string>
-    <string name="package_name">io.kurso.stitch</string>
-    <string name="custom_url_scheme">io.kurso.stitch</string>
+    <string name="app_name">Kurso</string>
+    <string name="title_activity_main">Kurso</string>
+    <string name="package_name">cl.mikurso.app</string>
+    <string name="custom_url_scheme">cl.mikurso.app</string>
 </resources>

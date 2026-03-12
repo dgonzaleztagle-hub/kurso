@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'io.kurso.stitch',
-  appName: 'Stitch',
+  appId: 'cl.mikurso.app',
+  appName: 'Kurso',
   webDir: 'dist'
 };
 
