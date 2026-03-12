@@ -4,22 +4,15 @@ import { useTheme } from "next-themes";
 import { Moon, Sun, ArrowRight, CheckCircle2, Building2, GraduationCap, Users, HelpCircle, ShieldCheck, CreditCard, Download, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveBranding } from "@/lib/branding";
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { MercadoPagoBadge } from "@/components/subscription/MercadoPagoBadge";
 import { SAAS_PRICING, formatCurrencyCLP } from "@/lib/saasBilling";
-
-interface BeforeInstallPromptEvent extends Event {
-    prompt: () => Promise<void>;
-    userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-}
 
 const Landing = () => {
     const { theme, setTheme } = useTheme();
     const navigate = useNavigate();
     const branding = resolveBranding();
-    const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-    const [isAndroid, setIsAndroid] = useState(false);
     const [isIos, setIsIos] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
     const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
@@ -41,39 +34,17 @@ const Landing = () => {
     useEffect(() => {
         const userAgent = navigator.userAgent || navigator.vendor;
         const ios = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        const android = /Android/i.test(userAgent);
         const standalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
         setIsIos(ios);
-        setIsAndroid(android);
         setIsStandalone(standalone);
-
-        const handleBeforeInstallPrompt = (event: Event) => {
-            event.preventDefault();
-            setInstallPrompt(event as BeforeInstallPromptEvent);
-        };
-
-        window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-
-        return () => {
-            window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-        };
     }, []);
 
-    const handleInstallClick = async () => {
-        if (installPrompt) {
-            await installPrompt.prompt();
-            await installPrompt.userChoice;
-            setInstallPrompt(null);
-            return;
-        }
-
+    const handleIosInstallClick = () => {
         if (isIos) {
             setShowIosInstallHelp(true);
             return;
         }
-
-        window.location.href = "/downloads/kurso-android.apk";
     };
 
     return (
@@ -296,29 +267,20 @@ const Landing = () => {
                         </motion.div>
 
                         <motion.div variants={fadeIn} className="mx-auto flex max-w-3xl flex-col items-center gap-3 rounded-3xl border border-border/60 bg-background/70 p-5 backdrop-blur sm:flex-row sm:justify-center">
-                            <Button size="lg" variant="secondary" className="w-full rounded-full sm:w-auto" onClick={handleInstallClick}>
-                                <Smartphone className="mr-2 h-5 w-5" />
-                                {isIos ? "Instalar en iPhone" : "Instalar en Android"}
+                            <Button size="lg" variant="secondary" className="w-full rounded-full sm:w-auto" asChild>
+                                <a href="/downloads/kurso-android.apk" download>
+                                    <Download className="mr-2 h-5 w-5" />
+                                    Instalar en Android
+                                </a>
                             </Button>
-                            {!isIos && (
-                                <Button
-                                    size="lg"
-                                    variant="outline"
-                                    className="w-full rounded-full sm:w-auto"
-                                    asChild
-                                >
-                                    <a href="/downloads/kurso-android.apk" download>
-                                        <Download className="mr-2 h-5 w-5" />
-                                        Respaldo Android
-                                    </a>
-                                </Button>
-                            )}
+                            <Button size="lg" variant="outline" className="w-full rounded-full sm:w-auto" onClick={handleIosInstallClick}>
+                                <Smartphone className="mr-2 h-5 w-5" />
+                                Instalar en iPhone
+                            </Button>
                             <p className="text-center text-sm text-muted-foreground sm:max-w-sm sm:text-left">
                                 {isStandalone
                                     ? "Kurso ya esta instalado en este dispositivo."
-                                    : isIos
-                                        ? "Te mostraremos los pasos para agregar Kurso a tu pantalla de inicio."
-                                        : "Instala Kurso en tu celular en segundos. Si tu navegador no lo permite, usa el respaldo para Android."}
+                                    : "Descarga la app en Android o revisa la guia rapida para instalarla en iPhone."}
                             </p>
                         </motion.div>
 
