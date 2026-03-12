@@ -1,0 +1,42 @@
+workflows:
+  ios-testflight:
+    name: Kurso iOS TestFlight
+    max_build_duration: 60
+    integrations:
+      app_store_connect: Codemagic
+    environment:
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: cl.mikurso.app
+      vars:
+        BUNDLE_ID: cl.mikurso.app
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+      - name: Build web assets
+        script: npm run build
+      - name: Sync Capacitor iOS shell
+        script: npx cap sync ios
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios/App
+          pod install
+      - name: Apply signing profiles
+        script: xcode-project use-profiles
+      - name: Build signed IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+

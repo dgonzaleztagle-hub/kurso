@@ -76,6 +76,12 @@ npm run test:business
 npm run build
 ```
 
+## Mobile Release Docs
+
+- [ANDROID_RELEASE.md](./ANDROID_RELEASE.md)
+- [IOS_RELEASE.md](./IOS_RELEASE.md)
+- [docs/IOS_STORE_READINESS.md](./docs/IOS_STORE_READINESS.md)
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
