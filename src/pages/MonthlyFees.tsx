@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Save, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { calculateMonthlyDebtItems } from "@/lib/creditAccounting";
+import type { TenantSettings } from "@/types/db";
 
 interface MonthlyFeeStatus {
   student_id: string | null;
@@ -23,6 +25,8 @@ interface MonthlyFeeStatus {
 
 const DEFAULT_FEE = 3000;
 const TOTAL_MONTHS = 10; // Marzo a Diciembre
+
+type PersistedSettings = TenantSettings | Record<string, Json | undefined>;
 
 export default function MonthlyFees() {
   const { currentTenant, refreshTenants } = useTenant();
@@ -44,20 +48,10 @@ export default function MonthlyFees() {
   // Calculate annual total based on dynamic fee
   const annualTotal = currentFee * TOTAL_MONTHS;
 
-  useEffect(() => {
-    if (currentTenant) {
-      // Load fee from settings or default
-      const settings = currentTenant.settings as any;
-      const savedFee = settings?.monthly_fee ? Number(settings.monthly_fee) : DEFAULT_FEE;
-      setCurrentFee(savedFee);
-      loadMonthlyFeeStatuses(savedFee);
-    }
-  }, [currentTenant]);
-
   const updateTenantSettings = async (partialSettings: Record<string, unknown>) => {
     if (!currentTenant) return null;
 
-    const currentSettings = (currentTenant.settings as any) || {};
+    const currentSettings = currentTenant.settings || {};
     const updatedSettings = {
       ...currentSettings,
       ...partialSettings,
@@ -110,17 +104,17 @@ export default function MonthlyFees() {
       if (!persistedSettings) throw new Error("La cuota no se pudo persistir en la base de datos");
 
       toast.success("Monto de cuota actualizado");
-      const persistedFee = Number((persistedSettings as any).monthly_fee);
+      const persistedFee = Number((persistedSettings as PersistedSettings).monthly_fee);
       setCurrentFee(Number.isFinite(persistedFee) ? persistedFee : newFee);
       setIsEditing(false);
-      loadMonthlyFeeStatuses(Number.isFinite(persistedFee) ? persistedFee : newFee); // Reload with new fee
+      void loadMonthlyFeeStatuses(Number.isFinite(persistedFee) ? persistedFee : newFee);
     } catch (error) {
       console.error("Error updating fee:", error);
       toast.error("Error al guardar la configuración");
     }
   };
 
-  const loadMonthlyFeeStatuses = async (feeAmount: number) => {
+  const loadMonthlyFeeStatuses = useCallback(async (feeAmount: number) => {
     try {
       setLoading(true);
       if (!currentTenant?.id) return;
@@ -194,7 +188,16 @@ export default function MonthlyFees() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant) {
+      const settings = currentTenant.settings || {};
+      const savedFee = settings.monthly_fee ? Number(settings.monthly_fee) : DEFAULT_FEE;
+      setCurrentFee(savedFee);
+      void loadMonthlyFeeStatuses(savedFee);
+    }
+  }, [currentTenant, loadMonthlyFeeStatuses]);
 
   const getPaymentStatus = (status: MonthlyFeeStatus) => {
     if (status.balance <= 0) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,33 +34,21 @@ interface Payment {
   student_name?: string;
 }
 
+type SearchType = "student" | "activity";
+type PeriodType = "current" | "year";
+
 export default function PaymentReports() {
   const { currentTenant } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [searchType, setSearchType] = useState<"student" | "activity">("student");
+  const [searchType, setSearchType] = useState<SearchType>("student");
   const [selectedStudent, setSelectedStudent] = useState<string>("");
   const [selectedActivity, setSelectedActivity] = useState<string>("");
-  const [period, setPeriod] = useState<"current" | "year">("current");
+  const [period, setPeriod] = useState<PeriodType>("current");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadStudents();
-      loadActivities();
-    }
-  }, [currentTenant?.id]);
-
-  useEffect(() => {
-    if (searchType === "student" && selectedStudent) {
-      loadPaymentsByStudent();
-    } else if (searchType === "activity" && selectedActivity) {
-      loadPaymentsByActivity();
-    }
-  }, [searchType, selectedStudent, selectedActivity, period]);
-
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     if (!currentTenant?.id) return;
     try {
       const { data, error } = await supabase
@@ -79,9 +67,9 @@ export default function PaymentReports() {
       console.error("Error loading students:", error);
       toast.error("Error al cargar estudiantes");
     }
-  };
+  }, [currentTenant?.id]);
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     if (!currentTenant?.id) return;
     try {
       const { data, error } = await supabase
@@ -96,9 +84,9 @@ export default function PaymentReports() {
       console.error("Error loading activities:", error);
       toast.error("Error al cargar actividades");
     }
-  };
+  }, [currentTenant?.id]);
 
-  const loadPaymentsByStudent = async () => {
+  const loadPaymentsByStudent = useCallback(async () => {
     if (!selectedStudent) return;
 
     try {
@@ -128,9 +116,9 @@ export default function PaymentReports() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period, selectedStudent]);
 
-  const loadPaymentsByActivity = async () => {
+  const loadPaymentsByActivity = useCallback(async () => {
     if (!selectedActivity) return;
 
     try {
@@ -160,7 +148,22 @@ export default function PaymentReports() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period, selectedActivity]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadStudents();
+      void loadActivities();
+    }
+  }, [currentTenant?.id, loadActivities, loadStudents]);
+
+  useEffect(() => {
+    if (searchType === "student" && selectedStudent) {
+      void loadPaymentsByStudent();
+    } else if (searchType === "activity" && selectedActivity) {
+      void loadPaymentsByActivity();
+    }
+  }, [loadPaymentsByActivity, loadPaymentsByStudent, searchType, selectedActivity, selectedStudent, period]);
 
   const generatePDF = async () => {
     if (payments.length === 0) {
@@ -363,7 +366,7 @@ export default function PaymentReports() {
         <CardContent className="p-3 md:p-6 space-y-3 md:space-y-6">
           <div className="space-y-1 md:space-y-2">
             <Label className="text-xs md:text-sm">Buscar por</Label>
-            <Select value={searchType} onValueChange={(value: any) => {
+            <Select value={searchType} onValueChange={(value: SearchType) => {
               setSearchType(value);
               setSelectedStudent("");
               setSelectedActivity("");
@@ -410,7 +413,7 @@ export default function PaymentReports() {
 
             <div className="space-y-2">
               <Label>Período</Label>
-              <Select value={period} onValueChange={(value: any) => setPeriod(value)}>
+              <Select value={period} onValueChange={(value: PeriodType) => setPeriod(value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

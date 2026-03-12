@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,13 +36,7 @@ export default function ActivityPayments() {
   const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadPaymentStatuses();
-    }
-  }, [currentTenant?.id]);
-
-  const loadPaymentStatuses = async () => {
+  const loadPaymentStatuses = useCallback(async () => {
     try {
       // Get all students with enrollment dates
       const { data: students, error: studentsError } = await supabase
@@ -132,7 +126,13 @@ export default function ActivityPayments() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadPaymentStatuses();
+    }
+  }, [currentTenant?.id, loadPaymentStatuses]);
 
   const getPaymentStatus = (status: PaymentStatus) => {
     if (status.was_not_enrolled) {
