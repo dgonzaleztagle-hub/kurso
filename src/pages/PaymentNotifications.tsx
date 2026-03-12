@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,25 +25,41 @@ import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { fetchStudentDashboardDataForPeriod } from '@/hooks/useStudentDashboardData';
 import { buildMonthlyPaymentMetadata } from '@/lib/paymentGrouping';
 
+type PaymentNotificationRow = Tables<'payment_notifications'>;
+type PaymentNotificationStudent = {
+  id: number;
+  first_name: string | null;
+  last_name: string | null;
+};
+type PaymentDebt = {
+  type: 'activity' | 'monthly_fee';
+  id: number | string;
+  name: string;
+  amount: number;
+  paid_amount?: number;
+  target_month?: string;
+  months?: string[];
+};
+type PaymentDetails = {
+  selected_debts?: PaymentDebt[];
+  remainder_to_monthly_fees?: number;
+};
+
 interface PaymentNotification {
   id: string;
-  user_id: string;
-  student_id: string;
+  user_id: string | null;
+  student_id: number | null;
   payment_date: string;
   amount: number;
-  payer_name: string;
-  bank: string;
-  payment_details: any;
+  payer_name: string | null;
+  bank: string | null;
+  payment_details: PaymentDetails | null;
   status: 'pending' | 'approved' | 'rejected';
-  rejection_reason?: string;
+  rejection_reason?: string | null;
   processed_by?: string;
   processed_at?: string;
   created_at: string;
-  students?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-  };
+  students?: PaymentNotificationStudent | null;
 }
 
 export default function PaymentNotifications() {
@@ -64,13 +81,7 @@ export default function PaymentNotifications() {
     return formatDateForDisplay(dateStr);
   };
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadNotifications();
-    }
-  }, [currentTenant?.id]);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -87,7 +98,15 @@ export default function PaymentNotifications() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setNotifications((data || []) as unknown as PaymentNotification[]);
+      setNotifications(
+        ((data || []) as Array<PaymentNotificationRow & { students?: PaymentNotificationStudent | null }>).map(
+          (notification) => ({
+            ...notification,
+            payment_details: (notification.payment_details as PaymentDetails | null) || null,
+            status: notification.status as PaymentNotification['status'],
+          }),
+        ),
+      );
     } catch (error) {
       console.error('Error loading notifications:', error);
       toast({
@@ -98,7 +117,13 @@ export default function PaymentNotifications() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id, toast]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadNotifications();
+    }
+  }, [currentTenant?.id, loadNotifications]);
 
   const getStudentName = (notification: PaymentNotification) => {
     if (!notification.students) return 'Estudiante desconocido';
@@ -164,10 +189,10 @@ export default function PaymentNotifications() {
           });
       }
 
-      const activityDebts = selectedDebts.filter((debt: any) => debt.type === 'activity');
-      const monthlyFeeDebts = selectedDebts.filter((debt: any) => debt.type === 'monthly_fee');
+      const activityDebts = selectedDebts.filter((debt) => debt.type === 'activity');
+      const monthlyFeeDebts = selectedDebts.filter((debt) => debt.type === 'monthly_fee');
       const requiredFolios = activityDebts.length + (monthlyFeeDebts.length > 0 ? 1 : 0);
-      const { data: folioData } = await supabase.rpc('reserve_payment_folios_for_tenant' as any, {
+      const { data: folioData } = await supabase.rpc('reserve_payment_folios_for_tenant', {
         target_tenant_id: currentTenant.id,
         requested_count: Math.max(requiredFolios, 1),
       });
@@ -196,9 +221,9 @@ export default function PaymentNotifications() {
       }
 
       if (monthlyFeeDebts.length > 0) {
-        const monthTargets = monthlyFeeDebts.flatMap((debt: any) => {
+        const monthTargets = monthlyFeeDebts.flatMap((debt) => {
           const months = Array.isArray(debt.months)
-            ? debt.months.map((month: string) => normalizeMonthName(month)).filter(Boolean)
+            ? debt.months.map((month) => normalizeMonthName(month)).filter(Boolean)
             : [];
 
           if (months.length > 0) {
@@ -210,7 +235,7 @@ export default function PaymentNotifications() {
 
         const monthlyMetadata = buildMonthlyPaymentMetadata(monthTargets);
         const totalMonthlyAmount = monthlyFeeDebts.reduce(
-          (sum: number, debt: any) => sum + (Number(debt.paid_amount) || 0),
+          (sum, debt) => sum + (Number(debt.paid_amount) || 0),
           0,
         );
 
@@ -266,7 +291,7 @@ export default function PaymentNotifications() {
         description: 'El pago ha sido aprobado y registrado correctamente',
       });
 
-      loadNotifications();
+      void loadNotifications();
       setShowDetailsDialog(false);
     } catch (error) {
       console.error('Error approving payment:', error);
@@ -350,7 +375,7 @@ export default function PaymentNotifications() {
         description: 'El pago ha sido rechazado',
       });
 
-      loadNotifications();
+      void loadNotifications();
       setShowRejectDialog(false);
       setRejectionReason('');
       setSelectedNotification(null);
@@ -551,7 +576,7 @@ export default function PaymentNotifications() {
                   {selectedNotification.payment_details?.selected_debts?.length > 0 ? (
                     <>
                       <p className="text-sm font-medium">Deudas seleccionadas:</p>
-                      {selectedNotification.payment_details.selected_debts.map((debt: any, index: number) => {
+                      {selectedNotification.payment_details.selected_debts.map((debt, index) => {
                         const paidAmount = debt.paid_amount || debt.amount;
                         const isPartial = debt.paid_amount && debt.paid_amount < debt.amount;
 

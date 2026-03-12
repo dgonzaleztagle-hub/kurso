@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +24,9 @@ interface Post {
     created_at: string;
 }
 
+type PostRow = Tables<'posts'>;
+type PostInsert = TablesInsert<'posts'>;
+
 const PostManagement = () => {
     const { currentTenant } = useTenant();
     const { toast } = useToast();
@@ -37,23 +41,23 @@ const PostManagement = () => {
     const [isOfficial, setIsOfficial] = useState(true);
     const [isPinned, setIsPinned] = useState(false);
 
-    useEffect(() => {
-        if (currentTenant) {
-            fetchPosts();
-        }
-    }, [currentTenant]);
-
-    const fetchPosts = async () => {
+    const fetchPosts = useCallback(async () => {
         try {
             setLoading(true);
             const { data, error } = await supabase
-                .from('posts' as any)
+                .from('posts')
                 .select('*')
                 .eq('tenant_id', currentTenant?.id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setPosts((data as any) || []);
+            setPosts(((data as PostRow[] | null) || []).map((post) => ({
+                ...post,
+                is_official: Boolean(post.is_official),
+                is_pinned: Boolean(post.is_pinned),
+                status: (post.status as Post['status']) || 'published',
+                created_at: post.created_at || new Date().toISOString(),
+            })));
         } catch (error) {
             console.error('Error fetching posts:', error);
             toast({
@@ -64,7 +68,13 @@ const PostManagement = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentTenant?.id, toast]);
+
+    useEffect(() => {
+        if (currentTenant) {
+            void fetchPosts();
+        }
+    }, [currentTenant, fetchPosts]);
 
     const handleCreatePost = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -72,14 +82,16 @@ const PostManagement = () => {
 
         try {
             setIsSubmitting(true);
-            const { error } = await supabase.from('posts' as any).insert({
+            const postToInsert: PostInsert = {
                 tenant_id: currentTenant.id,
                 title,
                 content,
                 is_official: isOfficial,
                 is_pinned: isPinned,
                 status: 'published'
-            });
+            };
+
+            const { error } = await supabase.from('posts').insert(postToInsert);
 
             if (error) throw error;
 
@@ -90,7 +102,7 @@ const PostManagement = () => {
 
             setIsDialogOpen(false);
             resetForm();
-            fetchPosts();
+            void fetchPosts();
         } catch (error) {
             console.error('Error creating post:', error);
             toast({
@@ -108,7 +120,7 @@ const PostManagement = () => {
 
         try {
             const { error } = await supabase
-                .from('posts' as any)
+                .from('posts')
                 .delete()
                 .eq('id', id);
 
@@ -118,7 +130,7 @@ const PostManagement = () => {
                 title: 'Eliminado',
                 description: 'El anuncio ha sido eliminado.'
             });
-            fetchPosts();
+            void fetchPosts();
         } catch (error) {
             console.error('Error deleting post:', error);
             toast({
