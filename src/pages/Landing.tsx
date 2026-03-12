@@ -350,11 +350,14 @@ const Landing = () => {
                             <img src={branding.iconUrl} alt={branding.appName} className="h-6 w-6 grayscale opacity-50 object-contain" />
                             <span className="text-sm text-muted-foreground">© {new Date().getFullYear()} Kurso. Todos los derechos reservados.</span>
                         </div>
-                        <div className="flex gap-6 text-sm text-muted-foreground">
-                            <Link to="/terms" className="hover:text-primary">Términos</Link>
-                            <Link to="/privacy" className="hover:text-primary">Privacidad</Link>
-                            <Link to="/contact" className="hover:text-primary">Contacto</Link>
-                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() => window.open("https://wa.me/56954031472", "_blank")}
+                        >
+                            Contacto y Soporte
+                        </Button>
                     </div>
 
                     {/* Factory Brand AEO Link */}

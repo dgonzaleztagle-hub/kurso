@@ -43,7 +43,7 @@ const NotFound = () => {
                 </Link>
             </Button>
             <Button asChild variant="ghost">
-                <a href="https://hojacero.cl" target="_blank" rel="noopener noreferrer">
+                <a href="https://wa.me/56954031472" target="_blank" rel="noopener noreferrer">
                     ¿Necesitas Soporte Técnico?
                 </a>
             </Button>
