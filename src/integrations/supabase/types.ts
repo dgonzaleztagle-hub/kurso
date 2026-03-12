@@ -19,19 +19,19 @@ export type Database = {
           activity_date: string | null
           amount: number
           can_redirect_to_fees: boolean
-          created_at: string
+          created_at: string | null
           description: string | null
-          id: number
+          id: string
           name: string
           tenant_id: string
         }
         Insert: {
           activity_date?: string | null
-          amount?: number
+          amount: number
           can_redirect_to_fees?: boolean
-          created_at?: string
+          created_at?: string | null
           description?: string | null
-          id?: number
+          id?: string
           name: string
           tenant_id: string
         }
@@ -39,9 +39,9 @@ export type Database = {
           activity_date?: string | null
           amount?: number
           can_redirect_to_fees?: boolean
-          created_at?: string
+          created_at?: string | null
           description?: string | null
-          id?: number
+          id?: string
           name?: string
           tenant_id?: string
         }
@@ -57,38 +57,38 @@ export type Database = {
       }
       activity_donations: {
         Row: {
-          amount: string
+          amount: number
           cantidad_original: string | null
           created_at: string
           donated_at: string | null
           id: string
           name: string
           scheduled_activity_id: string
-          student_id: number | null
+          student_id: string | null
           tenant_id: string
           unit: string
         }
         Insert: {
-          amount?: string
+          amount?: number
           cantidad_original?: string | null
           created_at?: string
           donated_at?: string | null
           id?: string
           name: string
           scheduled_activity_id: string
-          student_id?: number | null
+          student_id?: string | null
           tenant_id: string
           unit?: string
         }
         Update: {
-          amount?: string
+          amount?: number
           cantidad_original?: string | null
           created_at?: string
           donated_at?: string | null
           id?: string
           name?: string
           scheduled_activity_id?: string
-          student_id?: number | null
+          student_id?: string | null
           tenant_id?: string
           unit?: string
         }
@@ -118,27 +118,27 @@ export type Database = {
       }
       activity_exclusions: {
         Row: {
-          activity_id: number
-          created_at: string
-          id: number
+          activity_id: string | null
+          created_at: string | null
+          id: string
           reason: string | null
-          student_id: number
+          student_id: string | null
           tenant_id: string
         }
         Insert: {
-          activity_id: number
-          created_at?: string
-          id?: number
+          activity_id?: string | null
+          created_at?: string | null
+          id?: string
           reason?: string | null
-          student_id: number
+          student_id?: string | null
           tenant_id: string
         }
         Update: {
-          activity_id?: number
-          created_at?: string
-          id?: number
+          activity_id?: string | null
+          created_at?: string | null
+          id?: string
           reason?: string | null
-          student_id?: number
+          student_id?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -167,21 +167,36 @@ export type Database = {
       }
       admin_permissions: {
         Row: {
-          created_at: string | null
+          can_create: boolean
+          can_delete: boolean
+          can_update: boolean
+          can_view: boolean
+          created_at: string
           id: string
           module: string
+          updated_at: string
           user_id: string
         }
         Insert: {
-          created_at?: string | null
+          can_create?: boolean
+          can_delete?: boolean
+          can_update?: boolean
+          can_view?: boolean
+          created_at?: string
           id?: string
           module: string
+          updated_at?: string
           user_id: string
         }
         Update: {
-          created_at?: string | null
+          can_create?: boolean
+          can_delete?: boolean
+          can_update?: boolean
+          can_view?: boolean
+          created_at?: string
           id?: string
           module?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -266,100 +281,11 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      credit_movements: {
-        Row: {
-          amount: number
-          created_at: string
-          created_by: string | null
-          description: string | null
-          details: Json
-          id: string
-          related_movement_id: string | null
-          reversal_reason: string | null
-          reversed_at: string | null
-          reversed_by: string | null
-          source_payment_id: string | null
-          student_id: string
-          target_activity_id: string | null
-          target_month: string | null
-          target_type: string | null
-          tenant_id: string
-          type: string
-        }
-        Insert: {
-          amount: number
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          details?: Json
-          id?: string
-          related_movement_id?: string | null
-          reversal_reason?: string | null
-          reversed_at?: string | null
-          reversed_by?: string | null
-          source_payment_id?: string | null
-          student_id: string
-          target_activity_id?: string | null
-          target_month?: string | null
-          target_type?: string | null
-          tenant_id: string
-          type: string
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          details?: Json
-          id?: string
-          related_movement_id?: string | null
-          reversal_reason?: string | null
-          reversed_at?: string | null
-          reversed_by?: string | null
-          source_payment_id?: string | null
-          student_id?: string
-          target_activity_id?: string | null
-          target_month?: string | null
-          target_type?: string | null
-          tenant_id?: string
-          type?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "credit_movements_related_movement_id_fkey"
-            columns: ["related_movement_id"]
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "credit_movements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_movements_source_payment_id_fkey"
-            columns: ["source_payment_id"]
-            isOneToOne: false
-            referencedRelation: "payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_movements_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_movements_target_activity_id_fkey"
-            columns: ["target_activity_id"]
-            isOneToOne: false
-            referencedRelation: "activities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_movements_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
         ]
@@ -467,6 +393,109 @@ export type Database = {
           },
         ]
       }
+      credit_movements: {
+        Row: {
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          details: Json
+          id: string
+          related_movement_id: string | null
+          reversal_reason: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+          source_payment_id: string | null
+          student_id: string | null
+          target_activity_id: string | null
+          target_month: string | null
+          target_type: string | null
+          tenant_id: string
+          type: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          details?: Json
+          id?: string
+          related_movement_id?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          source_payment_id?: string | null
+          student_id?: string | null
+          target_activity_id?: string | null
+          target_month?: string | null
+          target_type?: string | null
+          tenant_id: string
+          type: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          details?: Json
+          id?: string
+          related_movement_id?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          source_payment_id?: string | null
+          student_id?: string | null
+          target_activity_id?: string | null
+          target_month?: string | null
+          target_type?: string | null
+          tenant_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_movements_related_movement_id_fkey"
+            columns: ["related_movement_id"]
+            isOneToOne: false
+            referencedRelation: "credit_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_movements_source_payment_id_fkey"
+            columns: ["source_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_movements_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_movements_target_activity_id_fkey"
+            columns: ["target_activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_movements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dashboard_notifications: {
         Row: {
           created_at: string
@@ -494,6 +523,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "dashboard_notifications_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "dashboard_notifications_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -506,34 +542,37 @@ export type Database = {
         Row: {
           amount: number
           category: string | null
-          created_at: string
+          created_at: string | null
           created_by: string | null
           description: string | null
-          expense_date: string
-          folio: number
-          id: number
+          expense_date: string | null
+          folio: string | null
+          id: string
+          supplier: string | null
           tenant_id: string
         }
         Insert: {
           amount: number
           category?: string | null
-          created_at?: string
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
-          expense_date?: string
-          folio: number
-          id?: number
+          expense_date?: string | null
+          folio?: string | null
+          id?: string
+          supplier?: string | null
           tenant_id: string
         }
         Update: {
           amount?: number
           category?: string | null
-          created_at?: string
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
-          expense_date?: string
-          folio?: number
-          id?: number
+          expense_date?: string | null
+          folio?: string | null
+          id?: string
+          supplier?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -548,30 +587,40 @@ export type Database = {
       }
       form_exclusions: {
         Row: {
-          created_at: string | null
+          created_at: string
           created_by: string | null
           form_id: string
           id: string
           reason: string | null
-          student_id: number
+          student_id: string
+          tenant_id: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
           form_id: string
           id?: string
           reason?: string | null
-          student_id: number
+          student_id: string
+          tenant_id: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
           form_id?: string
           id?: string
           reason?: string | null
-          student_id?: number
+          student_id?: string
+          tenant_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "form_exclusions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "form_exclusions_form_id_fkey"
             columns: ["form_id"]
@@ -586,41 +635,48 @@ export type Database = {
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "form_exclusions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
         ]
       }
       form_fields: {
         Row: {
           conditional_logic: Json | null
-          created_at: string | null
+          created_at: string
           description: string | null
           field_type: string
           form_id: string
           id: string
-          is_required: boolean | null
+          is_required: boolean
           label: string
           options: Json | null
           order_index: number
         }
         Insert: {
           conditional_logic?: Json | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
-          field_type: string
+          field_type?: string
           form_id: string
           id?: string
-          is_required?: boolean | null
+          is_required?: boolean
           label: string
           options?: Json | null
           order_index?: number
         }
         Update: {
           conditional_logic?: Json | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           field_type?: string
           form_id?: string
           id?: string
-          is_required?: boolean | null
+          is_required?: boolean
           label?: string
           options?: Json | null
           order_index?: number
@@ -639,25 +695,37 @@ export type Database = {
         Row: {
           form_id: string
           id: string
+          responder_email: string | null
+          responder_name: string | null
           response_data: Json
-          student_id: number | null
-          submitted_at: string | null
+          responses: Json
+          student_id: string | null
+          submitted_at: string
+          tenant_id: string
           user_id: string | null
         }
         Insert: {
           form_id: string
           id?: string
+          responder_email?: string | null
+          responder_name?: string | null
           response_data?: Json
-          student_id?: number | null
-          submitted_at?: string | null
+          responses?: Json
+          student_id?: string | null
+          submitted_at?: string
+          tenant_id: string
           user_id?: string | null
         }
         Update: {
           form_id?: string
           id?: string
+          responder_email?: string | null
+          responder_name?: string | null
           response_data?: Json
-          student_id?: number | null
-          submitted_at?: string | null
+          responses?: Json
+          student_id?: string | null
+          submitted_at?: string
+          tenant_id?: string
           user_id?: string | null
         }
         Relationships: [
@@ -675,52 +743,66 @@ export type Database = {
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "form_responses_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
         ]
       }
       forms: {
         Row: {
-          allow_multiple_responses: boolean | null
+          allow_multiple_responses: boolean
           closes_at: string | null
-          created_at: string | null
+          created_at: string
           created_by: string | null
           description: string | null
           id: string
-          is_active: boolean | null
-          is_public: boolean | null
-          requires_login: boolean | null
+          is_active: boolean
+          is_public: boolean
+          requires_login: boolean
           tenant_id: string
           title: string
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          allow_multiple_responses?: boolean | null
+          allow_multiple_responses?: boolean
           closes_at?: string | null
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
-          is_active?: boolean | null
-          is_public?: boolean | null
-          requires_login?: boolean | null
+          is_active?: boolean
+          is_public?: boolean
+          requires_login?: boolean
           tenant_id: string
           title: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          allow_multiple_responses?: boolean | null
+          allow_multiple_responses?: boolean
           closes_at?: string | null
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
-          is_active?: boolean | null
-          is_public?: boolean | null
-          requires_login?: boolean | null
+          is_active?: boolean
+          is_public?: boolean
+          requires_login?: boolean
           tenant_id?: string
           title?: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "forms_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "forms_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -766,6 +848,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "meeting_minutes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "meeting_minutes_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -803,62 +892,82 @@ export type Database = {
       }
       payment_notifications: {
         Row: {
-          amount: number
+          amount: number | null
           bank: string | null
-          created_at: string
+          created_at: string | null
           id: string
           payer_name: string | null
-          payment_date: string
+          payment_date: string | null
           payment_details: Json | null
           processed_at: string | null
           processed_by: string | null
           reference: string | null
           rejection_reason: string | null
-          status: string
-          student_id: number | null
+          status: string | null
+          student_id: string | null
+          submitted_by: string | null
           tenant_id: string
           user_id: string | null
+          voucher_url: string | null
         }
         Insert: {
-          amount: number
+          amount?: number | null
           bank?: string | null
-          created_at?: string
+          created_at?: string | null
           id?: string
           payer_name?: string | null
-          payment_date?: string
+          payment_date?: string | null
           payment_details?: Json | null
           processed_at?: string | null
           processed_by?: string | null
           reference?: string | null
           rejection_reason?: string | null
-          status?: string
-          student_id?: number | null
+          status?: string | null
+          student_id?: string | null
+          submitted_by?: string | null
           tenant_id: string
           user_id?: string | null
+          voucher_url?: string | null
         }
         Update: {
-          amount?: number
+          amount?: number | null
           bank?: string | null
-          created_at?: string
+          created_at?: string | null
           id?: string
           payer_name?: string | null
-          payment_date?: string
+          payment_date?: string | null
           payment_details?: Json | null
           processed_at?: string | null
           processed_by?: string | null
           reference?: string | null
           rejection_reason?: string | null
-          status?: string
-          student_id?: number | null
+          status?: string | null
+          student_id?: string | null
+          submitted_by?: string | null
           tenant_id?: string
           user_id?: string | null
+          voucher_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payment_notifications_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payment_notifications_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_notifications_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
           {
@@ -868,66 +977,76 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "payment_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payments: {
         Row: {
-          activity_id: number | null
+          activity_id: string | null
           amount: number
-          concept: string
-          created_at: string
-          created_by: string | null
-          folio: number
-          id: number
+          concept: string | null
+          created_at: string | null
+          folio: string | null
+          id: string
           last_redirected_at: string | null
           last_redirected_by: string | null
           month_period: string | null
-          payment_date: string
+          payment_date: string | null
+          payment_method: string | null
           redirect_locked: boolean
           redirect_notes: string | null
           redirect_status: string
           redirected_amount: number
-          student_id: number | null
+          status: string | null
+          student_id: string | null
           student_name: string | null
           tenant_id: string
         }
         Insert: {
-          activity_id?: number | null
+          activity_id?: string | null
           amount: number
-          concept: string
-          created_at?: string
-          created_by?: string | null
-          folio: number
-          id?: number
+          concept?: string | null
+          created_at?: string | null
+          folio?: string | null
+          id?: string
           last_redirected_at?: string | null
           last_redirected_by?: string | null
           month_period?: string | null
-          payment_date?: string
+          payment_date?: string | null
+          payment_method?: string | null
           redirect_locked?: boolean
           redirect_notes?: string | null
           redirect_status?: string
           redirected_amount?: number
-          student_id?: number | null
+          status?: string | null
+          student_id?: string | null
           student_name?: string | null
           tenant_id: string
         }
         Update: {
-          activity_id?: number | null
+          activity_id?: string | null
           amount?: number
-          concept?: string
-          created_at?: string
-          created_by?: string | null
-          folio?: number
-          id?: number
+          concept?: string | null
+          created_at?: string | null
+          folio?: string | null
+          id?: string
           last_redirected_at?: string | null
           last_redirected_by?: string | null
           month_period?: string | null
-          payment_date?: string
+          payment_date?: string | null
+          payment_method?: string | null
           redirect_locked?: boolean
           redirect_notes?: string | null
           redirect_status?: string
           redirected_amount?: number
-          student_id?: number | null
+          status?: string | null
+          student_id?: string | null
           student_name?: string | null
           tenant_id?: string
         }
@@ -1003,60 +1122,76 @@ export type Database = {
           account_info: Json | null
           amount: number
           attachments: Json | null
-          created_at: string
+          created_at: string | null
+          description: string | null
           expense_folio: number | null
-          folio: number | null
+          folio: string | null
           id: string
           payment_proof: Json | null
           processed_at: string | null
           processed_by: string | null
           rejection_reason: string | null
-          status: string
-          subject: string
+          requester_id: string | null
+          status: string | null
+          subject: string | null
           supplier_name: string | null
           tenant_id: string
-          type: string
+          type: string | null
           user_id: string | null
+          voucher_url: string | null
         }
         Insert: {
           account_info?: Json | null
           amount: number
           attachments?: Json | null
-          created_at?: string
+          created_at?: string | null
+          description?: string | null
           expense_folio?: number | null
-          folio?: number | null
+          folio?: string | null
           id?: string
           payment_proof?: Json | null
           processed_at?: string | null
           processed_by?: string | null
           rejection_reason?: string | null
-          status?: string
-          subject: string
+          requester_id?: string | null
+          status?: string | null
+          subject?: string | null
           supplier_name?: string | null
           tenant_id: string
-          type?: string
+          type?: string | null
           user_id?: string | null
+          voucher_url?: string | null
         }
         Update: {
           account_info?: Json | null
           amount?: number
           attachments?: Json | null
-          created_at?: string
+          created_at?: string | null
+          description?: string | null
           expense_folio?: number | null
-          folio?: number | null
+          folio?: string | null
           id?: string
           payment_proof?: Json | null
           processed_at?: string | null
           processed_by?: string | null
           rejection_reason?: string | null
-          status?: string
-          subject?: string
+          requester_id?: string | null
+          status?: string | null
+          subject?: string | null
           supplier_name?: string | null
           tenant_id?: string
-          type?: string
+          type?: string | null
           user_id?: string | null
+          voucher_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reimbursements_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reimbursements_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -1182,57 +1317,87 @@ export type Database = {
       }
       scheduled_activities: {
         Row: {
-          activity_id: number | null
+          amount: number
           completed: boolean
           created_at: string
-          created_by: string | null
-          fee_amount: number | null
           id: string
           is_with_donations: boolean
-          is_with_fee: boolean
           name: string
-          requires_management: boolean
           scheduled_date: string
           tenant_id: string
         }
         Insert: {
-          activity_id?: number | null
+          amount?: number
           completed?: boolean
           created_at?: string
-          created_by?: string | null
-          fee_amount?: number | null
           id?: string
           is_with_donations?: boolean
-          is_with_fee?: boolean
           name: string
-          requires_management?: boolean
-          scheduled_date: string
+          scheduled_date?: string
           tenant_id: string
         }
         Update: {
-          activity_id?: number | null
+          amount?: number
           completed?: boolean
           created_at?: string
-          created_by?: string | null
-          fee_amount?: number | null
           id?: string
           is_with_donations?: boolean
-          is_with_fee?: boolean
           name?: string
-          requires_management?: boolean
           scheduled_date?: string
           tenant_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "scheduled_activities_activity_id_fkey"
-            columns: ["activity_id"]
+            foreignKeyName: "scheduled_activities_tenant_id_fkey"
+            columns: ["tenant_id"]
             isOneToOne: false
-            referencedRelation: "activities"
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_activity_exclusions: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string | null
+          scheduled_activity_id: string
+          student_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason?: string | null
+          scheduled_activity_id: string
+          student_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string | null
+          scheduled_activity_id?: string
+          student_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_activity_exclusions_scheduled_activity_id_fkey"
+            columns: ["scheduled_activity_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_activities"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "scheduled_activities_tenant_id_fkey"
+            foreignKeyName: "scheduled_activity_exclusions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_activity_exclusions_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1243,25 +1408,22 @@ export type Database = {
       student_credits: {
         Row: {
           amount: number
-          created_at: string
           id: string
-          student_id: number
+          student_id: string
           tenant_id: string
           updated_at: string
         }
         Insert: {
           amount?: number
-          created_at?: string
           id?: string
-          student_id: number
+          student_id: string
           tenant_id: string
           updated_at?: string
         }
         Update: {
           amount?: number
-          created_at?: string
           id?: string
-          student_id?: number
+          student_id?: string
           tenant_id?: string
           updated_at?: string
         }
@@ -1282,30 +1444,88 @@ export type Database = {
           },
         ]
       }
+      student_guardians: {
+        Row: {
+          created_at: string | null
+          guardian_id: string | null
+          id: string
+          is_prymary: boolean | null
+          relationship: string | null
+          student_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          guardian_id?: string | null
+          id?: string
+          is_prymary?: boolean | null
+          relationship?: string | null
+          student_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          guardian_id?: string | null
+          id?: string
+          is_prymary?: boolean | null
+          relationship?: string | null
+          student_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_guardians_guardian_id_fkey"
+            columns: ["guardian_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_guardians_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_guardians_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
-          created_at: string
+          birth_date: string | null
+          created_at: string | null
           enrollment_date: string
           first_name: string
-          id: number
+          id: string
+          is_active: boolean | null
           last_name: string
           rut: string | null
           tenant_id: string
         }
         Insert: {
-          created_at?: string
+          birth_date?: string | null
+          created_at?: string | null
           enrollment_date?: string
           first_name: string
-          id?: number
+          id?: string
+          is_active?: boolean | null
           last_name: string
           rut?: string | null
           tenant_id: string
         }
         Update: {
-          created_at?: string
+          birth_date?: string | null
+          created_at?: string | null
           enrollment_date?: string
           first_name?: string
-          id?: number
+          id?: string
+          is_active?: boolean | null
           last_name?: string
           rut?: string | null
           tenant_id?: string
@@ -1313,6 +1533,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "students_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_folio_counters: {
+        Row: {
+          created_at: string
+          next_value: number
+          scope: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          next_value?: number
+          scope: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          next_value?: number
+          scope?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_folio_counters_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1362,6 +1614,60 @@ export type Database = {
           },
         ]
       }
+      tenant_opening_balances: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          effective_date: string
+          folio: number
+          id: string
+          notes: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          folio: number
+          id?: string
+          notes?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          folio?: number
+          id?: string
+          notes?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_opening_balances_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_opening_balances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           billing_plan_code: string | null
@@ -1374,9 +1680,9 @@ export type Database = {
           organization_id: string | null
           owner_id: string | null
           previous_tenant_id: string | null
+          saas_paid_cycle_count: number
           settings: Json | null
           slug: string | null
-          saas_paid_cycle_count: number
           status: string | null
           subscription_status:
             | Database["public"]["Enums"]["subscription_status"]
@@ -1513,21 +1819,21 @@ export type Database = {
           created_at: string | null
           display_name: string | null
           id: string
-          student_id: number
+          student_id: string
           user_id: string
         }
         Insert: {
           created_at?: string | null
           display_name?: string | null
           id?: string
-          student_id: number
+          student_id: string
           user_id: string
         }
         Update: {
           created_at?: string | null
           display_name?: string | null
           id?: string
-          student_id?: number
+          student_id?: string
           user_id?: string
         }
         Relationships: [
@@ -1552,6 +1858,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_credit_manually: {
+        Args: {
+          p_amount?: number
+          p_notes?: string
+          p_student_id: string
+          p_target_activity_id?: string
+          p_target_month?: string
+          p_target_type: string
+        }
+        Returns: string
+      }
       apply_saas_payment_log: {
         Args: { target_payment_id: string }
         Returns: {
@@ -1560,62 +1877,162 @@ export type Database = {
           valid_until: string
         }[]
       }
-      archive_tenant: { Args: { target_tenant_id: string }; Returns: undefined }
-      auth_has_tenant_role: {
-        Args: { p_roles: string[]; p_tenant_id: string }
-        Returns: boolean
+      approve_payment_notification_transaction: {
+        Args: {
+          payment_entries: Json
+          target_notification_id: string
+          target_processed_by: string
+        }
+        Returns: {
+          inserted_payment_ids: number[]
+          notification_id: string
+        }[]
       }
+      approve_reimbursement_transaction: {
+        Args: {
+          payment_proof_files?: Json
+          target_processed_by: string
+          target_reimbursement_id: string
+        }
+        Returns: {
+          expense_folio: number
+          reimbursement_id: string
+        }[]
+      }
+      archive_tenant: { Args: { target_tenant_id: string }; Returns: undefined }
       auth_is_superadmin: { Args: never; Returns: boolean }
       auth_owns_tenant: { Args: { target_tenant_id: string }; Returns: boolean }
+      bump_tenant_folio_counter: {
+        Args: {
+          requested_count?: number
+          target_scope: string
+          target_tenant_id: string
+        }
+        Returns: number
+      }
+      can_manage_credit: {
+        Args: { target_tenant_id: string }
+        Returns: boolean
+      }
       check_is_superadmin: { Args: never; Returns: boolean }
+      create_auth_user_from_rut: {
+        Args: { p_first_name: string; p_last_name: string; p_rut: string }
+        Returns: string
+      }
       create_db_user: {
         Args: { p_email: string; p_metadata: Json; p_password: string }
         Returns: string
       }
-      create_own_tenant: {
-        Args: { new_institution_name?: string; new_tenant_name: string }
-        Returns: Json
+      create_own_tenant:
+        | {
+            Args: { new_institution_name: string; new_tenant_name: string }
+            Returns: {
+              billing_plan_code: string | null
+              created_at: string | null
+              fiscal_year: number | null
+              id: string
+              last_saas_payment_at: string | null
+              name: string
+              next_tenant_id: string | null
+              organization_id: string | null
+              owner_id: string | null
+              previous_tenant_id: string | null
+              saas_paid_cycle_count: number
+              settings: Json | null
+              slug: string | null
+              status: string | null
+              subscription_status:
+                | Database["public"]["Enums"]["subscription_status"]
+                | null
+              trial_ends_at: string | null
+              updated_at: string | null
+              valid_until: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "tenants"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { new_tenant_name: string }
+            Returns: {
+              billing_plan_code: string | null
+              created_at: string | null
+              fiscal_year: number | null
+              id: string
+              last_saas_payment_at: string | null
+              name: string
+              next_tenant_id: string | null
+              organization_id: string | null
+              owner_id: string | null
+              previous_tenant_id: string | null
+              saas_paid_cycle_count: number
+              settings: Json | null
+              slug: string | null
+              status: string | null
+              subscription_status:
+                | Database["public"]["Enums"]["subscription_status"]
+                | null
+              trial_ends_at: string | null
+              updated_at: string | null
+              valid_until: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "tenants"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      delete_reimbursement_transaction: {
+        Args: { target_processed_by: string; target_reimbursement_id: string }
+        Returns: string
       }
-      ensure_student_account: {
-        Args: { p_student_id: number }
-        Returns: Json
-      }
+      ensure_student_account: { Args: { p_student_id: number }; Returns: Json }
       generate_missing_accounts: {
         Args: { p_tenant_id: string }
         Returns: Json
       }
-        get_next_expense_folio: { Args: never; Returns: number }
-        get_next_expense_folio_for_tenant: {
-          Args: { target_tenant_id: string }
-          Returns: number
-        }
-        get_next_payment_folio: { Args: never; Returns: number }
-        get_next_payment_folio_for_tenant: {
-          Args: { target_tenant_id: string }
-          Returns: number
-        }
-        get_next_reimbursement_folio: { Args: never; Returns: number }
-        get_next_reimbursement_folio_for_tenant: {
-          Args: { target_tenant_id: string }
-          Returns: number
-        }
+      get_next_expense_folio: { Args: never; Returns: string }
+      get_next_expense_folio_for_tenant: {
+        Args: { target_tenant_id: string }
+        Returns: number
+      }
+      get_next_payment_folio: { Args: never; Returns: string }
+      get_next_payment_folio_for_tenant: {
+        Args: { target_tenant_id: string }
+        Returns: number
+      }
+      get_next_reimbursement_folio: { Args: never; Returns: string }
+      get_next_reimbursement_folio_for_tenant: {
+        Args: { target_tenant_id: string }
+        Returns: number
+      }
       get_platform_clients: {
         Args: never
         Returns: {
           created_at: string
-          fiscal_year: number
-          id: string
           organization_name: string
           owner_email: string
-          owner_name: string
           status: string
           subscription_status: Database["public"]["Enums"]["subscription_status"]
+          tenant_id: string
           tenant_name: string
-          trial_ends_at: string
           valid_until: string
         }[]
       }
-      get_users_by_tenant: { Args: { target_tenant_id: string }; Returns: Json }
+      get_users_by_tenant: {
+        Args: { target_tenant_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+          user_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1623,28 +2040,97 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_first_login_completed: { Args: never; Returns: undefined }
       migrate_course_year: {
         Args: {
-          p_admin_ids: string[]
-          p_new_fee_amount: number
-          p_new_fiscal_year: number
-          p_new_name: string
-          p_previous_tenant_id: string
-          p_student_data: Json[]
+          new_fiscal_year: number
+          new_tenant_name: string
+          source_tenant_id: string
         }
-        Returns: Json
+        Returns: {
+          billing_plan_code: string | null
+          created_at: string | null
+          fiscal_year: number | null
+          id: string
+          last_saas_payment_at: string | null
+          name: string
+          next_tenant_id: string | null
+          organization_id: string | null
+          owner_id: string | null
+          previous_tenant_id: string | null
+          saas_paid_cycle_count: number
+          settings: Json | null
+          slug: string | null
+          status: string | null
+          subscription_status:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
+          trial_ends_at: string | null
+          updated_at: string | null
+          valid_until: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tenants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      recompute_student_credit_balance: {
+        Args: { p_student_id: string; p_tenant_id: string }
+        Returns: number
+      }
+      redirect_payment_to_credit: {
+        Args: { p_amount: number; p_notes?: string; p_payment_id: string }
+        Returns: string
+      }
+      reject_payment_notification_transaction: {
+        Args: {
+          target_notification_id: string
+          target_processed_by: string
+          target_rejection_reason: string
+        }
+        Returns: string
+      }
+      reject_reimbursement_transaction: {
+        Args: {
+          target_processed_by: string
+          target_reimbursement_id: string
+          target_rejection_reason: string
+        }
+        Returns: string
+      }
+      reopen_reimbursement_transaction: {
+        Args: { target_processed_by: string; target_reimbursement_id: string }
+        Returns: string
+      }
+      reserve_payment_folios_for_tenant: {
+        Args: { requested_count?: number; target_tenant_id: string }
+        Returns: number
+      }
+      reverse_credit_movement: {
+        Args: { p_amount: number; p_movement_id: string; p_reason?: string }
+        Returns: string
+      }
+      rls_is_superadmin: { Args: { _uid: string }; Returns: boolean }
+      rls_is_tenant_member: {
+        Args: { _tenant_id: string; _uid: string }
+        Returns: boolean
+      }
+      rls_is_tenant_owner: {
+        Args: { _tenant_id: string; _uid: string }
+        Returns: boolean
+      }
+      student_auth_email_from_rut: { Args: { p_rut: string }; Returns: string }
+      student_auth_initial_password_from_rut: {
+        Args: { p_rut: string }
+        Returns: string
       }
     }
     Enums: {
-      app_role: "owner" | "master" | "admin" | "member" | "student" | "alumnos"
+      app_role: "owner" | "admin" | "member" | "student" | "master" | "alumnos"
       plan_type: "basic" | "institutional"
-      subscription_status:
-        | "trial"
-        | "active"
-        | "past_due"
-        | "canceled"
-        | "grace_period"
-        | "locked"
+      subscription_status: "trial" | "active" | "past_due" | "canceled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1772,16 +2258,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "master", "admin", "member", "student", "alumnos"],
+      app_role: ["owner", "admin", "member", "student", "master", "alumnos"],
       plan_type: ["basic", "institutional"],
-      subscription_status: [
-        "trial",
-        "active",
-        "past_due",
-        "canceled",
-        "grace_period",
-        "locked",
-      ],
+      subscription_status: ["trial", "active", "past_due", "canceled"],
     },
   },
 } as const
