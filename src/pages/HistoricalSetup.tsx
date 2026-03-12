@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,11 +53,24 @@ type HistoricalPaymentImportRow = {
   concept?: string;
 };
 
-const isMissingPaymentsCreatedByColumn = (error: any) =>
-  error?.code === "PGRST204" &&
-  typeof error?.message === "string" &&
-  error.message.includes("'created_by'") &&
-  error.message.includes("'payments'");
+type PostgrestErrorLike = { code?: string; message?: string };
+type StudentId = string | number;
+type OpeningBalanceInsert = {
+  tenant_id: string;
+  folio: number;
+  amount: number;
+  effective_date: string;
+  notes: string | null;
+  created_by: string;
+};
+type PaymentInsert = TablesInsert<"payments">;
+type CreditMovementInsert = TablesInsert<"credit_movements">;
+
+const isMissingPaymentsCreatedByColumn = (error: unknown) =>
+  (error as PostgrestErrorLike | undefined)?.code === "PGRST204" &&
+  typeof (error as PostgrestErrorLike | undefined)?.message === "string" &&
+  ((error as PostgrestErrorLike).message?.includes("'created_by'")) &&
+  ((error as PostgrestErrorLike).message?.includes("'payments'"));
 
 export default function HistoricalSetup() {
   const { currentTenant } = useTenant();
@@ -83,12 +97,6 @@ export default function HistoricalSetup() {
   const [creditAmount, setCreditAmount] = useState("");
   const [creditDescription, setCreditDescription] = useState("");
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      void loadData();
-    }
-  }, [currentTenant?.id]);
-
   const sortedStudents = useMemo(
     () =>
       [...students].sort((a, b) =>
@@ -97,7 +105,7 @@ export default function HistoricalSetup() {
     [students],
   );
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!currentTenant?.id) return;
     try {
       setLoading(true);
@@ -108,7 +116,7 @@ export default function HistoricalSetup() {
           .eq("tenant_id", currentTenant.id)
           .order("last_name"),
         supabase
-          .from("tenant_opening_balances" as any)
+          .from("tenant_opening_balances")
           .select("*")
           .eq("tenant_id", currentTenant.id)
           .order("effective_date", { ascending: false }),
@@ -125,7 +133,13 @@ export default function HistoricalSetup() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadData();
+    }
+  }, [currentTenant?.id, loadData]);
 
   const getStudentName = (studentId: string) => {
     const student = sortedStudents.find((item) => String(item.id) === String(studentId));
@@ -142,28 +156,29 @@ export default function HistoricalSetup() {
 
     try {
       setSavingOpening(true);
-      const { data: folio, error: folioError } = await supabase.rpc("get_next_payment_folio_for_tenant" as any, {
+      const { data: folio, error: folioError } = await supabase.rpc("get_next_payment_folio_for_tenant", {
         target_tenant_id: currentTenant.id,
       });
       if (folioError) throw folioError;
 
-      const { error } = await supabase.from("tenant_opening_balances" as any).insert({
+      const openingBalance: OpeningBalanceInsert = {
         tenant_id: currentTenant.id,
         folio: folio || 1,
         amount,
         effective_date: openingDate,
         notes: openingNotes.trim() || null,
         created_by: user.id,
-      });
+      };
+      const { error } = await supabase.from("tenant_opening_balances").insert(openingBalance);
       if (error) throw error;
 
       toast.success("Saldo inicial registrado");
       setOpeningAmount("");
       setOpeningNotes("");
       await loadData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating opening balance:", error);
-      toast.error(error?.message || "No se pudo registrar el saldo inicial");
+      toast.error((error as PostgrestErrorLike).message || "No se pudo registrar el saldo inicial");
     } finally {
       setSavingOpening(false);
     }
@@ -187,27 +202,27 @@ export default function HistoricalSetup() {
       throw new Error("Debe ingresar un monto válido");
     }
 
-    const { data: folio, error: folioError } = await supabase.rpc("get_next_payment_folio_for_tenant" as any, {
+    const { data: folio, error: folioError } = await supabase.rpc("get_next_payment_folio_for_tenant", {
       target_tenant_id: currentTenant.id,
     });
     if (folioError) throw folioError;
 
-    const paymentInsert = {
+    const paymentInsert: PaymentInsert & { created_by?: string | null } = {
       tenant_id: currentTenant.id,
       folio: folio || 1,
-      student_id: studentId as any,
+      student_id: Number(studentId),
       student_name: studentName,
       payment_date: date,
       amount,
       concept,
       month_period: month,
       created_by: user.id,
-    } as any;
+    };
 
     const { error } = await supabase.from("payments").insert(paymentInsert);
     if (error && isMissingPaymentsCreatedByColumn(error)) {
       const { created_by: _ignored, ...fallbackInsert } = paymentInsert;
-      const { error: fallbackError } = await supabase.from("payments").insert(fallbackInsert as any);
+      const { error: fallbackError } = await supabase.from("payments").insert(fallbackInsert);
       if (fallbackError) throw fallbackError;
       return;
     }
@@ -223,9 +238,9 @@ export default function HistoricalSetup() {
       setPaymentMonth("");
       setPaymentAmount("");
       setPaymentConcept("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating historical payment:", error);
-      toast.error(error?.message || "No se pudo registrar el pago histórico");
+      toast.error((error as PostgrestErrorLike).message || "No se pudo registrar el pago histórico");
     } finally {
       setSavingPayment(false);
     }
@@ -245,9 +260,9 @@ export default function HistoricalSetup() {
 
     try {
       setSavingCredit(true);
-      const { error } = await supabase.from("credit_movements").insert({
+      const creditMovement: CreditMovementInsert = {
         tenant_id: currentTenant.id,
-        student_id: creditStudentId as any,
+        student_id: String(creditStudentId),
         amount,
         type: "manual_adjustment",
         description: creditDescription.trim() || "Saldo a favor previo a la app",
@@ -256,12 +271,13 @@ export default function HistoricalSetup() {
           kind: "previous_credit",
         },
         created_by: user.id,
-      } as any);
+      };
+      const { error } = await supabase.from("credit_movements").insert(creditMovement);
       if (error) throw error;
 
-      const { error: recomputeError } = await supabase.rpc("recompute_student_credit_balance" as any, {
+      const { error: recomputeError } = await supabase.rpc("recompute_student_credit_balance", {
         p_tenant_id: currentTenant.id,
-        p_student_id: creditStudentId as any,
+        p_student_id: Number(creditStudentId),
       });
       if (recomputeError) throw recomputeError;
 
@@ -269,9 +285,9 @@ export default function HistoricalSetup() {
       setCreditStudentId("");
       setCreditAmount("");
       setCreditDescription("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating previous credit:", error);
-      toast.error(error?.message || "No se pudo registrar el saldo a favor");
+      toast.error((error as PostgrestErrorLike).message || "No se pudo registrar el saldo a favor");
     } finally {
       setSavingCredit(false);
     }
@@ -328,9 +344,9 @@ export default function HistoricalSetup() {
 
       toast.success(`Se importaron ${rows.length} pagos históricos`);
       event.target.value = "";
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error importing historical payments:", error);
-      toast.error(error?.message || "No se pudo importar la planilla");
+      toast.error((error as PostgrestErrorLike).message || "No se pudo importar la planilla");
     } finally {
       setImporting(false);
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +17,9 @@ interface Student {
     enrollment_date: string;
 }
 
+type StudentJoinRow = { students: Student | null };
+type ErrorWithMessage = { message?: string };
+
 export default function MobileProfile() {
     const { user, appUser, userRole, signOut, updateProfile, refreshUserData } = useAuth();
     const { currentTenant } = useTenant();
@@ -28,18 +31,10 @@ export default function MobileProfile() {
     const [savingPhone, setSavingPhone] = useState(false);
 
     useEffect(() => {
-        if (currentTenant && user) {
-            fetchStudents();
-        } else {
-            setLoading(false);
-        }
-    }, [currentTenant, user]);
-
-    useEffect(() => {
         setPhoneDraft(appUser?.whatsapp_number || "");
     }, [appUser?.whatsapp_number]);
 
-    const fetchStudents = async () => {
+    const fetchStudents = useCallback(async () => {
         try {
             if (userRole === 'alumnos') {
                 const { data, error } = await supabase
@@ -58,7 +53,7 @@ export default function MobileProfile() {
                     console.error("Error fetching own student link:", error);
                     setMyStudents([]);
                 } else {
-                    const list = (data || []).map((item: any) => item.students).filter(Boolean);
+                    const list = ((data || []) as StudentJoinRow[]).map((item) => item.students).filter(Boolean) as Student[];
                     setMyStudents(list);
                 }
             } else {
@@ -80,7 +75,7 @@ export default function MobileProfile() {
                     console.error("Error fetching students:", error);
                     setMyStudents([]);
                 } else {
-                    const studentsList = data.map((item: any) => item.students).filter(Boolean);
+                    const studentsList = ((data || []) as StudentJoinRow[]).map((item) => item.students).filter(Boolean) as Student[];
                     setMyStudents(studentsList);
                 }
             }
@@ -89,7 +84,15 @@ export default function MobileProfile() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentTenant?.id, user?.id, userRole]);
+
+    useEffect(() => {
+        if (currentTenant && user) {
+            void fetchStudents();
+        } else {
+            setLoading(false);
+        }
+    }, [currentTenant, user, fetchStudents]);
 
     const handleSavePhone = async () => {
         if (!user) return;
@@ -100,8 +103,8 @@ export default function MobileProfile() {
             await refreshUserData();
             setEditingPhone(false);
             toast.success("Contacto actualizado");
-        } catch (error: any) {
-            toast.error(error?.message || "No se pudo actualizar el contacto");
+        } catch (error: unknown) {
+            toast.error((error as ErrorWithMessage).message || "No se pudo actualizar el contacto");
         } finally {
             setSavingPhone(false);
         }
