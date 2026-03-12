@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
-import { Moon, Sun, ArrowRight, CheckCircle2, Building2, GraduationCap, Users, HelpCircle, ShieldCheck, CreditCard } from "lucide-react";
+import { Moon, Sun, ArrowRight, CheckCircle2, Building2, GraduationCap, Users, HelpCircle, ShieldCheck, CreditCard, Download, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveBranding } from "@/lib/branding";
 import { ReactNode, useState, useEffect } from "react";
@@ -9,10 +9,20 @@ import { Helmet } from "react-helmet-async";
 import { MercadoPagoBadge } from "@/components/subscription/MercadoPagoBadge";
 import { SAAS_PRICING, formatCurrencyCLP } from "@/lib/saasBilling";
 
+interface BeforeInstallPromptEvent extends Event {
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 const Landing = () => {
     const { theme, setTheme } = useTheme();
     const navigate = useNavigate();
     const branding = resolveBranding();
+    const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+    const [isAndroid, setIsAndroid] = useState(false);
+    const [isIos, setIsIos] = useState(false);
+    const [isStandalone, setIsStandalone] = useState(false);
+    const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
 
     const fadeIn = {
         initial: { opacity: 0, y: 20 },
@@ -26,6 +36,44 @@ const Landing = () => {
                 staggerChildren: 0.1
             }
         }
+    };
+
+    useEffect(() => {
+        const userAgent = navigator.userAgent || navigator.vendor;
+        const ios = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        const android = /Android/i.test(userAgent);
+        const standalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+        setIsIos(ios);
+        setIsAndroid(android);
+        setIsStandalone(standalone);
+
+        const handleBeforeInstallPrompt = (event: Event) => {
+            event.preventDefault();
+            setInstallPrompt(event as BeforeInstallPromptEvent);
+        };
+
+        window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+        return () => {
+            window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+        };
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (installPrompt) {
+            await installPrompt.prompt();
+            await installPrompt.userChoice;
+            setInstallPrompt(null);
+            return;
+        }
+
+        if (isIos) {
+            setShowIosInstallHelp(true);
+            return;
+        }
+
+        window.location.href = "/downloads/kurso-android.apk";
     };
 
     return (
@@ -247,6 +295,33 @@ const Landing = () => {
                             </Button>
                         </motion.div>
 
+                        <motion.div variants={fadeIn} className="mx-auto flex max-w-3xl flex-col items-center gap-3 rounded-3xl border border-border/60 bg-background/70 p-5 backdrop-blur sm:flex-row sm:justify-center">
+                            <Button size="lg" variant="secondary" className="w-full rounded-full sm:w-auto" onClick={handleInstallClick}>
+                                <Smartphone className="mr-2 h-5 w-5" />
+                                {installPrompt ? "Instalar app" : isIos ? "Instalar en iPhone" : "Descargar APK"}
+                            </Button>
+                            {!isIos && (
+                                <Button
+                                    size="lg"
+                                    variant="outline"
+                                    className="w-full rounded-full sm:w-auto"
+                                    asChild
+                                >
+                                    <a href="/downloads/kurso-android.apk" download>
+                                        <Download className="mr-2 h-5 w-5" />
+                                        Descargar APK
+                                    </a>
+                                </Button>
+                            )}
+                            <p className="text-center text-sm text-muted-foreground sm:max-w-sm sm:text-left">
+                                {isStandalone
+                                    ? "Kurso ya esta instalado en este dispositivo."
+                                    : isIos
+                                        ? "En iPhone se instala desde Safari con Compartir > Agregar a pantalla de inicio."
+                                        : "En Android puedes instalar la PWA o descargar el APK directo desde la landing."}
+                            </p>
+                        </motion.div>
+
                         <motion.div
                             variants={fadeIn}
                             className="mt-16 relative mx-auto max-w-5xl rounded-xl border bg-background/50 shadow-2xl overflow-hidden min-h-[300px] md:min-h-[500px]"
@@ -375,6 +450,33 @@ const Landing = () => {
                     </div>
                 </div>
             </footer>
+
+            {showIosInstallHelp && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
+                    <div className="w-full max-w-md rounded-3xl border bg-background p-6 shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-xl font-bold">Instalar en iPhone</h3>
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    Apple no permite forzar la instalacion con un solo boton. Haz esto desde Safari:
+                                </p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setShowIosInstallHelp(false)}>
+                                Cerrar
+                            </Button>
+                        </div>
+                        <ol className="mt-5 space-y-3 text-sm text-foreground">
+                            <li>1. Abre `mikurso.cl` en Safari.</li>
+                            <li>2. Toca el boton Compartir.</li>
+                            <li>3. Elige `Agregar a pantalla de inicio`.</li>
+                            <li>4. Confirma con `Agregar`.</li>
+                        </ol>
+                        <div className="mt-6 flex justify-end">
+                            <Button onClick={() => setShowIosInstallHelp(false)}>Entendido</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
