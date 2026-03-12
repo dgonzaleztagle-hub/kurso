@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import { Download, Upload, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { validateRut, formatRut, cleanRutForDB } from "@/lib/rutUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -21,24 +22,15 @@ interface ImportedStudent {
     errorMessage?: string;
 }
 
+type SpreadsheetRow = Record<string, string | number | null | undefined>;
+type StudentInsert = TablesInsert<'students'>;
+type ErrorWithMessage = { message?: string };
+
 export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
     const [importing, setImporting] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [data, setData] = useState<ImportedStudent[]>([]);
     const { toast } = useToast();
-
-    // ... (rest of code)
-
-    // In handleImport loop:
-    /* 
-       Optimization: I will just replace the handleImport block or the whole file segment 
-       Wait, I need to match context.
-       I'll use MultiReplace if possible? Or just replace the Insert.
-       But I need to destructure `tenantId` from props.
-       So I must change the function signature line.
-    */
-    /* Retrying with exact context. */
-
 
     const handleDownloadTemplate = () => {
         const ws = XLSX.utils.json_to_sheet([
@@ -63,9 +55,9 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
-                const rawData = XLSX.utils.sheet_to_json(ws);
+                const rawData = XLSX.utils.sheet_to_json<SpreadsheetRow>(ws);
 
-                const processed: ImportedStudent[] = rawData.map((row: any) => {
+                const processed: ImportedStudent[] = rawData.map((row) => {
                     // Intentar mapear columnas flexibles (Nombre, Nombres, Name / RUT, Rut, Id)
                     const name = row['Nombre'] || row['Nombres'] || row['Name'] || '';
                     const rawRut = row['RUT'] || row['Rut'] || row['rut'] || '';
@@ -133,14 +125,15 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
                     continue;
                 }
 
-                const { error } = await supabase.from('students').insert({
+                const studentToInsert: StudentInsert = {
                     tenant_id: tenantId,
                     first_name: firstName,
                     last_name: lastName,
-                    // If DB has 'name' column as well (legacy), we might need to handle it, but 'first_name/last_name' seems to be the source of truth based on Students.tsx
                     rut: student.rut ? cleanRutForDB(student.rut) : null,
-                    enrollment_date: new Date().toISOString().split('T')[0] // Default inicio
-                } as any);
+                    enrollment_date: new Date().toISOString().split('T')[0]
+                };
+
+                const { error } = await supabase.from('students').insert(studentToInsert);
 
                 if (error) {
                     newData[i] = { ...student, status: 'error', errorMessage: error.message };
@@ -149,8 +142,8 @@ export function StudentImport({ onSuccess, tenantId }: StudentImportProps) {
                     newData[i] = { ...student, status: 'success' };
                     successCount++;
                 }
-            } catch (err: any) {
-                newData[i] = { ...student, status: 'error', errorMessage: err.message };
+            } catch (err: unknown) {
+                newData[i] = { ...student, status: 'error', errorMessage: (err as ErrorWithMessage).message || 'Error al importar' };
                 errorCount++;
             }
         }

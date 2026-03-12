@@ -4,13 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { excelPayments, excelExpenses } from "@/utils/excelData";
+
+type LegacyExpenseRow = TablesInsert<"expenses"> & { concept?: string | null };
 
 export default function ImportData() {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState("");
+  const { currentTenant } = useTenant();
 
   const importData = async () => {
+    if (!currentTenant?.id) {
+      toast.error("No se pudo detectar el curso activo");
+      return;
+    }
+
     setImporting(true);
     setProgress("Iniciando importación...");
 
@@ -38,11 +48,14 @@ export default function ImportData() {
       if (newExpenses.length > 0) {
         setProgress(`Insertando ${newExpenses.length} egresos nuevos...`);
         for (let i = 0; i < newExpenses.length; i += 100) {
-          const batch = newExpenses.slice(i, i + 100).map((e: any) => ({
-            ...e,
-            tenant_id: currentTenant.id,
-            description: e.description || e.concept, // Compatibilidad con datos antiguos
-          }));
+          const batch = newExpenses.slice(i, i + 100).map((expense): TablesInsert<"expenses"> => {
+            const legacyExpense = expense as LegacyExpenseRow;
+            return {
+              ...legacyExpense,
+              tenant_id: currentTenant.id,
+              description: legacyExpense.description || legacyExpense.concept,
+            };
+          });
           const { error } = await supabase.from("expenses").insert(batch);
           if (error) throw error;
           setProgress(`Insertados ${Math.min(i + 100, newExpenses.length)} de ${newExpenses.length} egresos...`);

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { MeetingMinute } from "@/types/db";
@@ -12,6 +13,10 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar as CalendarIcon, FileIcon, Image as ImageIcon, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+
+type MeetingMinuteRow = Tables<'meeting_minutes'>;
+type MeetingMinuteInsert = TablesInsert<'meeting_minutes'>;
+type ErrorWithMessage = { message?: string };
 
 export default function MeetingMinutes() {
     const { userRole, user } = useAuth();
@@ -31,30 +36,30 @@ export default function MeetingMinutes() {
     const effectiveRole = roleInCurrentTenant || userRole || '';
     const isAdmin = ['owner', 'admin', 'master'].includes(effectiveRole);
 
-    useEffect(() => {
-        if (currentTenant) {
-            fetchMinutes();
-        }
-    }, [currentTenant]);
-
-    const fetchMinutes = async () => {
+    const fetchMinutes = useCallback(async () => {
         setLoading(true);
         try {
             const { data, error } = await supabase
-                .from("meeting_minutes" as any)
+                .from("meeting_minutes")
                 .select("*")
                 .eq("tenant_id", currentTenant?.id) // Extra safety, though RLS handles it
                 .order("meeting_date", { ascending: false });
 
             if (error) throw error;
-            setMinutes(data as unknown as MeetingMinute[]);
+            setMinutes((data ?? []) as MeetingMinuteRow[] as MeetingMinute[]);
         } catch (error) {
             console.error("Error fetching minutes:", error);
             toast({ title: "Error", description: "No se pudieron cargar las actas.", variant: "destructive" });
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentTenant?.id, toast]);
+
+    useEffect(() => {
+        if (currentTenant) {
+            void fetchMinutes();
+        }
+    }, [currentTenant, fetchMinutes]);
 
     const handleFileUpload = async (file: File): Promise<string | null> => {
         const fileExt = file.name.split('.').pop();
@@ -87,25 +92,27 @@ export default function MeetingMinutes() {
                 imageUrl = await handleFileUpload(file);
             }
 
+            const minuteToInsert: MeetingMinuteInsert = {
+                tenant_id: currentTenant.id,
+                meeting_date: date,
+                content,
+                image_url: imageUrl,
+                created_by: user?.id || null,
+            };
+
             const { error } = await supabase
-                .from("meeting_minutes" as any)
-                .insert({
-                    tenant_id: currentTenant.id,
-                    meeting_date: date,
-                    content,
-                    image_url: imageUrl,
-                    created_by: user?.id || null,
-                });
+                .from("meeting_minutes")
+                .insert(minuteToInsert);
 
             if (error) throw error;
 
             toast({ title: "Éxito", description: "Acta registrada correctamente." });
             setIsDialogOpen(false);
             resetForm();
-            fetchMinutes();
-        } catch (error: any) {
+            void fetchMinutes();
+        } catch (error: unknown) {
             console.error("Error saving minute:", error);
-            toast({ title: "Error", description: error.message || "No se pudo guardar el acta.", variant: "destructive" });
+            toast({ title: "Error", description: (error as ErrorWithMessage).message || "No se pudo guardar el acta.", variant: "destructive" });
         } finally {
             setSubmitting(false);
         }
