@@ -12,6 +12,7 @@
     "test:business": "npx tsx --test tests/unit/paymentNotificationEntries.test.ts tests/unit/parentUserPermissions.test.ts tests/unit/reimbursementActions.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "audit:supabase": "node scripts/audit_supabase_alignment.mjs",
     "generate-accounts": "tsx scripts/generate_accounts.ts",
     "ios:sync": "npx cap sync ios",
     "ios:open": "npx cap open ios",
