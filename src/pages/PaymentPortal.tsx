@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,16 +45,43 @@ interface DebtItem {
   month_key?: string;
 }
 
+type StudentRow = Tables<'students'>;
+type PaymentRow = Tables<'payments'>;
+type PaymentNotificationRow = Tables<'payment_notifications'>;
+type StudentLinkRow = {
+  student_id: string | number;
+  students: StudentRow | null;
+};
+type SelectedDebtAllocation = {
+  type: DebtItem['type'];
+  id?: string;
+  name: string;
+  amount: number;
+  paid_amount: number;
+  target_month?: string;
+  months?: string[];
+};
+type PaymentNotificationInsert = TablesInsert<'payment_notifications'>;
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { message?: string; details?: string };
+    return candidate.message || candidate.details || 'Error desconocido al informar el pago';
+  }
+  return 'Error desconocido al informar el pago';
+};
+
 export default function PaymentPortal() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [student, setStudent] = useState<any>(null);
+  const [student, setStudent] = useState<StudentRow | null>(null);
   const [debts, setDebts] = useState<DebtItem[]>([]);
-  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [tenantSettings, setTenantSettings] = useState<any>(null);
+  const [paymentHistory, setPaymentHistory] = useState<PaymentRow[]>([]);
+  const [notifications, setNotifications] = useState<PaymentNotificationRow[]>([]);
+  const [tenantSettings, setTenantSettings] = useState<Tables<'tenants'>['settings'] | null>(null);
 
   // Form state
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(undefined);
@@ -63,11 +91,28 @@ export default function PaymentPortal() {
   const [customBank, setCustomBank] = useState('');
   const [selectedDebts, setSelectedDebts] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    loadStudentData();
-  }, [user]);
+  const loadNotifications = useCallback(async () => {
+    const primaryQuery = await supabase
+      .from('payment_notifications')
+      .select('*')
+      .eq('user_id', user?.id)
+      .order('created_at', { ascending: false });
 
-  const loadStudentData = async () => {
+    if (!primaryQuery.error) {
+      setNotifications((primaryQuery.data as PaymentNotificationRow[] | null) || []);
+      return;
+    }
+
+    const fallbackQuery = await supabase
+      .from('payment_notifications')
+      .select('*')
+      .eq('submitted_by', user?.id)
+      .order('created_at', { ascending: false });
+
+    setNotifications((fallbackQuery.data as PaymentNotificationRow[] | null) || []);
+  }, [user?.id]);
+
+  const loadStudentData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -89,30 +134,35 @@ export default function PaymentPortal() {
         return;
       }
 
-      setStudent(studentLink.students);
+      const resolvedStudentLink = studentLink as StudentLinkRow | null;
+      setStudent(resolvedStudentLink?.students ?? null);
 
       let resolvedMonthlyFee = 3000;
-      if (studentLink.students?.tenant_id) {
+      if (resolvedStudentLink?.students?.tenant_id) {
         const { data: tenantData } = await supabase
           .from('tenants')
           .select('settings')
-          .eq('id', studentLink.students.tenant_id)
+          .eq('id', resolvedStudentLink.students.tenant_id)
           .maybeSingle();
         setTenantSettings(tenantData?.settings || null);
-        const configuredFee = Number((tenantData?.settings as any)?.monthly_fee);
+        const configuredFee = Number(
+          tenantData?.settings && typeof tenantData.settings === 'object' && !Array.isArray(tenantData.settings)
+            ? tenantData.settings.monthly_fee
+            : null,
+        );
         resolvedMonthlyFee = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
       }
 
       // Cargar deudas
       await loadDebts(
-        studentLink.student_id,
-        studentLink.students?.enrollment_date,
-        studentLink.students?.tenant_id,
+        resolvedStudentLink?.student_id as string | number,
+        resolvedStudentLink?.students?.enrollment_date,
+        resolvedStudentLink?.students?.tenant_id,
         resolvedMonthlyFee,
       );
 
       // Cargar historial de pagos
-      await loadPaymentHistory(studentLink.student_id);
+      await loadPaymentHistory(resolvedStudentLink?.student_id as string | number);
 
       // Cargar notificaciones
       await loadNotifications();
@@ -126,9 +176,18 @@ export default function PaymentPortal() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadNotifications, toast, user]);
 
-  const loadDebts = async (studentId: string) => {
+  useEffect(() => {
+    void loadStudentData();
+  }, [loadStudentData]);
+
+  const loadDebts = async (
+    studentId: string | number,
+    _enrollmentDate?: string | null,
+    _tenantId?: string | null,
+    _monthlyFee?: number,
+  ) => {
     const snapshot = await fetchStudentDashboardDataForPeriod(studentId, 'year');
 
     const debtsData: DebtItem[] = [
@@ -153,35 +212,14 @@ export default function PaymentPortal() {
     setDebts(debtsData);
   };
 
-  const loadPaymentHistory = async (studentId: number) => {
+  const loadPaymentHistory = async (studentId: string | number) => {
     const { data } = await supabase
       .from('payments')
       .select('*')
       .eq('student_id', studentId)
       .order('payment_date', { ascending: false });
 
-    setPaymentHistory(data || []);
-  };
-
-  const loadNotifications = async () => {
-    const primaryQuery = await supabase
-      .from('payment_notifications')
-      .select('*')
-      .eq('user_id', user?.id)
-      .order('created_at', { ascending: false });
-
-    if (!primaryQuery.error) {
-      setNotifications(primaryQuery.data || []);
-      return;
-    }
-
-    const fallbackQuery = await supabase
-      .from('payment_notifications')
-      .select('*')
-      .eq('submitted_by', user?.id)
-      .order('created_at', { ascending: false });
-
-    setNotifications(fallbackQuery.data || []);
+    setPaymentHistory((data as PaymentRow[] | null) || []);
   };
 
   const toggleDebtSelection = (debtKey: string) => {
@@ -258,11 +296,11 @@ export default function PaymentPortal() {
       .map(key => debts.find(d => getDebtKey(d) === key))
       .filter(Boolean);
     
-    const activities = selectedDebtsData.filter(d => d!.type === 'activity');
-    const monthlyFees = selectedDebtsData.filter(d => d!.type === 'monthly_fee');
+    const activities = selectedDebtsData.filter((debt): debt is DebtItem => Boolean(debt) && debt.type === 'activity');
+    const monthlyFees = selectedDebtsData.filter((debt): debt is DebtItem => Boolean(debt) && debt.type === 'monthly_fee');
     
     // PRIMERO: Pagar actividades completas en orden
-    const selectedDebtsArray: any[] = [];
+    const selectedDebtsArray: SelectedDebtAllocation[] = [];
     
     for (const activity of activities) {
       if (!activity || remainingPayment <= 0) continue;
@@ -369,7 +407,7 @@ export default function PaymentPortal() {
 
       console.log('Validation passed, inserting into database...');
 
-      const insertData = {
+      const insertData: PaymentNotificationInsert = {
         user_id: user!.id,
         tenant_id: student.tenant_id,
         student_id: student.id,
@@ -396,7 +434,7 @@ export default function PaymentPortal() {
         missingColumnError.includes("column payment_notifications.payment_details does not exist") ||
         missingColumnError.includes("column payment_notifications.reference does not exist")
       )) {
-        const legacyInsertData = {
+        const legacyInsertData: PaymentNotificationInsert = {
           tenant_id: student.tenant_id,
           student_id: student.id,
           amount: paymentAmount,
@@ -455,12 +493,11 @@ export default function PaymentPortal() {
         await loadPaymentHistory(student.id);
       }
       loadNotifications();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error submitting payment:', error);
-      const errorMessage = error?.message || error?.details || 'Error desconocido al informar el pago';
       toast({
         title: 'Error',
-        description: errorMessage,
+        description: getErrorMessage(error),
         variant: 'destructive',
       });
     } finally {

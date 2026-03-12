@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,23 @@ interface UserWithRole {
 
 import { useTenant } from "@/contexts/TenantContext";
 
+type UsersByTenantResponse = {
+  users?: UserWithRole[];
+};
+
+type FunctionResponse = {
+  error?: string;
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const candidate = error as { error?: string; message?: string };
+    return candidate.error || candidate.message || "Ocurrió un error inesperado";
+  }
+  return "Ocurrió un error inesperado";
+};
+
 export default function UserManagement() {
   const { userRole } = useAuth();
   const { roleInCurrentTenant, currentTenant } = useTenant(); // Needed currentTenant for ID
@@ -85,15 +102,9 @@ export default function UserManagement() {
   const [newPhone, setNewPhone] = useState("");
   const [updatingPhone, setUpdatingPhone] = useState(false);
 
-  useEffect(() => {
-    if (userRole === 'master' || roleInCurrentTenant === 'owner' || roleInCurrentTenant === 'admin') {
-      if (currentTenant) {
-        fetchUsers();
-      }
-    }
-  }, [userRole, roleInCurrentTenant, currentTenant]);
+  const fetchUsers = useCallback(async () => {
+    if (!currentTenant) return;
 
-  const fetchUsers = async () => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -122,7 +133,7 @@ export default function UserManagement() {
 
       // RPC returns the JSON object directly (e.g. { "users": [...] })
       // Cast response to expected shape
-      const response = data as unknown as { users: UserWithRole[] };
+      const response = data as UsersByTenantResponse | null;
 
       if (response?.users) {
         setUsers(response.users);
@@ -130,13 +141,19 @@ export default function UserManagement() {
         console.log("No se recibieron usuarios en la respuesta:", data);
         setUsers([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al cargar usuarios:", error);
-      toast.error("Error al cargar usuarios: " + (error.message || 'Error desconocido'));
+      toast.error(`Error al cargar usuarios: ${getErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant]);
+
+  useEffect(() => {
+    if (userRole === 'master' || roleInCurrentTenant === 'owner' || roleInCurrentTenant === 'admin') {
+      void fetchUsers();
+    }
+  }, [fetchUsers, roleInCurrentTenant, userRole]);
 
   const handleCreateAdmin = async () => {
     if (!adminEmail || !adminPassword || !adminName) {
@@ -177,7 +194,8 @@ export default function UserManagement() {
       });
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const response = data as FunctionResponse | null;
+      if (response?.error) throw new Error(response.error);
 
       toast.success(`Admin ${resolvedUserName} creado exitosamente`);
       setShowCreateAdmin(false);
@@ -188,8 +206,8 @@ export default function UserManagement() {
       setAdminPosition("");
       setAdminPhone("");
       fetchUsers();
-    } catch (error: any) {
-      toast.error(error.message || "Error al crear admin");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setCreatingAdmin(false);
     }
@@ -209,8 +227,8 @@ export default function UserManagement() {
       toast.success("Rol eliminado exitosamente");
       setDeleteDialog(null);
       fetchUsers();
-    } catch (error: any) {
-      toast.error("Error al eliminar rol: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al eliminar rol: ${getErrorMessage(error)}`);
     }
   };
 
@@ -228,7 +246,7 @@ export default function UserManagement() {
         body: JSON.stringify({ userId, tenantId: currentTenant?.id }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as FunctionResponse;
 
       if (!response.ok) {
         throw new Error(result.error || 'Error al eliminar usuario');
@@ -236,9 +254,9 @@ export default function UserManagement() {
 
       toast.success("Usuario eliminado completamente del sistema");
       fetchUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error al eliminar usuario:', error);
-      toast.error(error.message || "Error al eliminar usuario");
+      toast.error(getErrorMessage(error));
     }
   };
 
@@ -296,9 +314,9 @@ export default function UserManagement() {
       setParentDisplayName("");
       setParentStudentId(null);
       fetchUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creando apoderado:", error);
-      toast.error(error.message || "Error al crear apoderado adicional");
+      toast.error(getErrorMessage(error));
     } finally {
       setCreatingParent(false);
     }
@@ -334,7 +352,7 @@ export default function UserManagement() {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as FunctionResponse;
 
       if (!response.ok) {
         throw new Error(result.error || 'Error al resetear contraseña');
@@ -343,9 +361,9 @@ export default function UserManagement() {
       toast.success("Contraseña actualizada exitosamente");
       setResetPasswordDialog(null);
       setNewPassword("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error al resetear contraseña:', error);
-      toast.error(error.message || "Error al resetear contraseña");
+      toast.error(getErrorMessage(error));
     } finally {
       setResettingPassword(false);
     }
@@ -376,9 +394,9 @@ export default function UserManagement() {
       setEditPhoneDialog(null);
       setNewPhone("");
       fetchUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error al actualizar teléfono:', error);
-      toast.error(error.message || "Error al actualizar teléfono");
+      toast.error(getErrorMessage(error));
     } finally {
       setUpdatingPhone(false);
     }
