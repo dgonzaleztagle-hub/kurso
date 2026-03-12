@@ -81,6 +81,7 @@ npm run build
 - [ANDROID_RELEASE.md](./ANDROID_RELEASE.md)
 - [IOS_RELEASE.md](./IOS_RELEASE.md)
 - [docs/IOS_STORE_READINESS.md](./docs/IOS_STORE_READINESS.md)
+- [APP_REVIEW_INFO.md](./APP_REVIEW_INFO.md)
 
 ## Can I connect a custom domain to my Lovable project?
 

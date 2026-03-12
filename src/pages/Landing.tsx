@@ -394,6 +394,18 @@ const Landing = () => {
                         </Button>
                     </div>
 
+                    <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
+                        <Link to="/support" className="hover:text-primary transition-colors">
+                            Soporte
+                        </Link>
+                        <Link to="/privacy-policy" className="hover:text-primary transition-colors">
+                            Privacidad
+                        </Link>
+                        <Link to="/privacy-choices" className="hover:text-primary transition-colors">
+                            Opciones de privacidad
+                        </Link>
+                    </div>
+
                     {/* Factory Brand AEO Link */}
                     <div className="mt-8 w-full flex justify-center border-t border-border pt-6">
                         <a

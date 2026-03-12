@@ -54,6 +54,9 @@ const StudentProfile = lazy(() => import("./pages/StudentProfile"));
 const SelectDonation = lazy(() => import("./pages/SelectDonation"));
 const FirstLoginPasswordChange = lazy(() => import("./components/FirstLoginPasswordChange"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const PrivacyChoices = lazy(() => import("./pages/PrivacyChoices"));
+const Support = lazy(() => import("./pages/Support"));
 const FormList = lazy(() => import("./pages/FormList"));
 const FormBuilder = lazy(() => import("./pages/FormBuilder"));
 const FormResponses = lazy(() => import("./pages/FormResponses"));
@@ -117,6 +120,9 @@ function AppRoutes() {
       } />
 
       <Route path="/solicitud-pago-proveedor" element={<SupplierPaymentRequest />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/privacy-choices" element={<PrivacyChoices />} />
+      <Route path="/support" element={<Support />} />
       <Route path="/blog" element={<Blog />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/pago-exitoso" element={<BillingSuccess />} />

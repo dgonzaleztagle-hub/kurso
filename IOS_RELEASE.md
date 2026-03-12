@@ -25,15 +25,17 @@ Kurso ya tiene shell iOS base con Capacitor y lane inicial de Codemagic en `code
 - Activar integracion `App Store Connect`.
 - Cargar o generar certificados/perfiles para `cl.mikurso.app`.
 - Confirmar que el workflow use firma `app_store`.
+- Definir `APP_STORE_APPLE_ID` en Codemagic para versionado automatico de build.
 
 ## Checklist App Store Connect
 
 - Nombre: `Kurso`
 - Subtitulo: `Gestion escolar transparente`
 - Categoria primaria: `Finance` o `Education`
-- Support URL: `https://mikurso.cl`
+- Support URL: `https://mikurso.cl/support`
 - Marketing URL: `https://mikurso.cl`
-- Privacy Policy URL: definir URL publica antes del envio
+- Privacy Policy URL: `https://mikurso.cl/privacy-policy`
+- User Privacy Choices URL: `https://mikurso.cl/privacy-choices`
 - Keywords iniciales: `colegio,pagos,tesoreria,curso,apoderados`
 
 ## App Privacy
@@ -63,4 +65,4 @@ No responder esto por intuicion en App Store Connect. Revisarlo contra la implem
 - `main` sigue siendo la rama de produccion web.
 - Todo trabajo iOS se hace en rama dedicada y solo se mergea si `lint`, `test:business` y `build` siguen pasando.
 - El primer objetivo no es publicacion final, sino un build estable en `TestFlight`.
-
+- Antes del primer upload, completar tambien `APP_REVIEW_INFO.md`.

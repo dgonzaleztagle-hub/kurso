@@ -12,6 +12,7 @@ workflows:
         bundle_identifier: cl.mikurso.app
       vars:
         BUNDLE_ID: cl.mikurso.app
+        APP_STORE_APPLE_ID: ""
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
     scripts:
@@ -21,6 +22,15 @@ workflows:
         script: npm run build
       - name: Sync Capacitor iOS shell
         script: npx cap sync ios
+      - name: Set iOS build number
+        script: |
+          cd ios/App
+          if [ -n "$APP_STORE_APPLE_ID" ]; then
+            LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || echo 0)
+            agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
+          else
+            agvtool new-version -all $BUILD_NUMBER
+          fi
       - name: Install CocoaPods dependencies
         script: |
           cd ios/App
@@ -39,4 +49,3 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-
