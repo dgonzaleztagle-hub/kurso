@@ -385,7 +385,7 @@ export default function PublicForm() {
       <Helmet>
         <title>{form.title} | {branding.appName}</title>
         <meta name="description" content={form.description || `Completa el formulario oficial de ${branding.appName} de forma segura.`} />
-        <link rel="canonical" href={`https://kurso.app/formulario/${id}`} />
+        <link rel="canonical" href={`https://mikurso.cl/formulario/${id}`} />
       </Helmet>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="text-center">

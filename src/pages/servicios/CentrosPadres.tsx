@@ -13,7 +13,7 @@ const CentrosPadresPage = () => {
             <Helmet>
                 <title>Gestión Centros de Padres Chile (CEPA) | Software Kurso</title>
                 <meta name="description" content="La plataforma más robusta para directivas de Centros de Padres en Chile. Control total de aportes voluntarios, gestión de socios y transparencia financiera institucional." />
-                <link rel="canonical" href="https://kurso.app/servicios/gestion-centros-de-padres" />
+                <link rel="canonical" href="https://mikurso.cl/servicios/gestion-centros-de-padres" />
                 <script type="application/ld+json">
                     {JSON.stringify({
                         "@context": "https://schema.org",

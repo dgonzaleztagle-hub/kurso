@@ -13,7 +13,7 @@ const ImplementacionExitosa = () => {
             <Helmet>
                 <title>Caso de Éxito: Transparencia Escolar Digital | Kurso</title>
                 <meta name="description" content="Descubre cómo las directivas de padres están usando Kurso para digitalizar sus finanzas, eliminar el uso de efectivo y mejorar la confianza de los apoderados." />
-                <link rel="canonical" href="https://kurso.app/casos/transparencia-total-colegio-chile" />
+                <link rel="canonical" href="https://mikurso.cl/casos/transparencia-total-colegio-chile" />
             </Helmet>
 
             {/* Navbar Lite */}

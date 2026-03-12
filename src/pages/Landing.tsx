@@ -34,10 +34,10 @@ const Landing = () => {
             <Helmet>
                 <title>Kurso | Gestión Financiera para Centros de Padres y Cursos</title>
                 <meta name="description" content="La plataforma líder en transparencia escolar en Chile. Kurso simplifica la recaudación de cuotas, rendición de cuentas y comunicación para centros de padres y tesoreros de curso." />
-                <link rel="canonical" href="https://kurso.app/" />
+                <link rel="canonical" href="https://mikurso.cl/" />
                 <meta property="og:title" content="Kurso | La Evolución de la Tesorería Escolar" />
                 <meta property="og:description" content="Automatiza pagos y rinde cuentas de forma transparente con la tecnología de Kurso." />
-                <meta property="og:image" content="https://kurso.app/og-image.png" />
+                <meta property="og:image" content="https://mikurso.cl/og-image.png" />
                 
                 {/* JSON-LD Structured Data */}
                 <script type="application/ld+json">
@@ -86,10 +86,10 @@ const Landing = () => {
                             {
                                 "@type": "WebSite",
                                 "name": "Kurso",
-                                "url": "https://kurso.app/",
+                                "url": "https://mikurso.cl/",
                                 "potentialAction": {
                                     "@type": "SearchAction",
-                                    "target": "https://kurso.app/blog?s={search_term_string}",
+                                    "target": "https://mikurso.cl/blog?s={search_term_string}",
                                     "query-input": "required name=search_term_string"
                                 }
                             },
@@ -100,7 +100,7 @@ const Landing = () => {
                                         "@type": "ListItem",
                                         "position": 1,
                                         "name": "Inicio",
-                                        "item": "https://kurso.app/"
+                                        "item": "https://mikurso.cl/"
                                     }
                                 ]
                             },

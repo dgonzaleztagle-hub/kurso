@@ -245,7 +245,8 @@ export default function Auth() {
       <Helmet>
         <title>{getPageTitle()}</title>
         <meta name="description" content={`Accede a tu panel de Kurso para gestionar las finanzas de tu curso de forma segura y transparente.`} />
-        <link rel="canonical" href="https://kurso.app/auth" />
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://mikurso.cl/auth" />
       </Helmet>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">

@@ -31,7 +31,7 @@ const Blog = () => {
             <Helmet>
                 <title>Blog de Tesorería Escolar | Consejos para Padres y Cursos | Kurso</title>
                 <meta name="description" content="Aprende sobre gestión financiera escolar, consejos para tesoreros de curso y transparencia en centros de padres con los artículos expertos de Kurso." />
-                <link rel="canonical" href="https://kurso.app/blog" />
+                <link rel="canonical" href="https://mikurso.cl/blog" />
             </Helmet>
 
             {/* Header / Navbar Lite */}

@@ -17,7 +17,7 @@ const NotFound = () => {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Helmet>
         <title>404 - Página no encontrada | {branding.appName}</title>
-        <meta name="robots" content="noindex, follow" />
+        <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       
       <div className="text-center space-y-6 max-w-md animate-in fade-in zoom-in duration-500">

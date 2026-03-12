@@ -29,7 +29,7 @@ const BlogPost = () => {
                 <meta property="og:description" content={post.excerpt} />
                 <meta property="og:image" content={post.image} />
                 <meta property="og:type" content="article" />
-                <link rel="canonical" href={`https://kurso.app/blog/${post.slug}`} />
+                <link rel="canonical" href={`https://mikurso.cl/blog/${post.slug}`} />
                 {/* JSON-LD Schema for Article */}
                 <script type="application/ld+json">
                     {JSON.stringify({
@@ -61,19 +61,19 @@ const BlogPost = () => {
                                         "@type": "ListItem",
                                         "position": 1,
                                         "name": "Inicio",
-                                        "item": "https://kurso.app/"
+                                        "item": "https://mikurso.cl/"
                                     },
                                     {
                                         "@type": "ListItem",
                                         "position": 2,
                                         "name": "Blog",
-                                        "item": "https://kurso.app/blog"
+                                        "item": "https://mikurso.cl/blog"
                                     },
                                     {
                                         "@type": "ListItem",
                                         "position": 3,
                                         "name": post.title,
-                                        "item": `https://kurso.app/blog/${post.slug}`
+                                        "item": `https://mikurso.cl/blog/${post.slug}`
                                     }
                                 ]
                             },

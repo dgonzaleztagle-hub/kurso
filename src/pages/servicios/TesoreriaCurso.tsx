@@ -13,7 +13,7 @@ const TesoreriaCursoPage = () => {
             <Helmet>
                 <title>Software para Tesoreros de Curso Chile | Kurso</title>
                 <meta name="description" content="La herramienta definitiva para el tesorero de curso. Administra pagos, rinde gastos y mantén a los apoderados informados en tiempo real. ¡Adiós a las planillas de Excel!" />
-                <link rel="canonical" href="https://kurso.app/servicios/tesoreria-de-curso" />
+                <link rel="canonical" href="https://mikurso.cl/servicios/tesoreria-de-curso" />
                 <script type="application/ld+json">
                     {JSON.stringify({
                         "@context": "https://schema.org",
