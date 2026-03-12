@@ -41,10 +41,7 @@ const Landing = () => {
     }, []);
 
     const handleIosInstallClick = () => {
-        if (isIos) {
-            setShowIosInstallHelp(true);
-            return;
-        }
+        setShowIosInstallHelp(true);
     };
 
     return (
