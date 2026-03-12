@@ -298,7 +298,7 @@ const Landing = () => {
                         <motion.div variants={fadeIn} className="mx-auto flex max-w-3xl flex-col items-center gap-3 rounded-3xl border border-border/60 bg-background/70 p-5 backdrop-blur sm:flex-row sm:justify-center">
                             <Button size="lg" variant="secondary" className="w-full rounded-full sm:w-auto" onClick={handleInstallClick}>
                                 <Smartphone className="mr-2 h-5 w-5" />
-                                {installPrompt ? "Instalar app" : isIos ? "Instalar en iPhone" : "Descargar APK"}
+                                {isIos ? "Instalar en iPhone" : "Instalar en Android"}
                             </Button>
                             {!isIos && (
                                 <Button
@@ -309,7 +309,7 @@ const Landing = () => {
                                 >
                                     <a href="/downloads/kurso-android.apk" download>
                                         <Download className="mr-2 h-5 w-5" />
-                                        Descargar APK
+                                        Respaldo Android
                                     </a>
                                 </Button>
                             )}
@@ -317,8 +317,8 @@ const Landing = () => {
                                 {isStandalone
                                     ? "Kurso ya esta instalado en este dispositivo."
                                     : isIos
-                                        ? "En iPhone se instala desde Safari con Compartir > Agregar a pantalla de inicio."
-                                        : "En Android puedes instalar la PWA o descargar el APK directo desde la landing."}
+                                        ? "Te mostraremos los pasos para agregar Kurso a tu pantalla de inicio."
+                                        : "Instala Kurso en tu celular en segundos. Si tu navegador no lo permite, usa el respaldo para Android."}
                             </p>
                         </motion.div>
 
