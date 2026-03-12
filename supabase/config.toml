@@ -1,7 +1,7 @@
 project_id = "euhmpuhkwbxorfzrxemp"
 
 [functions.create-student-accounts]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-users-with-roles]
 verify_jwt = true
@@ -9,10 +9,16 @@ verify_jwt = true
 [functions.create-admin-user]
 verify_jwt = true
 
+[functions.create-parent-user]
+verify_jwt = true
+
 [functions.delete-user]
 verify_jwt = true
 
 [functions.reset-user-password]
+verify_jwt = true
+
+[functions.process-payment-notification]
 verify_jwt = true
 
 [functions.check-default-password]
@@ -22,7 +28,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.create-supplier-request-link]
-verify_jwt = false
+verify_jwt = true
 
 [functions.submit-supplier-payment-request]
 verify_jwt = false
@@ -31,4 +37,7 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.mercadopago-webhook]
+verify_jwt = false
+
+[functions.public-branding]
 verify_jwt = false

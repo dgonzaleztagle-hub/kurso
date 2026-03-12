@@ -29,7 +29,7 @@ import { useTenant } from "@/contexts/TenantContext";
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
     const location = useLocation();
-    const { signOut, userRole: globalRole, hasPermission } = useAuth();
+    const { signOut, userRole: globalRole, adminPermissions, hasPermission } = useAuth();
     const { roleInCurrentTenant, currentTenant } = useTenant();
 
     // Extract College Name from Settings
@@ -68,14 +68,14 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                 if (hasRoleAccess(activeRole, "master")) return true;
                 if (item.masterOnly) return false;
 
-                // For admin/members, we might check permissions or role mapping
-                // For now, if role is 'admin', show all non-master items
-                if (activeRole === 'admin') return true;
-
                 // Students/Members restrictions
                 if (activeRole === 'student' || activeRole === 'member') {
                     // Allow specific items for students (like Meeting Minutes)
                     if (!item.allowStudent) return false;
+                }
+
+                if (activeRole === 'admin' && item.module) {
+                    return !adminPermissions.includes(item.module as AppModule);
                 }
 
                 return item.module ? hasPermission(item.module as AppModule) : true;

@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, UserCog, Trash2, UserPlus, UserX, KeyRound, Settings, ChevronDown, Phone } from "lucide-react";
+import { Loader2, Trash2, KeyRound, Settings, ChevronDown, Phone } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StudentCombobox } from "@/components/StudentCombobox";
 import { AdminPermissionsDialog } from "@/components/AdminPermissionsDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface Student {
   id: number;
@@ -22,22 +21,9 @@ interface Student {
 
 type AppRole = 'master' | 'owner' | 'admin' | 'alumnos';
 
-interface UserRole {
-  id: string;
-  user_id: string;
-  role: AppRole;
-}
-
-interface UserStudent {
-  id: string;
-  user_id: string;
-  student_id: number;
-}
-
 interface UserWithRole {
   id: string;
   role: AppRole;
-  roleId: string;
   email: string;
   name?: string;
   userName?: string;
@@ -56,7 +42,10 @@ type UsersByTenantResponse = {
 
 type FunctionResponse = {
   error?: string;
+  users?: UserWithRole[];
 };
+
+type StudentRow = Pick<Tables<"students">, "id" | "first_name" | "last_name">;
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -73,7 +62,6 @@ export default function UserManagement() {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: string; roleId: string } | null>(null);
   const [resetPasswordDialog, setResetPasswordDialog] = useState<{ open: boolean; userId: string; userEmail: string } | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resettingPassword, setResettingPassword] = useState(false);
@@ -107,38 +95,17 @@ export default function UserManagement() {
 
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        toast.error("Debe estar autenticado");
-        setLoading(false);
-        return;
-      }
-
-      if (!currentTenant) {
-        console.error("No tenant selected");
-        setLoading(false);
-        return;
-      }
-
-      // SECURE CALL: Pass Tenant ID
-      const { data, error } = await supabase.rpc('get_users_by_tenant', {
-        target_tenant_id: currentTenant.id
+      const { data, error } = await supabase.functions.invoke("get-users-with-roles", {
+        body: { tenantId: currentTenant.id },
       });
 
-      if (error) {
-        console.error("Error invocando RPC:", error);
-        throw error;
-      }
-
-      // RPC returns the JSON object directly (e.g. { "users": [...] })
-      // Cast response to expected shape
       const response = data as UsersByTenantResponse | null;
+      if (error) throw error;
+      if (response?.error) throw new Error(response.error);
 
       if (response?.users) {
         setUsers(response.users);
       } else {
-        console.log("No se recibieron usuarios en la respuesta:", data);
         setUsers([]);
       }
     } catch (error: unknown) {
@@ -154,6 +121,36 @@ export default function UserManagement() {
       void fetchUsers();
     }
   }, [fetchUsers, roleInCurrentTenant, userRole]);
+
+  const fetchStudents = useCallback(async () => {
+    if (!currentTenant?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("students")
+        .select("id, first_name, last_name")
+        .eq("tenant_id", currentTenant.id)
+        .order("last_name", { ascending: true });
+
+      if (error) throw error;
+
+      setStudents(
+        ((data as StudentRow[] | null) || []).map((student) => ({
+          id: Number(student.id),
+          name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
+        })),
+      );
+    } catch (error: unknown) {
+      console.error("Error al cargar estudiantes:", error);
+      toast.error(`Error al cargar estudiantes: ${getErrorMessage(error)}`);
+    }
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void fetchStudents();
+    }
+  }, [currentTenant?.id, fetchStudents]);
 
   const handleCreateAdmin = async () => {
     if (!adminEmail || !adminPassword || !adminName) {
@@ -213,47 +210,18 @@ export default function UserManagement() {
     }
   };
 
-  const handleDeleteRole = async () => {
-    if (!deleteDialog) return;
-
-    try {
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('id', deleteDialog.roleId);
-
-      if (error) throw error;
-
-      toast.success("Rol eliminado exitosamente");
-      setDeleteDialog(null);
-      fetchUsers();
-    } catch (error: unknown) {
-      toast.error(`Error al eliminar rol: ${getErrorMessage(error)}`);
-    }
-  };
-
   const handleDeleteUser = async (userId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sesión inválida');
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
-        },
-        body: JSON.stringify({ userId, tenantId: currentTenant?.id }),
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId, tenantId: currentTenant?.id },
       });
 
-      const result = await response.json() as FunctionResponse;
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al eliminar usuario');
-      }
+      const result = data as FunctionResponse | null;
+      if (error) throw error;
+      if (result?.error) throw new Error(result.error);
 
       toast.success("Usuario eliminado completamente del sistema");
-      fetchUsers();
+      await fetchUsers();
     } catch (error: unknown) {
       console.error('Error al eliminar usuario:', error);
       toast.error(getErrorMessage(error));
@@ -268,44 +236,19 @@ export default function UserManagement() {
 
     setCreatingParent(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: parentEmail,
-        password: parentPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`
-        }
+      const { data, error } = await supabase.functions.invoke("create-parent-user", {
+        body: {
+          email: parentEmail,
+          password: parentPassword,
+          displayName: parentDisplayName || null,
+          studentId: parentStudentId,
+          tenantId: currentTenant?.id,
+        },
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("No se pudo crear el usuario");
-
-      // Insertar rol de alumnos
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: authData.user.id,
-          role: 'alumnos',
-          first_login: true
-        });
-
-      if (roleError) {
-        await handleDeleteUser(authData.user.id);
-        throw roleError;
-      }
-
-      // Vincular con estudiante
-      const { error: linkError } = await supabase
-        .from('user_students')
-        .insert({
-          user_id: authData.user.id,
-          student_id: parentStudentId,
-          display_name: parentDisplayName || undefined
-        });
-
-      if (linkError) {
-        await handleDeleteUser(authData.user.id);
-        throw linkError;
-      }
+      const result = data as FunctionResponse | null;
+      if (error) throw error;
+      if (result?.error) throw new Error(result.error);
 
       toast.success("Apoderado adicional creado exitosamente");
       setShowCreateParent(false);
@@ -313,7 +256,7 @@ export default function UserManagement() {
       setParentPassword("");
       setParentDisplayName("");
       setParentStudentId(null);
-      fetchUsers();
+      await fetchUsers();
     } catch (error: unknown) {
       console.error("Error creando apoderado:", error);
       toast.error(getErrorMessage(error));
@@ -336,27 +279,17 @@ export default function UserManagement() {
     setResettingPassword(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sesión inválida');
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke("reset-user-password", {
+        body: {
           userId: resetPasswordDialog.userId,
           newPassword,
-          tenantId: currentTenant?.id
-        }),
+          tenantId: currentTenant?.id,
+        },
       });
 
-      const result = await response.json() as FunctionResponse;
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al resetear contraseña');
-      }
+      const result = data as FunctionResponse | null;
+      if (error) throw error;
+      if (result?.error) throw new Error(result.error);
 
       toast.success("Contraseña actualizada exitosamente");
       setResetPasswordDialog(null);
@@ -685,11 +618,7 @@ export default function UserManagement() {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => setDeleteDialog({
-                          open: true,
-                          userId: user.id,
-                          roleId: user.roleId
-                        })}
+                        onClick={() => handleDeleteUser(user.id)}
                         className="text-xs h-8"
                       >
                         <Trash2 className="h-3 w-3 sm:mr-1" />
@@ -775,11 +704,7 @@ export default function UserManagement() {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => setDeleteDialog({
-                          open: true,
-                          userId: user.id,
-                          roleId: user.roleId
-                        })}
+                        onClick={() => handleDeleteUser(user.id)}
                         className="text-xs h-8"
                       >
                         <Trash2 className="h-3 w-3 sm:mr-1" />
@@ -854,21 +779,6 @@ export default function UserManagement() {
           </Card>
         )}
       </div>
-
-      <AlertDialog open={deleteDialog?.open || false} onOpenChange={(open) => !open && setDeleteDialog(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar rol de usuario?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción eliminará el rol asignado. El usuario perderá acceso al sistema hasta que se le asigne un nuevo rol.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteRole}>Eliminar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={resetPasswordDialog?.open || false} onOpenChange={(open) => {
         if (!open) {

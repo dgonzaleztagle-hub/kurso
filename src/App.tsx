@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,69 +11,67 @@ import { TenantProvider } from "./contexts/TenantContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { IndexSwitcher } from "./components/IndexSwitcher";
 import { HelmetProvider } from "react-helmet-async";
-
-import Dashboard from "./pages/Dashboard";
-import Students from "./pages/Students";
-import Income from "./pages/Income";
-import Expenses from "./pages/Expenses";
-import DebtReports from "./pages/DebtReports";
-import PaymentReports from "./pages/PaymentReports";
-import Balance from "./pages/Balance";
-import AuditLogs from "./pages/admin/AuditLogs";
-import MeetingMinutes from "./pages/MeetingMinutes";
-import ImportData from "./pages/ImportData";
-import HistoricalSetup from "./pages/HistoricalSetup";
-import Movements from "./pages/Movements";
-import Activities from "./pages/Activities";
-import ActivityExclusions from "./pages/ActivityExclusions";
-import ActivityPayments from "./pages/ActivityPayments";
-import MonthlyFees from "./pages/MonthlyFees";
-import Auth from "./pages/Auth";
-import UserManagement from "./pages/UserManagement";
-import PaymentPortal from "./pages/PaymentPortal";
-import PaymentNotifications from "./pages/PaymentNotifications";
-import Reimbursements from "./pages/Reimbursements";
-import ScheduledActivities from "./pages/ScheduledActivities";
-import SupplierPaymentRequest from "./pages/SupplierPaymentRequest";
-import PostManagement from "./pages/PostManagement";
-import TenantBranding from "./pages/TenantBranding";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
-import BillingSuccess from "./pages/BillingSuccess";
-import BillingPending from "./pages/BillingPending";
-import BillingFailure from "./pages/BillingFailure";
-import TesoreriaCurso from "./pages/servicios/TesoreriaCurso";
-import CentrosPadres from "./pages/servicios/CentrosPadres";
-import ImplementacionExitosa from "./pages/casos/ImplementacionExitosa";
-
-import CreditManagement from "./pages/CreditManagement";
-import CreditMovements from "./pages/CreditMovements";
-import StudentProfile from "./pages/StudentProfile";
-import SelectDonation from "./pages/SelectDonation";
-import FirstLoginPasswordChange from "./components/FirstLoginPasswordChange";
-import NotFound from "./pages/NotFound";
-import FormList from "./pages/FormList";
-import FormBuilder from "./pages/FormBuilder";
-import FormResponses from "./pages/FormResponses";
-import PublicForm from "./pages/PublicForm";
 import { AdminRoute } from "./components/AdminRoute";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import YearRolloverWizard from "./pages/admin/YearRolloverWizard";
-import Organizations from "./pages/admin/Organizations";
-import OrganizationDetail from "./pages/admin/OrganizationDetail";
-import CloseYear from "./pages/admin/CloseYear";
-import TenantsList from "./pages/admin/TenantsList";
-import UsersList from "./pages/admin/UsersList";
-import SaasBilling from "./pages/admin/SaasBilling";
-import OnboardingWizard from "./pages/onboarding/OnboardingWizard";
 import { AdminLayout } from "./layouts/AdminLayout";
-
 import { MobileLayout } from "./components/layouts/MobileLayout";
-import MobileFinances from "./pages/mobile/MobileFinances";
-import MobileAgenda from "./pages/mobile/MobileAgenda";
-import MobileActas from "./pages/mobile/MobileActas";
-import MobileBoard from "./pages/mobile/MobileBoard";
-import MobileProfile from "./pages/mobile/MobileProfile";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Students = lazy(() => import("./pages/Students"));
+const Income = lazy(() => import("./pages/Income"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const DebtReports = lazy(() => import("./pages/DebtReports"));
+const PaymentReports = lazy(() => import("./pages/PaymentReports"));
+const Balance = lazy(() => import("./pages/Balance"));
+const AuditLogs = lazy(() => import("./pages/admin/AuditLogs"));
+const MeetingMinutes = lazy(() => import("./pages/MeetingMinutes"));
+const ImportData = lazy(() => import("./pages/ImportData"));
+const HistoricalSetup = lazy(() => import("./pages/HistoricalSetup"));
+const Movements = lazy(() => import("./pages/Movements"));
+const Activities = lazy(() => import("./pages/Activities"));
+const ActivityExclusions = lazy(() => import("./pages/ActivityExclusions"));
+const ActivityPayments = lazy(() => import("./pages/ActivityPayments"));
+const MonthlyFees = lazy(() => import("./pages/MonthlyFees"));
+const Auth = lazy(() => import("./pages/Auth"));
+const UserManagement = lazy(() => import("./pages/UserManagement"));
+const PaymentPortal = lazy(() => import("./pages/PaymentPortal"));
+const PaymentNotifications = lazy(() => import("./pages/PaymentNotifications"));
+const Reimbursements = lazy(() => import("./pages/Reimbursements"));
+const ScheduledActivities = lazy(() => import("./pages/ScheduledActivities"));
+const SupplierPaymentRequest = lazy(() => import("./pages/SupplierPaymentRequest"));
+const PostManagement = lazy(() => import("./pages/PostManagement"));
+const TenantBranding = lazy(() => import("./pages/TenantBranding"));
+const Blog = lazy(() => import("./pages/Blog"));
+const BlogPost = lazy(() => import("./pages/BlogPost"));
+const BillingSuccess = lazy(() => import("./pages/BillingSuccess"));
+const BillingPending = lazy(() => import("./pages/BillingPending"));
+const BillingFailure = lazy(() => import("./pages/BillingFailure"));
+const TesoreriaCurso = lazy(() => import("./pages/servicios/TesoreriaCurso"));
+const CentrosPadres = lazy(() => import("./pages/servicios/CentrosPadres"));
+const ImplementacionExitosa = lazy(() => import("./pages/casos/ImplementacionExitosa"));
+const CreditManagement = lazy(() => import("./pages/CreditManagement"));
+const CreditMovements = lazy(() => import("./pages/CreditMovements"));
+const StudentProfile = lazy(() => import("./pages/StudentProfile"));
+const SelectDonation = lazy(() => import("./pages/SelectDonation"));
+const FirstLoginPasswordChange = lazy(() => import("./components/FirstLoginPasswordChange"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const FormList = lazy(() => import("./pages/FormList"));
+const FormBuilder = lazy(() => import("./pages/FormBuilder"));
+const FormResponses = lazy(() => import("./pages/FormResponses"));
+const PublicForm = lazy(() => import("./pages/PublicForm"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const YearRolloverWizard = lazy(() => import("./pages/admin/YearRolloverWizard"));
+const Organizations = lazy(() => import("./pages/admin/Organizations"));
+const OrganizationDetail = lazy(() => import("./pages/admin/OrganizationDetail"));
+const CloseYear = lazy(() => import("./pages/admin/CloseYear"));
+const TenantsList = lazy(() => import("./pages/admin/TenantsList"));
+const UsersList = lazy(() => import("./pages/admin/UsersList"));
+const SaasBilling = lazy(() => import("./pages/admin/SaasBilling"));
+const OnboardingWizard = lazy(() => import("./pages/onboarding/OnboardingWizard"));
+const MobileFinances = lazy(() => import("./pages/mobile/MobileFinances"));
+const MobileAgenda = lazy(() => import("./pages/mobile/MobileAgenda"));
+const MobileActas = lazy(() => import("./pages/mobile/MobileActas"));
+const MobileBoard = lazy(() => import("./pages/mobile/MobileBoard"));
+const MobileProfile = lazy(() => import("./pages/mobile/MobileProfile"));
 
 const queryClient = new QueryClient();
 
@@ -85,8 +84,16 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
-      <Route path="/auth" element={<Auth />} />
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <Routes>
+        <Route path="/auth" element={<Auth />} />
 
       {/* SuperAdmin Routes */}
       <Route element={<AdminRoute />}>
@@ -161,12 +168,12 @@ function AppRoutes() {
       } />
 
       <Route path="/credit-management" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="credit_management">
           <Layout><CreditManagement /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/credit-movements" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="credit_movements">
           <Layout><CreditMovements /></Layout>
         </ProtectedRoute>
       } />
@@ -182,7 +189,7 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/dashboard" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="dashboard">
           <Layout><Dashboard /></Layout>
         </ProtectedRoute>
       } />
@@ -309,8 +316,9 @@ function AppRoutes() {
         <Route path="payment-portal" element={<PaymentPortal />} />
       </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
 }
 

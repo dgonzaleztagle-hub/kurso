@@ -367,22 +367,8 @@ export default function PaymentPortal() {
       remainder_to_monthly_fees: remainingPayment > 0 ? remainingPayment : 0,
     };
 
-    console.log('=== PAYMENT DISTRIBUTION DEBUG ===');
-    console.log('Payment amount:', paymentAmount);
-    console.log('Selected debts array:', JSON.stringify(selectedDebtsArray, null, 2));
-    console.log('Remainder:', remainingPayment);
-
     try {
       setSubmitting(true);
-
-      console.log('=== PAYMENT NOTIFICATION DEBUG ===');
-      console.log('User ID:', user?.id);
-      console.log('Student ID:', student.id);
-      console.log('Payment Date:', paymentDate);
-      console.log('Amount:', paymentAmount);
-      console.log('Payer Name:', payerName);
-      console.log('Bank:', bank);
-      console.log('Payment Details:', paymentDetails);
 
       // Validate payment notification data
       const validationResult = paymentNotificationSchema.safeParse({
@@ -405,8 +391,6 @@ export default function PaymentPortal() {
         return;
       }
 
-      console.log('Validation passed, inserting into database...');
-
       const insertData: PaymentNotificationInsert = {
         user_id: user!.id,
         tenant_id: student.tenant_id,
@@ -418,8 +402,6 @@ export default function PaymentPortal() {
         payment_details: paymentDetails,
         reference: `REF-${Date.now()}`,
       };
-
-      console.log('Insert data:', insertData);
 
       let { data, error } = await supabase
         .from('payment_notifications')
@@ -454,13 +436,7 @@ export default function PaymentPortal() {
       }
 
       if (error) {
-        console.error('=== DATABASE ERROR ===');
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        console.error('Error hint:', error.hint);
-        console.error('Full error object:', JSON.stringify(error, null, 2));
-        
+        console.error('Error inserting payment notification:', error);
         const errorMessage = error.message || error.details || error.hint || 'Ocurrió un error al procesar su solicitud';
         toast({
           title: 'Error al informar el pago',
@@ -470,8 +446,6 @@ export default function PaymentPortal() {
         setSubmitting(false);
         return;
       }
-
-      console.log('Payment notification inserted successfully:', data);
 
       toast({
         title: 'Pago informado correctamente',

@@ -22,8 +22,6 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
-import { fetchStudentDashboardDataForPeriod } from '@/hooks/useStudentDashboardData';
-import { buildMonthlyPaymentMetadata } from '@/lib/paymentGrouping';
 
 type PaymentNotificationRow = Tables<'payment_notifications'>;
 type PaymentNotificationStudent = {
@@ -31,17 +29,16 @@ type PaymentNotificationStudent = {
   first_name: string | null;
   last_name: string | null;
 };
-type PaymentDebt = {
-  type: 'activity' | 'monthly_fee';
-  id: number | string;
-  name: string;
-  amount: number;
-  paid_amount?: number;
-  target_month?: string;
-  months?: string[];
-};
 type PaymentDetails = {
-  selected_debts?: PaymentDebt[];
+  selected_debts?: Array<{
+    type: 'activity' | 'monthly_fee';
+    id: number | string;
+    name: string;
+    amount: number;
+    paid_amount?: number;
+    target_month?: string;
+    months?: string[];
+  }>;
   remainder_to_monthly_fees?: number;
 };
 
@@ -147,144 +144,17 @@ export default function PaymentNotifications() {
 
     setSelectedNotification(notification);
     setProcessing(true);
-    const insertedPaymentIds: string[] = [];
 
     try {
-      if (!currentTenant?.id) {
-        throw new Error('No se pudo detectar el curso activo');
-      }
-      const paymentDetails = notification.payment_details || null;
-      let selectedDebts = paymentDetails?.selected_debts || [];
-      const studentFullName = getStudentName(notification);
-
-      console.log('=== APPROVAL DEBUG ===');
-      console.log('Payment details:', JSON.stringify(paymentDetails, null, 2));
-      console.log('Selected debts to process:', selectedDebts.length);
-
-      const normalizeMonthName = (value: string) => String(value).trim().toUpperCase().split(' ')[0];
-
-      // Legacy notifications don't store payment_details. In that case we allocate
-      // the payment to the oldest pending monthly fees first, which is the safest
-      // default to keep debt state coherent.
-      if (selectedDebts.length === 0) {
-        const snapshot = await fetchStudentDashboardDataForPeriod(notification.student_id, 'year');
-        let remainingLegacyAmount = Number(notification.amount) || 0;
-
-        selectedDebts = snapshot.monthlyDebtItems
-          .filter((item) => item.due > 0)
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .flatMap((item) => {
-            if (remainingLegacyAmount <= 0) return [];
-            const paidAmount = Math.min(remainingLegacyAmount, item.due);
-            remainingLegacyAmount -= paidAmount;
-            return [{
-              type: 'monthly_fee',
-              id: item.key,
-              name: `Cuota ${item.label}`,
-              amount: item.due,
-              paid_amount: paidAmount,
-              target_month: item.key,
-              months: [item.month],
-            }];
-          });
-      }
-
-      const activityDebts = selectedDebts.filter((debt) => debt.type === 'activity');
-      const monthlyFeeDebts = selectedDebts.filter((debt) => debt.type === 'monthly_fee');
-      const requiredFolios = activityDebts.length + (monthlyFeeDebts.length > 0 ? 1 : 0);
-      const { data: folioData } = await supabase.rpc('reserve_payment_folios_for_tenant', {
-        target_tenant_id: currentTenant.id,
-        requested_count: Math.max(requiredFolios, 1),
+      const { data, error } = await supabase.functions.invoke('process-payment-notification', {
+        body: {
+          notificationId: notification.id,
+          action: 'approve',
+        },
       });
-      let currentFolio = folioData || 1;
-
-      // Registrar pagos según la distribución
-      for (const debt of activityDebts) {
-        console.log('Processing debt:', debt.type, debt.name, 'Amount:', debt.paid_amount);
-
-        const { data: insertedPayment, error: insertError } = await supabase
-          .from('payments')
-          .insert({
-            folio: currentFolio++,
-            tenant_id: currentTenant.id,
-            payment_date: notification.payment_date,
-            student_id: notification.student_id,
-            student_name: studentFullName,
-            activity_id: debt.id,
-            concept: debt.name,
-            amount: debt.paid_amount,
-          })
-          .select('id')
-          .single();
-        if (insertError) throw insertError;
-        insertedPaymentIds.push(String(insertedPayment.id));
-      }
-
-      if (monthlyFeeDebts.length > 0) {
-        const monthTargets = monthlyFeeDebts.flatMap((debt) => {
-          const months = Array.isArray(debt.months)
-            ? debt.months.map((month) => normalizeMonthName(month)).filter(Boolean)
-            : [];
-
-          if (months.length > 0) {
-            return months;
-          }
-
-          return debt.target_month ? [normalizeMonthName(debt.target_month)] : [];
-        });
-
-        const monthlyMetadata = buildMonthlyPaymentMetadata(monthTargets);
-        const totalMonthlyAmount = monthlyFeeDebts.reduce(
-          (sum, debt) => sum + (Number(debt.paid_amount) || 0),
-          0,
-        );
-
-        const { data: insertedPayment, error: insertError } = await supabase
-          .from('payments')
-          .insert({
-            folio: currentFolio++,
-            tenant_id: currentTenant.id,
-            payment_date: notification.payment_date,
-            student_id: notification.student_id,
-            student_name: studentFullName,
-            concept: monthlyMetadata.concept,
-            month_period: monthlyMetadata.monthPeriod,
-            amount: totalMonthlyAmount,
-          })
-          .select('id')
-          .single();
-        if (insertError) throw insertError;
-        insertedPaymentIds.push(String(insertedPayment.id));
-      }
-
-      let { error: updateError } = await supabase
-        .from('payment_notifications')
-        .update({
-          status: 'approved',
-          processed_by: user!.id,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', notification.id);
-
-      const updateErrorMessage = String(updateError?.message || '').toLowerCase();
-      if (
-        updateError &&
-        (
-          updateErrorMessage.includes('processed_by') ||
-          updateErrorMessage.includes('processed_at')
-        )
-      ) {
-        const legacyUpdate = await supabase
-          .from('payment_notifications')
-          .update({
-            status: 'approved',
-          })
-          .eq('id', notification.id);
-
-        updateError = legacyUpdate.error;
-      }
-
-      if (updateError) throw updateError;
+      const response = data as { error?: string } | null;
+      if (error) throw error;
+      if (response?.error) throw new Error(response.error);
 
       toast({
         title: 'Pago aprobado',
@@ -295,12 +165,6 @@ export default function PaymentNotifications() {
       setShowDetailsDialog(false);
     } catch (error) {
       console.error('Error approving payment:', error);
-      if (insertedPaymentIds.length > 0) {
-        await supabase
-          .from('payments')
-          .delete()
-          .in('id', insertedPaymentIds);
-      }
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Error al aprobar el pago',
@@ -339,36 +203,16 @@ export default function PaymentNotifications() {
     setProcessing(true);
 
     try {
-      let { error } = await supabase
-        .from('payment_notifications')
-        .update({
-          status: 'rejected',
-          rejection_reason: rejectionReason,
-          processed_by: user!.id,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedNotification!.id);
-
-      const rejectErrorMessage = String(error?.message || '').toLowerCase();
-      if (
-        error &&
-        (
-          rejectErrorMessage.includes('processed_by') ||
-          rejectErrorMessage.includes('processed_at') ||
-          rejectErrorMessage.includes('rejection_reason')
-        )
-      ) {
-        const legacyReject = await supabase
-          .from('payment_notifications')
-          .update({
-            status: 'rejected',
-          })
-          .eq('id', selectedNotification!.id);
-
-        error = legacyReject.error;
-      }
-
+      const { data, error } = await supabase.functions.invoke('process-payment-notification', {
+        body: {
+          notificationId: selectedNotification!.id,
+          action: 'reject',
+          rejectionReason,
+        },
+      });
+      const response = data as { error?: string } | null;
       if (error) throw error;
+      if (response?.error) throw new Error(response.error);
 
       toast({
         title: 'Pago rechazado',

@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminPermissions, setAdminPermissions] = useState<AppModule[]>([]);
 
   // Estados Legacy (Compatibilidad)
   const [userRole, setUserRole] = useState<LegacyRole | null>(null);
@@ -83,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setFirstLogin(false);
         setStudentId(null);
         setDisplayName(null);
+        setAdminPermissions([]);
         setLoading(false);
       }
     });
@@ -135,11 +137,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const dbRole = roleData.role as LegacyRole;
         setUserRole(dbRole);
         setFirstLogin(roleData.first_login || false);
+
+        if (dbRole === 'admin') {
+          const { data: permissionRows, error: permissionError } = await supabase
+            .from('admin_permissions')
+            .select('module')
+            .eq('user_id', userId);
+
+          if (permissionError) {
+            console.error('Error fetching admin permissions:', permissionError);
+            setAdminPermissions([]);
+          } else {
+            const deniedModules = (permissionRows ?? [])
+              .map((row) => row.module)
+              .filter((module): module is AppModule => typeof module === 'string');
+            setAdminPermissions(deniedModules);
+          }
+        } else {
+          setAdminPermissions([]);
+        }
       } else {
         // Fallback if no user_roles entry
         if (appData?.is_superadmin) setUserRole('master');
         else setUserRole(null);
         setFirstLogin(false);
+        setAdminPermissions([]);
       }
 
     } catch (error: unknown) {
@@ -195,12 +217,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setFirstLogin(false);
     setStudentId(null);
     setDisplayName(null);
+    setAdminPermissions([]);
   };
 
   // Legacy Permission Check
   const hasPermission = (module: AppModule) => {
-    if (userRole === 'master' || userRole === 'owner' || userRole === 'admin') return true;
-    return false; // TODO: Implement permissions from TenantContext
+    if (userRole === 'master' || userRole === 'owner') return true;
+    if (userRole === 'admin') return !adminPermissions.includes(module);
+    return false;
   };
 
   const updateProfile = async (updates: Partial<AppUser>) => {
@@ -239,7 +263,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       firstLogin,      // Exposed
       studentId,
       displayName,
-      adminPermissions: [],
+      adminPermissions,
       hasPermission
     }}>
       {children}

@@ -32,11 +32,12 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: ProtectedRouteProps) => {
-  const { user, userRole, loading, hasPermission } = useAuth();
+  const { user, userRole, loading, adminPermissions } = useAuth();
   const { roleInCurrentTenant, loading: tenantLoading } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
   const effectiveRole = roleInCurrentTenant || userRole;
+  const isModuleAllowed = !requiredModule || effectiveRole !== 'admin' || !adminPermissions.includes(requiredModule);
 
   useEffect(() => {
     if (!loading && !tenantLoading) {
@@ -50,11 +51,11 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: Prote
         } else {
           navigate('/');
         }
-      } else if (requiredModule && effectiveRole === 'admin' && !hasPermission(requiredModule)) {
+      } else if (!isModuleAllowed) {
         navigate('/');
       }
     }
-  }, [user, effectiveRole, loading, tenantLoading, navigate, allowedRoles, requiredModule, hasPermission, location]);
+  }, [user, effectiveRole, loading, tenantLoading, navigate, allowedRoles, isModuleAllowed, location]);
 
   if (loading || tenantLoading) {
     return (
