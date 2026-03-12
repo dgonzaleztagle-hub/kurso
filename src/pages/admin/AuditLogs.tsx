@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Search, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import type { Json, Tables } from "@/integrations/supabase/types";
 
 interface AuditLog {
     id: string;
@@ -24,9 +25,11 @@ interface AuditLog {
     action: string;
     entity_name: string;
     entity_id: string;
-    details: any;
+    details: Json | null;
     user_email?: string; // Loaded via join or secondary query if needed, or stored in log
 }
+
+type AppUserLookup = Tables<"app_users">;
 
 export default function AuditLogs() {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -62,7 +65,7 @@ export default function AuditLogs() {
 
                 if (usersData) {
                     const newMap: Record<string, string> = {};
-                    usersData.forEach((u: any) => {
+                    usersData.forEach((u: Pick<AppUserLookup, "id" | "full_name" | "email">) => {
                         newMap[u.id] = u.full_name || u.email || "Usuario sin Nombre";
                     });
                     setUserMap(newMap);

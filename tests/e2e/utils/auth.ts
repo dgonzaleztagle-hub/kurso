@@ -72,8 +72,8 @@ async function getUserIdByPasswordGrant(email: string, password: string) {
   });
 
   if (!res.ok) return null;
-  const json = (await res.json()) as any;
-  return json?.user?.id || null;
+  const json = (await res.json()) as { user?: { id?: string | null } };
+  return json.user?.id || null;
 }
 
 async function ensureMasterMembershipForOwnerTenant() {

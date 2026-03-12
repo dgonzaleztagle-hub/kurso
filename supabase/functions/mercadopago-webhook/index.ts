@@ -26,7 +26,13 @@ const safeJsonParse = async (req: Request) => {
   }
 };
 
-const extractPaymentId = (payload: any, url: URL): string | null => {
+type WebhookPayload = {
+  id?: string | number | null;
+  resource?: string | null;
+  data?: { id?: string | number | null } | null;
+};
+
+const extractPaymentId = (payload: WebhookPayload | null, url: URL): string | null => {
   const candidates = [
     payload?.data?.id,
     payload?.id,

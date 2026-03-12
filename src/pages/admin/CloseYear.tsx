@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
+type ErrorWithMessage = { message?: string };
+
 export default function CloseYear() {
     const { currentTenant, refreshTenants, roleInCurrentTenant } = useTenant();
     const { userRole } = useAuth();
@@ -49,9 +51,9 @@ export default function CloseYear() {
                 navigate("/");
             }, 500);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error archiving:", error);
-            toast.error("Error al finalizar el año: " + error.message);
+            toast.error("Error al finalizar el año: " + ((error as ErrorWithMessage).message || "Error desconocido"));
             setLoading(false);
         }
     };

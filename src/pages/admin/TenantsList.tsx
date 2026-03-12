@@ -15,8 +15,13 @@ import { ArrowLeft, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getCommercialStatusLabel } from "@/lib/saasBilling";
 
+type TenantListRow = Tenant & {
+    organization?: { name: string | null } | null;
+    owner?: { full_name: string | null } | null;
+};
+
 export default function TenantsList() {
-    const [tenants, setTenants] = useState<any[]>([]);
+    const [tenants, setTenants] = useState<TenantListRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const navigate = useNavigate();

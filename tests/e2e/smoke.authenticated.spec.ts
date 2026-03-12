@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page, type Request, type Response } from "@playwright/test";
 import { login } from "./utils/auth";
 
 const desktopRoutes = [
@@ -21,7 +21,7 @@ const mobileRoutes = [
   "/mobile/profile",
 ];
 
-function attachRuntimeWatchers(page: any) {
+function attachRuntimeWatchers(page: Page) {
   const jsErrors: string[] = [];
   const failedRequests: string[] = [];
 
@@ -29,14 +29,14 @@ function attachRuntimeWatchers(page: any) {
     jsErrors.push(err.message);
   });
 
-  page.on("requestfailed", (req: any) => {
+  page.on("requestfailed", (req: Request) => {
     const reason = req.failure()?.errorText || "unknown";
     // Ignore browser-aborted requests during route transitions in SPA navigation.
     if (reason.includes("ERR_ABORTED")) return;
     failedRequests.push(`${req.method()} ${req.url()} :: ${reason}`);
   });
 
-  page.on("response", (res: any) => {
+  page.on("response", (res: Response) => {
     const status = res.status();
     if (status >= 500) {
       failedRequests.push(`${res.request().method()} ${res.url()} :: HTTP ${status}`);
@@ -46,7 +46,7 @@ function attachRuntimeWatchers(page: any) {
   return { jsErrors, failedRequests };
 }
 
-async function closeWelcomeIfPresent(page: any) {
+async function closeWelcomeIfPresent(page: Page) {
   const modalTitle = page.getByText(/¡bienvenido a tu panel!/i);
   if (await modalTitle.isVisible().catch(() => false)) {
     const closeBtn = page.getByRole("button", { name: /close|cerrar/i });

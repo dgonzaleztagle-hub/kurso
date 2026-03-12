@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { login } from "./utils/auth";
 
 function computeRutDv(num: number): string {
@@ -22,7 +22,7 @@ function formatRut(num: number): string {
   return `${num}-${dv}`;
 }
 
-async function dismissWelcomeModal(page: any) {
+async function dismissWelcomeModal(page: Page) {
   const modalTitle = page.getByText(/¡bienvenido a tu panel!/i);
   if (await modalTitle.isVisible().catch(() => false)) {
     const closeByText = page.getByRole("button", { name: /×|cerrar|close/i });
