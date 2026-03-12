@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { formatDateForDB, parseDateFromDB } from "@/lib/dateUtils";
 import { useTenant } from "@/contexts/TenantContext";
 import { calculateMonthlyDebtItems, getNetPaymentAmount } from "@/lib/creditAccounting";
 import { buildMonthlyPaymentMetadata } from "@/lib/paymentGrouping";
+import type { TenantSettings } from "@/types/db";
 
 type MovementType = "ingreso" | "egreso" | null;
 type IncomeType = "actividad" | "cuota_mensual" | "otros" | null;
@@ -25,6 +27,16 @@ interface PendingMonthDebt {
   month: string;
   amount: number;
 }
+
+type ExpenseSupplierRow = Pick<Tables<"expenses">, "supplier">;
+type StudentEnrollmentRow = Pick<Tables<"students">, "enrollment_date">;
+type PaymentRow = Pick<Tables<"payments">, "amount" | "redirected_amount" | "concept" | "month_period">;
+type CreditApplicationRow = Pick<Tables<"credit_applications">, "amount" | "reversed_amount" | "target_type" | "target_month">;
+type PaymentInsert = TablesInsert<"payments">;
+type ExpenseInsert = TablesInsert<"expenses">;
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Ocurrió un error inesperado";
 
 export default function Movements() {
   const { currentTenant } = useTenant();
@@ -55,16 +67,7 @@ export default function Movements() {
   const [expenseConcept, setExpenseConcept] = useState("");
   const [existingSuppliers, setExistingSuppliers] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (currentTenant?.id) {
-      loadIncomeGlosas();
-      loadExistingSuppliers();
-      loadActivities();
-      loadStudents();
-    }
-  }, [currentTenant?.id]);
-
-  const loadIncomeGlosas = async () => {
+  const loadIncomeGlosas = useCallback(async () => {
     if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("payments")
@@ -76,9 +79,9 @@ export default function Movements() {
       const uniqueGlosas = Array.from(new Set(data.map(p => p.concept).filter(Boolean)));
       setIncomeGlosas(uniqueGlosas);
     }
-  };
+  }, [currentTenant?.id]);
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("activities")
@@ -89,9 +92,9 @@ export default function Movements() {
     if (data) {
       setActivities(data);
     }
-  };
+  }, [currentTenant?.id]);
 
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("students")
@@ -105,9 +108,9 @@ export default function Movements() {
         name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Sin Nombre'
       })));
     }
-  };
+  }, [currentTenant?.id]);
 
-  const loadExistingSuppliers = async () => {
+  const loadExistingSuppliers = useCallback(async () => {
     if (!currentTenant?.id) return;
     const { data } = await supabase
       .from("expenses")
@@ -115,10 +118,19 @@ export default function Movements() {
       .eq("tenant_id", currentTenant.id);
 
     if (data) {
-      const uniqueSuppliers = Array.from(new Set((data as any[]).map(e => e.supplier).filter(Boolean)));
+      const uniqueSuppliers = Array.from(new Set((data as ExpenseSupplierRow[]).map((expense) => expense.supplier).filter(Boolean)));
       setExistingSuppliers(uniqueSuppliers);
     }
-  };
+  }, [currentTenant?.id]);
+
+  useEffect(() => {
+    if (currentTenant?.id) {
+      void loadIncomeGlosas();
+      void loadExistingSuppliers();
+      void loadActivities();
+      void loadStudents();
+    }
+  }, [currentTenant?.id, loadActivities, loadExistingSuppliers, loadIncomeGlosas, loadStudents]);
 
   const resetForm = () => {
     setAmount("");
@@ -139,7 +151,7 @@ export default function Movements() {
   const loadPendingMonths = async (selectedStudentId: string) => {
     if (!currentTenant?.id) return;
     setLoadingPendingMonths(true);
-    const tenantSettings = (currentTenant.settings as any) || {};
+    const tenantSettings = (currentTenant.settings as TenantSettings | null) || {};
     const configuredFee = Number(tenantSettings.monthly_fee);
     const MONTHLY_FEE = Number.isFinite(configuredFee) && configuredFee > 0 ? configuredFee : 3000;
     const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
@@ -153,7 +165,7 @@ export default function Movements() {
         .from('students')
         .select('enrollment_date')
         .eq('tenant_id', currentTenant.id)
-        .eq('id', normalizedStudentId as any)
+        .eq('id', normalizedStudentId)
         .single();
 
       if (studentError) throw studentError;
@@ -181,7 +193,7 @@ export default function Movements() {
         .from('payments')
         .select('amount, redirected_amount, concept, month_period')
         .eq('tenant_id', currentTenant.id)
-        .eq('student_id', normalizedStudentId as any);
+        .eq('student_id', normalizedStudentId);
 
       if (paymentsError) throw paymentsError;
 
@@ -189,7 +201,7 @@ export default function Movements() {
         .from('credit_applications')
         .select('amount, reversed_amount, target_type, target_month')
         .eq('tenant_id', currentTenant.id)
-        .eq('student_id', normalizedStudentId as any)
+        .eq('student_id', normalizedStudentId)
         .eq('target_type', 'monthly_fee');
 
       if (applicationsError) throw applicationsError;
@@ -198,7 +210,7 @@ export default function Movements() {
         .from('student_credits')
         .select('amount')
         .eq('tenant_id', currentTenant.id)
-        .eq('student_id', normalizedStudentId as any)
+        .eq('student_id', normalizedStudentId)
         .maybeSingle();
 
       if (studentCreditError) {
@@ -208,11 +220,11 @@ export default function Movements() {
       const monthlyDebtItems = calculateMonthlyDebtItems({
         enrollmentDate: studentData.enrollment_date,
         monthlyFee: MONTHLY_FEE,
-        payments: (previousPayments || []).map((payment) => ({
+        payments: ((previousPayments as PaymentRow[] | null) || []).map((payment) => ({
           ...payment,
           redirected_amount: payment.redirected_amount,
         })),
-        applications: (creditApplications || []).map((application) => ({
+        applications: ((creditApplications as CreditApplicationRow[] | null) || []).map((application) => ({
           ...application,
           target_type: application.target_type,
         })),
@@ -229,11 +241,11 @@ export default function Movements() {
 
       setPendingMonths(pending);
       setSelectedMonths([]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading pending months:", error);
       setPendingMonths([]);
       setSelectedMonths([]);
-      toast.error(error?.message || "No se pudo calcular meses pendientes");
+      toast.error(getErrorMessage(error));
     } finally {
       setLoadingPendingMonths(false);
     }
@@ -251,7 +263,7 @@ export default function Movements() {
     try {
       if (movementType === "ingreso") {
         // Get next folio for payment
-        const { data: folioData } = await supabase.rpc("get_next_payment_folio_for_tenant" as any, {
+        const { data: folioData } = await supabase.rpc("get_next_payment_folio_for_tenant", {
           target_tenant_id: currentTenant.id,
         });
         const folio = folioData || 1;
@@ -269,7 +281,7 @@ export default function Movements() {
           finalConcept = concept === "OTRO" ? customConcept : concept;
         }
 
-        const insertData: any = {
+        const insertData: PaymentInsert = {
           folio,
           tenant_id: currentTenant.id,
           student_id: studentId ? (/^\d+$/.test(studentId) ? Number(studentId) : studentId) : null,
@@ -303,14 +315,14 @@ export default function Movements() {
         toast.success(`Ingreso registrado con folio ${folio}`);
       } else {
         // Get next folio for expense
-        const { data: folioData } = await supabase.rpc("get_next_expense_folio_for_tenant" as any, {
+        const { data: folioData } = await supabase.rpc("get_next_expense_folio_for_tenant", {
           target_tenant_id: currentTenant.id,
         });
         const folio = folioData || 1;
 
         const finalSupplier = supplier === "NUEVO" ? customSupplier : supplier;
 
-        const insertPayload: any = {
+        const insertPayload: ExpenseInsert = {
           folio,
           tenant_id: currentTenant.id,
           supplier: finalSupplier,
@@ -328,9 +340,9 @@ export default function Movements() {
       resetForm();
       loadIncomeGlosas();
       loadExistingSuppliers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al registrar movimiento:", error);
-      toast.error(error?.message || "Error al registrar el movimiento");
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
