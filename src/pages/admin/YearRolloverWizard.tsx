@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowRight, ArrowLeft, Loader2, Users, Wallet, School, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
+import { Tenant, TenantSettings } from "@/types/db";
 
 // Types
 interface RolloverStudent {
@@ -22,6 +24,40 @@ interface RolloverStudent {
     rollover_credit: boolean;
 }
 
+type StudentRow = {
+    id: string;
+    rut: string;
+    first_name: string;
+    last_name: string;
+};
+
+type CreditMovementRow = {
+    student_id: string;
+    amount: number | string;
+};
+
+type PaymentRow = {
+    student_id: string;
+    amount: number | string;
+};
+
+type RolloverPayload = {
+    old_student_id: string;
+    rut: string;
+    first_name: string;
+    last_name: string;
+    rollover_debt: number;
+    rollover_credit: number;
+};
+
+const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : "Ocurrió un error inesperado";
+
+const getMonthlyFee = (settings: TenantSettings | null) => {
+    const rawFee = settings?.monthly_fee;
+    return typeof rawFee === "number" ? rawFee : Number(rawFee ?? 0) || 0;
+};
+
 export default function YearRolloverWizard() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -33,7 +69,7 @@ export default function YearRolloverWizard() {
     const [processing, setProcessing] = useState(false);
 
     // Data
-    const [oldTenant, setOldTenant] = useState<any>(null);
+    const [oldTenant, setOldTenant] = useState<Tenant | null>(null);
     const [students, setStudents] = useState<RolloverStudent[]>([]);
 
     // Form Inputs
@@ -42,16 +78,13 @@ export default function YearRolloverWizard() {
     const [newFee, setNewFee] = useState(0);
 
     // Load Initial Data
-    useEffect(() => {
+    const fetchSourceData = useCallback(async () => {
         if (!fromTenantId) {
             toast.error("ID de curso no especificado");
             navigate("/dashboard");
             return;
         }
-        fetchSourceData();
-    }, [fromTenantId]);
 
-    const fetchSourceData = async () => {
         try {
             // 1. Fetch Tenant
             const { data: tenant, error: tError } = await supabase
@@ -61,13 +94,12 @@ export default function YearRolloverWizard() {
                 .single();
 
             if (tError) throw tError;
-            setOldTenant(tenant);
+            setOldTenant(tenant as Tenant);
 
             // Auto-suggest name
             const suggestedName = tenant.name.replace(/\d{4}/, "").trim() + " " + newYear;
             setNewName(suggestedName);
-            const settings = tenant.settings as any;
-            setNewFee(settings?.monthly_fee || 0);
+            setNewFee(getMonthlyFee(tenant.settings as TenantSettings | null));
 
             // 2. Fetch Students & Financials
             // We need to calculate debts. This is heavy.
@@ -94,20 +126,20 @@ export default function YearRolloverWizard() {
 
             if (cError) throw cError;
 
-            const creditMap = new Map();
-            credits?.forEach((c: any) => {
-                const current = creditMap.get(c.student_id) || 0;
+            const creditMap = new Map<string, number>();
+            (credits as CreditMovementRow[] | null)?.forEach((credit) => {
+                const current = creditMap.get(credit.student_id) || 0;
                 // Assuming positive amount adds to credit? 
                 // In Dashboard: "redirectedAmount" was absolute value of negative amounts.
                 // Let's assume standard logic: credit positive. 
                 // But Dashboard used: cm.amount < 0 for payment_redirect. 
                 // Let's just sum raw amount if it represents "Wallet".
                 // Safest bet: Sum everything.
-                creditMap.set(c.student_id, current + Number(c.amount));
+                creditMap.set(credit.student_id, current + Number(credit.amount));
             });
 
             // Fetch payments to calculate actual debt
-            const studentIds = rawStudents.map((s: any) => s.id);
+            const studentIds = (rawStudents as StudentRow[]).map((student) => student.id);
             const { data: paymentsData } = await supabase
                 .from('payments')
                 .select('student_id, amount')
@@ -119,32 +151,36 @@ export default function YearRolloverWizard() {
             const TOTAL_MONTHS = 10; // Mar-Dec
             const EXPECTED_YEARLY = MONTHLY_FEE * TOTAL_MONTHS;
 
-            const paymentsMap = new Map<number, number>();
-            paymentsData?.forEach((p: any) => {
-                const current = paymentsMap.get(p.student_id) || 0;
-                paymentsMap.set(p.student_id, current + Number(p.amount));
+            const paymentsMap = new Map<string, number>();
+            (paymentsData as PaymentRow[] | null)?.forEach((payment) => {
+                const current = paymentsMap.get(payment.student_id) || 0;
+                paymentsMap.set(payment.student_id, current + Number(payment.amount));
             });
 
-            const processedStudents: RolloverStudent[] = rawStudents.map((s: any) => ({
-                id: s.id,
-                rut: s.rut,
-                first_name: s.first_name,
-                last_name: s.last_name,
-                debt_amount: Math.max(0, EXPECTED_YEARLY - (paymentsMap.get(s.id) || 0)), // Real Calculation
-                credit_amount: creditMap.get(s.id) || 0,
+            const processedStudents: RolloverStudent[] = (rawStudents as StudentRow[]).map((student) => ({
+                id: student.id,
+                rut: student.rut,
+                first_name: student.first_name,
+                last_name: student.last_name,
+                debt_amount: Math.max(0, EXPECTED_YEARLY - (paymentsMap.get(student.id) || 0)), // Real Calculation
+                credit_amount: creditMap.get(student.id) || 0,
                 selected: true,
                 rollover_debt: true,
                 rollover_credit: true,
             }));
 
             setStudents(processedStudents);
-            setLoading(false);
-
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error fetching data:", error);
-            toast.error("Error cargando datos del curso anterior");
+            toast.error(getErrorMessage(error));
+        } finally {
+            setLoading(false);
         }
-    };
+    }, [fromTenantId, navigate, newYear]);
+
+    useEffect(() => {
+        void fetchSourceData();
+    }, [fetchSourceData]);
 
     // Step Logic
     const nextStep = () => setStep(step + 1);
@@ -154,7 +190,7 @@ export default function YearRolloverWizard() {
         setProcessing(true);
         try {
             // Prepare Student Data Payload
-            const studentsToMigrate = students
+            const studentsToMigrate: RolloverPayload[] = students
                 .filter(s => s.selected)
                 .map(s => ({
                     old_student_id: s.id,
@@ -165,13 +201,13 @@ export default function YearRolloverWizard() {
                     rollover_credit: s.rollover_credit ? s.credit_amount : 0
                 }));
 
-            const { data, error } = await supabase.rpc('migrate_course_year' as any, {
+            const { error } = await supabase.rpc('migrate_course_year', {
                 p_previous_tenant_id: fromTenantId,
                 p_new_name: newName,
                 p_new_fiscal_year: newYear,
                 p_new_fee_amount: newFee,
                 p_admin_ids: [],
-                p_student_data: studentsToMigrate
+                p_student_data: studentsToMigrate as Json[]
             });
 
             if (error) throw error;
@@ -183,14 +219,14 @@ export default function YearRolloverWizard() {
             // Force reload to update context cleanly
             window.location.href = "/dashboard";
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            toast.error("Error al migrar curso: " + error.message);
+            toast.error(`Error al migrar curso: ${getErrorMessage(error)}`);
             setProcessing(false);
         }
     };
 
-    if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin h-8 w-8" /></div>;
+    if (loading || !oldTenant) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin h-8 w-8" /></div>;
 
     return (
         <div className="min-h-screen bg-muted/20 flex flex-col items-center py-10 px-4">

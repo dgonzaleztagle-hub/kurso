@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Organization, Tenant } from "@/types/db";
@@ -25,6 +25,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+
+const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : "Ocurrió un error inesperado";
 
 export default function OrganizationDetail() {
     const { id } = useParams<{ id: string }>();
@@ -65,16 +68,13 @@ export default function OrganizationDetail() {
     // Course Detail Modal State
     const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-    useEffect(() => {
-        if (id) {
-            fetchDetails();
-        } else {
+    const fetchDetails = useCallback(async () => {
+        if (!id) {
             setLoading(false);
             navigate("/admin/organizations");
+            return;
         }
-    }, [id]);
 
-    const fetchDetails = async () => {
         setLoading(true);
         try {
             // Fetch Org
@@ -111,7 +111,11 @@ export default function OrganizationDetail() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id, navigate]);
+
+    useEffect(() => {
+        void fetchDetails();
+    }, [fetchDetails]);
 
 
 
@@ -134,9 +138,9 @@ export default function OrganizationDetail() {
             toast.success("Curso finalizado y archivado correctamente");
             setIsArchiveOpen(false);
             fetchDetails();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error archiving:", error);
-            toast.error("Error al archivar curso");
+            toast.error(getErrorMessage(error));
         } finally {
             setArchiving(false);
         }
@@ -218,9 +222,9 @@ export default function OrganizationDetail() {
             setNewUserName("");
             setNewUserPassword("");
             fetchDetails();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error creating owner:", error);
-            toast.error(error.message || "Error al crear encargado");
+            toast.error(getErrorMessage(error));
         } finally {
             setAssigning(false);
         }
@@ -281,9 +285,9 @@ export default function OrganizationDetail() {
             toast.success(`Trial extendido por ${extendDays} días`);
             setIsExtendTrialOpen(false);
             fetchDetails();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error extending trial:", error);
-            toast.error("Error al extender trial");
+            toast.error(getErrorMessage(error));
         } finally {
             setProcessingSub(false);
         }
@@ -308,9 +312,9 @@ export default function OrganizationDetail() {
             toast.success(`Plan activado por ${planMonths} meses`);
             setIsActivatePlanOpen(false);
             fetchDetails();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error activating plan:", error);
-            toast.error("Error al activar plan");
+            toast.error(getErrorMessage(error));
         } finally {
             setProcessingSub(false);
         }

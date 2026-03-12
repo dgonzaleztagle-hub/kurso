@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AppUser } from "@/types/db";
+import type { Database } from "@/integrations/supabase/types";
 import {
     Table,
     TableBody,
@@ -31,15 +31,33 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+type PlatformClientRow = {
+    tenant_id: string | null;
+    tenant_name: string | null;
+    email: string | null;
+    owner_email?: string | null;
+    full_name?: string | null;
+    owner_name?: string | null;
+    whatsapp_number?: string | null;
+    user_id?: string | null;
+    created_at: string;
+    subscription_status: Database["public"]["Enums"]["subscription_status"] | null;
+    trial_ends_at?: string | null;
+    valid_until: string | null;
+};
+
+const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : "Ocurrió un error inesperado";
+
 export default function UsersList() {
-    const [users, setUsers] = useState<AppUser[]>([]);
+    const [users, setUsers] = useState<PlatformClientRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const navigate = useNavigate();
 
     // Subscription Management States
     const [isDetailOpen, setIsDetailOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<any | null>(null);
+    const [selectedUser, setSelectedUser] = useState<PlatformClientRow | null>(null);
 
     const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
     const [selectedTenantName, setSelectedTenantName] = useState<string>("");
@@ -61,7 +79,7 @@ export default function UsersList() {
         const { data, error } = await supabase.rpc('get_platform_clients');
 
         if (!error && data) {
-            setUsers(data as any[]);
+            setUsers(data as PlatformClientRow[]);
         } else if (error) {
             console.error("Error fetching users:", error);
             toast.error("Error al cargar clientes");
@@ -103,9 +121,9 @@ export default function UsersList() {
             toast.success(`Trial extendido por ${extendDays} días`);
             setIsExtendTrialOpen(false);
             fetchUsers(); // Refresh list to see implicit changes if any
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error extending trial:", error);
-            toast.error("Error al extender trial");
+            toast.error(getErrorMessage(error));
         } finally {
             setProcessingSub(false);
         }
@@ -130,9 +148,9 @@ export default function UsersList() {
             toast.success(`Plan activado por ${planMonths} meses`);
             setIsActivatePlanOpen(false);
             fetchUsers();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error activating plan:", error);
-            toast.error("Error al activar plan");
+            toast.error(getErrorMessage(error));
         } finally {
             setProcessingSub(false);
         }
@@ -186,9 +204,9 @@ export default function UsersList() {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredUsers.map((user: any) => (
+                            filteredUsers.map((user) => (
                                 <TableRow
-                                    key={user.user_id}
+                                    key={user.user_id ?? user.tenant_id ?? `${user.email}-${user.created_at}`}
                                     className="cursor-pointer hover:bg-muted/50"
                                     onClick={() => {
                                         setSelectedUser(user);
@@ -197,8 +215,8 @@ export default function UsersList() {
                                 >
                                     <TableCell>
                                         <div className="flex flex-col">
-                                            <span className="font-medium">{user.full_name || 'Sin Nombre'}</span>
-                                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                                            <span className="font-medium">{user.full_name || user.owner_name || 'Sin Nombre'}</span>
+                                            <span className="text-xs text-muted-foreground">{user.email || user.owner_email || "Sin email"}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
