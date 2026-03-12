@@ -1,39 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.78.0";
+import {
+  buildApprovalEntries,
+  type PaymentDetails,
+  type PaymentNotificationRow,
+} from "../_shared/paymentNotificationEntries.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const SCHOOL_MONTHS = [
-  "MARZO",
-  "ABRIL",
-  "MAYO",
-  "JUNIO",
-  "JULIO",
-  "AGOSTO",
-  "SEPTIEMBRE",
-  "OCTUBRE",
-  "NOVIEMBRE",
-  "DICIEMBRE",
-] as const;
-
-type SchoolMonthName = typeof SCHOOL_MONTHS[number];
-
-type PaymentDebt = {
-  type: "activity" | "monthly_fee";
-  id?: number | string | null;
-  name: string;
-  amount: number;
-  paid_amount?: number;
-  target_month?: string;
-  months?: string[];
-};
-
-type PaymentDetails = {
-  selected_debts?: PaymentDebt[];
-  remainder_to_monthly_fees?: number;
-} | null;
 
 type NotificationRow = {
   id: string;
@@ -47,130 +22,6 @@ type NotificationRow = {
     first_name: string | null;
     last_name: string | null;
   } | null;
-};
-
-type PaymentEntry = {
-  payment_date: string;
-  student_id: number | null;
-  student_name: string;
-  activity_id: number | null;
-  concept: string;
-  amount: number;
-  month_period: string | null;
-};
-
-const monthIndexMap = new Map(SCHOOL_MONTHS.map((month, index) => [month, index]));
-
-const normalizeMonthToken = (value: string | null | undefined): SchoolMonthName | null => {
-  if (!value) return null;
-  const normalized = String(value).trim().toUpperCase();
-  if (monthIndexMap.has(normalized as SchoolMonthName)) {
-    return normalized as SchoolMonthName;
-  }
-
-  const segments = normalized.split("-");
-  const trailingToken = segments[segments.length - 1];
-  return monthIndexMap.has(trailingToken as SchoolMonthName) ? (trailingToken as SchoolMonthName) : null;
-};
-
-const dedupeMonths = (months: SchoolMonthName[]) => {
-  const seen = new Set<SchoolMonthName>();
-  return months.filter((month) => {
-    if (seen.has(month)) return false;
-    seen.add(month);
-    return true;
-  });
-};
-
-const sortMonths = (months: SchoolMonthName[]) =>
-  [...months].sort((left, right) => (monthIndexMap.get(left) || 0) - (monthIndexMap.get(right) || 0));
-
-const buildMonthPeriodValue = (months: SchoolMonthName[]) => {
-  if (months.length === 0) return null;
-  if (months.length === 1) return months[0];
-
-  const sorted = sortMonths(dedupeMonths(months));
-  const indexes = sorted.map((month) => monthIndexMap.get(month) || 0);
-  const isContiguous = indexes.every((monthIndex, index) =>
-    index === 0 ? true : monthIndex === indexes[index - 1] + 1,
-  );
-
-  if (isContiguous) {
-    return `${sorted[0]}-${sorted[sorted.length - 1]}`;
-  }
-
-  return sorted.join(",");
-};
-
-const buildMonthlyConcept = (months: SchoolMonthName[]) => {
-  const period = buildMonthPeriodValue(months);
-  return period ? `Cuota ${period}` : "Cuota Mensual";
-};
-
-const extractMonthlyPaymentEntry = (notification: NotificationRow, debts: PaymentDebt[], studentName: string): PaymentEntry | null => {
-  const totalMonthlyAmount = debts.reduce((sum, debt) => sum + (Number(debt.paid_amount) || 0), 0);
-  if (totalMonthlyAmount <= 0) return null;
-
-  const months = debts.flatMap((debt) => {
-    if (Array.isArray(debt.months) && debt.months.length > 0) {
-      return debt.months.map((month) => normalizeMonthToken(month)).filter((month): month is SchoolMonthName => month !== null);
-    }
-
-    const normalizedTarget = normalizeMonthToken(debt.target_month);
-    return normalizedTarget ? [normalizedTarget] : [];
-  });
-
-  const sortedMonths = sortMonths(dedupeMonths(months));
-
-  return {
-    payment_date: notification.payment_date,
-    student_id: notification.student_id,
-    student_name: studentName,
-    activity_id: null,
-    concept: buildMonthlyConcept(sortedMonths),
-    amount: totalMonthlyAmount,
-    month_period: buildMonthPeriodValue(sortedMonths),
-  };
-};
-
-const buildApprovalEntries = (notification: NotificationRow) => {
-  const studentName = `${notification.students?.first_name || ""} ${notification.students?.last_name || ""}`.trim() || "Estudiante desconocido";
-  const selectedDebts = Array.isArray(notification.payment_details?.selected_debts)
-    ? notification.payment_details?.selected_debts || []
-    : [];
-
-  if (selectedDebts.length === 0) {
-    return [{
-      payment_date: notification.payment_date,
-      student_id: notification.student_id,
-      student_name: studentName,
-      activity_id: null,
-      concept: "Cuota Mensual",
-      amount: Number(notification.amount) || 0,
-      month_period: null,
-    }] satisfies PaymentEntry[];
-  }
-
-  const activityEntries = selectedDebts
-    .filter((debt) => debt.type === "activity")
-    .map((debt) => ({
-      payment_date: notification.payment_date,
-      student_id: notification.student_id,
-      student_name: studentName,
-      activity_id: debt.id ? Number(debt.id) : null,
-      concept: debt.name,
-      amount: Number(debt.paid_amount) || 0,
-      month_period: null,
-    }))
-    .filter((entry) => entry.amount > 0);
-
-  const monthlyEntry = extractMonthlyPaymentEntry(
-    notification,
-    selectedDebts.filter((debt) => debt.type === "monthly_fee"),
-    studentName,
-  );
-
-  return monthlyEntry ? [...activityEntries, monthlyEntry] : activityEntries;
 };
 
 Deno.serve(async (req) => {
@@ -271,7 +122,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "approve") {
-      const paymentEntries = buildApprovalEntries(notification as NotificationRow);
+      const paymentEntries = buildApprovalEntries(notification as PaymentNotificationRow);
       if (paymentEntries.length === 0) {
         return new Response(
           JSON.stringify({ error: "La notificación no contiene pagos aplicables" }),

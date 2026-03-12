@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { CHILEAN_ACCOUNT_TYPES } from "@/lib/banking";
 import { toast } from "sonner";
-import { FileText, Download, CheckCircle, XCircle, Clock, Check, X, Share2, Copy } from "lucide-react";
+import { FileText, Download, CheckCircle, XCircle, Clock, Check, X, Share2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Table,
@@ -58,15 +58,15 @@ interface Reimbursement {
   subject: string;
   account_info: ReimbursementAccountInfo | null;
   status: 'pending' | 'approved' | 'rejected';
-  attachments: ReimbursementFile[] | null;
+  attachments: StoredReimbursementFile[] | null;
   rejection_reason?: string | null;
-  user_id: string;
+  user_id: string | null;
   processed_by?: string | null;
   processed_at?: string | null;
   folio?: number | null;
   type: 'reimbursement' | 'supplier_payment';
   supplier_name?: string | null;
-  payment_proof?: ReimbursementFile[] | ReimbursementFile | null;
+  payment_proof?: StoredReimbursementFile[] | StoredReimbursementFile | null;
   expense_folio?: number | null;
 }
 
@@ -81,19 +81,45 @@ type ReimbursementFile = {
   uploaded_at?: string;
 };
 
+type StoredReimbursementFile = ReimbursementFile | string;
+
 type ReimbursementAccountInfo = {
   bank?: string;
   account_type?: string;
   account_number?: string;
   holder_name?: string;
   supplier_rut?: string;
+  supplier_email?: string;
+  supplier_phone?: string;
 };
 
 type ReimbursementInsert = TablesInsert<"reimbursements">;
-type ExpenseInsert = TablesInsert<"expenses">;
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Ocurrió un error inesperado";
+
+const getFileNameFromPath = (path: string) => path.split('/').pop() || 'archivo';
+
+const normalizeStoredFile = (file: StoredReimbursementFile): ReimbursementFile | null => {
+  if (typeof file === 'string') {
+    return {
+      name: getFileNameFromPath(file),
+      path: file,
+      uploaded_at: undefined,
+    };
+  }
+
+  if (file && typeof file.name === 'string' && typeof file.path === 'string') {
+    return file;
+  }
+
+  return null;
+};
+
+const normalizeStoredFiles = (files: StoredReimbursementFile[] | null | undefined) =>
+  (files ?? [])
+    .map(normalizeStoredFile)
+    .filter((file): file is ReimbursementFile => file !== null);
 
 export default function Reimbursements() {
   const { user, userRole } = useAuth();
@@ -140,22 +166,29 @@ export default function Reimbursements() {
 
       if (error) throw error;
 
-      const userIds: string[] = [...new Set<string>(reimbursementsData?.map((r) => r.user_id) || [])];
+      const userIds = [...new Set((reimbursementsData ?? []).map((r) => r.user_id).filter((id): id is string => Boolean(id)))];
+      let rolesData: { user_id: string; user_name: string | null }[] | null = null;
 
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, user_name, position')
-        .in('user_id', userIds);
+      if (userIds.length > 0) {
+        const rolesResult = await supabase
+          .from('user_roles')
+          .select('user_id, user_name')
+          .in('user_id', userIds);
 
-      if (rolesError) {
-        console.error('Error fetching roles:', rolesError);
+        if (rolesResult.error) {
+          console.error('Error fetching roles:', rolesResult.error);
+        } else {
+          rolesData = rolesResult.data;
+        }
       }
 
-      console.log('Roles data:', rolesData);
-
-      const reimbursementsWithUsers = (reimbursementsData || []).map(reimbursement => {
-        const userRole = rolesData?.find(r => r.user_id === reimbursement.user_id);
-        const displayName = userRole?.user_name || 'Usuario desconocido';
+      const reimbursementsWithUsers = (reimbursementsData || []).map((reimbursement) => {
+        const userRole = reimbursement.user_id
+          ? rolesData?.find((row) => row.user_id === reimbursement.user_id)
+          : null;
+        const displayName = reimbursement.user_id
+          ? (userRole?.user_name || 'Usuario desconocido')
+          : 'Proveedor externo';
         return {
           ...reimbursement,
           status: reimbursement.status as Reimbursement['status'],
@@ -336,48 +369,30 @@ export default function Reimbursements() {
     return uploadedProofs;
   };
 
-  const buildExpensePayload = async (reimbursement: ReimbursementWithUser): Promise<ExpenseInsert> => {
-    const { data: folioData, error: folioError } = await supabase.rpc('get_next_expense_folio_for_tenant', {
-      target_tenant_id: currentTenant!.id,
+  const invokeReimbursementAction = async (
+    action: 'approve' | 'reject' | 'reopen' | 'delete',
+    payload?: { rejectionReason?: string; paymentProof?: ReimbursementFile[] },
+  ) => {
+    if (!selectedReimbursement) {
+      throw new Error('No hay rendición seleccionada');
+    }
+
+    const { data, error } = await supabase.functions.invoke('manage-reimbursement', {
+      body: {
+        action,
+        reimbursementId: selectedReimbursement.id,
+        rejectionReason: payload?.rejectionReason,
+        paymentProof: payload?.paymentProof ?? [],
+      },
     });
-    if (folioError) throw folioError;
 
-    const supplier =
-      reimbursement.type === 'supplier_payment'
-        ? reimbursement.supplier_name || reimbursement.account_info?.holder_name || 'Proveedor'
-        : reimbursement.account_info?.holder_name || 'Rendicion';
+    if (error) {
+      throw error;
+    }
 
-    const conceptPrefix = reimbursement.type === 'supplier_payment' ? 'Pago a Proveedor' : 'Rendicion';
-    const expenseDate = new Date().toISOString().split('T')[0];
-
-    return {
-      folio: folioData || 1,
-      tenant_id: currentTenant!.id,
-      supplier,
-      expense_date: expenseDate,
-      amount: reimbursement.amount,
-      description: reimbursement.folio
-        ? `${conceptPrefix} #${reimbursement.folio}: ${reimbursement.subject}`
-        : `${conceptPrefix}: ${reimbursement.subject}`,
-    };
-  };
-
-  const createExpenseForReimbursement = async (reimbursement: ReimbursementWithUser) => {
-    const insertPayload = await buildExpensePayload(reimbursement);
-    const { error } = await supabase.from('expenses').insert(insertPayload);
-
-    if (error) throw error;
-    return insertPayload.folio;
-  };
-
-  const deleteLinkedExpense = async (expenseFolio: number) => {
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('tenant_id', currentTenant!.id)
-      .eq('folio', expenseFolio);
-
-    if (error) throw error;
+    if (data?.error) {
+      throw new Error(String(data.error));
+    }
   };
 
   const handleApprove = async () => {
@@ -390,56 +405,14 @@ export default function Reimbursements() {
     setUploadingProof(true);
     try {
       let paymentProofs: ReimbursementFile[] = [];
-      let expenseFolio = selectedReimbursement.expense_folio ?? null;
 
       if (proofFiles.length > 0) {
         paymentProofs = await uploadProofs(selectedReimbursement.id);
       }
 
-      if (!expenseFolio) {
-        expenseFolio = await createExpenseForReimbursement(selectedReimbursement);
-      }
-
-      const { error } = await supabase
-        .from('reimbursements')
-        .update({
-          status: 'approved',
-          processed_by: user?.id,
-          processed_at: new Date().toISOString(),
-          payment_proof: paymentProofs.length > 0 ? paymentProofs : null,
-          expense_folio: expenseFolio,
-        })
-        .eq('tenant_id', currentTenant.id)
-        .eq('id', selectedReimbursement.id);
-
-      if (error) {
-        if (!selectedReimbursement.expense_folio && expenseFolio) {
-          await deleteLinkedExpense(expenseFolio);
-        }
-        throw error;
-      }
-
-      // Enviar notificación SMS al creador
-      const { data: creatorData } = await supabase
-        .from('user_roles')
-        .select('phone, user_name, user_id')
-        .eq('user_id', selectedReimbursement.user_id)
-        .single();
-
-      if (creatorData?.phone) {
-        await supabase.functions.invoke('send-reimbursement-notification', {
-          body: {
-            user_phone: creatorData.phone,
-            user_name: creatorData.user_name,
-            reimbursement_type: selectedReimbursement.type,
-            subject: selectedReimbursement.subject,
-            amount: selectedReimbursement.amount,
-            status: 'approved',
-            folio: selectedReimbursement.folio,
-            user_id: creatorData.user_id,
-          },
-        });
-      }
+      await invokeReimbursementAction('approve', {
+        paymentProof: paymentProofs,
+      });
 
       toast.success(selectedReimbursement.type === 'supplier_payment' ? "Pago aprobado" : "Rendición aprobada");
       setShowApproveDialog(false);
@@ -464,41 +437,9 @@ export default function Reimbursements() {
     }
 
     try {
-      const { error } = await supabase
-        .from('reimbursements')
-        .update({
-          status: 'rejected',
-          processed_by: user?.id,
-          processed_at: new Date().toISOString(),
-          rejection_reason: rejectionReason,
-        })
-        .eq('tenant_id', currentTenant.id)
-        .eq('id', selectedReimbursement.id);
-
-      if (error) throw error;
-
-      // Enviar notificación SMS al creador
-      const { data: creatorData } = await supabase
-        .from('user_roles')
-        .select('phone, user_name, user_id')
-        .eq('user_id', selectedReimbursement.user_id)
-        .single();
-
-      if (creatorData?.phone) {
-        await supabase.functions.invoke('send-reimbursement-notification', {
-          body: {
-            user_phone: creatorData.phone,
-            user_name: creatorData.user_name,
-            reimbursement_type: selectedReimbursement.type,
-            subject: selectedReimbursement.subject,
-            amount: selectedReimbursement.amount,
-            status: 'rejected',
-            folio: selectedReimbursement.folio,
-            rejection_reason: rejectionReason,
-            user_id: creatorData.user_id,
-          },
-        });
-      }
+      await invokeReimbursementAction('reject', {
+        rejectionReason,
+      });
 
       toast.success(selectedReimbursement.type === 'supplier_payment' ? "Pago rechazado" : "Rendición rechazada");
       setShowRejectDialog(false);
@@ -518,24 +459,7 @@ export default function Reimbursements() {
     }
 
     try {
-      if (selectedReimbursement.expense_folio) {
-        await deleteLinkedExpense(selectedReimbursement.expense_folio);
-      }
-
-      const { error } = await supabase
-        .from('reimbursements')
-        .update({
-          status: 'pending',
-          processed_by: null,
-          processed_at: null,
-          rejection_reason: null,
-          payment_proof: null,
-          expense_folio: null,
-        })
-        .eq('tenant_id', currentTenant.id)
-        .eq('id', selectedReimbursement.id);
-
-      if (error) throw error;
+      await invokeReimbursementAction('reopen');
 
       toast.success(selectedReimbursement.type === 'supplier_payment' ? "Pago reabierto" : "Rendición reabierta");
       setShowReopenDialog(false);
@@ -554,28 +478,7 @@ export default function Reimbursements() {
     }
 
     try {
-      // Si tiene egreso asociado, eliminarlo primero
-      if (selectedReimbursement.expense_folio) {
-        const { error: expenseError } = await supabase
-          .from('expenses')
-          .delete()
-          .eq('tenant_id', currentTenant.id)
-          .eq('folio', selectedReimbursement.expense_folio);
-
-        if (expenseError) {
-          toast.error("Error al eliminar el egreso asociado");
-          return;
-        }
-      }
-
-      // Eliminar la rendición/pago
-      const { error } = await supabase
-        .from('reimbursements')
-        .delete()
-        .eq('tenant_id', currentTenant.id)
-        .eq('id', selectedReimbursement.id);
-
-      if (error) throw error;
+      await invokeReimbursementAction('delete');
 
       const message = selectedReimbursement.expense_folio
         ? (selectedReimbursement.type === 'supplier_payment' ? "Pago y egreso eliminados exitosamente" : "Rendición y egreso eliminados exitosamente")
@@ -593,6 +496,11 @@ export default function Reimbursements() {
 
   const downloadFile = async (path: string, name: string) => {
     try {
+      if (/^https?:\/\//i.test(path)) {
+        window.open(path, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
       const { data, error } = await supabase.storage
         .from('reimbursements')
         .download(path);
@@ -717,7 +625,7 @@ export default function Reimbursements() {
         <div>
           <Label className="text-xs font-semibold text-muted-foreground">Cotización/Respaldos</Label>
           <div className="space-y-1.5 mt-1.5">
-            {reimbursement.attachments.map((file, idx: number) => (
+            {normalizeStoredFiles(reimbursement.attachments).map((file, idx: number) => (
               <Button
                 key={idx}
                 variant="outline"
@@ -738,7 +646,7 @@ export default function Reimbursements() {
           <Label className="text-xs font-semibold text-muted-foreground">Comprobante(s)</Label>
           {Array.isArray(reimbursement.payment_proof) ? (
             <div className="space-y-1.5 mt-1.5">
-              {reimbursement.payment_proof.map((proof, idx: number) => (
+              {normalizeStoredFiles(reimbursement.payment_proof).map((proof, idx: number) => (
                 <Button
                   key={idx}
                   variant="outline"
@@ -751,20 +659,25 @@ export default function Reimbursements() {
                 </Button>
               ))}
             </div>
-          ) : reimbursement.payment_proof.path ? (
+          ) : normalizeStoredFile(reimbursement.payment_proof)?.path ? (
             <>
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full justify-start mt-1.5 h-8 text-xs"
-                onClick={() => downloadFile(reimbursement.payment_proof.path, reimbursement.payment_proof.name)}
+                onClick={() => {
+                  const proof = normalizeStoredFile(reimbursement.payment_proof!);
+                  if (proof) {
+                    void downloadFile(proof.path, proof.name);
+                  }
+                }}
               >
                 <Download className="w-3 h-3 mr-1.5" />
-                <span className="truncate">{reimbursement.payment_proof.name}</span>
+                <span className="truncate">{normalizeStoredFile(reimbursement.payment_proof!)?.name}</span>
               </Button>
-              {reimbursement.payment_proof.uploaded_at && (
+              {normalizeStoredFile(reimbursement.payment_proof!)?.uploaded_at && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  {new Date(reimbursement.payment_proof.uploaded_at).toLocaleDateString('es-CL')}
+                  {new Date(normalizeStoredFile(reimbursement.payment_proof!)!.uploaded_at!).toLocaleDateString('es-CL')}
                 </p>
               )}
             </>
@@ -821,20 +734,18 @@ export default function Reimbursements() {
             <Clock className="w-4 h-4 mr-2" />
             Reabrir
           </Button>
-          {!reimbursement.expense_folio && (
-            <Button
-              onClick={() => {
-                setSelectedReimbursement(reimbursement);
-                setShowDeleteDialog(true);
-                setDetailsOpen(false);
-              }}
-              variant="destructive"
-              className="flex-1"
-            >
-              <X className="w-4 h-4 mr-2" />
-              Eliminar
-            </Button>
-          )}
+          <Button
+            onClick={() => {
+              setSelectedReimbursement(reimbursement);
+              setShowDeleteDialog(true);
+              setDetailsOpen(false);
+            }}
+            variant="destructive"
+            className="flex-1"
+          >
+            <X className="w-4 h-4 mr-2" />
+            Eliminar
+          </Button>
         </div>
       )}
     </div>

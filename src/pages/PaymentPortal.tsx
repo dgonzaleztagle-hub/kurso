@@ -92,24 +92,16 @@ export default function PaymentPortal() {
   const [selectedDebts, setSelectedDebts] = useState<Set<string>>(new Set());
 
   const loadNotifications = useCallback(async () => {
-    const primaryQuery = await supabase
+    const { data, error } = await supabase
       .from('payment_notifications')
       .select('*')
       .eq('user_id', user?.id)
       .order('created_at', { ascending: false });
 
-    if (!primaryQuery.error) {
-      setNotifications((primaryQuery.data as PaymentNotificationRow[] | null) || []);
-      return;
+    if (error) {
+      throw error;
     }
-
-    const fallbackQuery = await supabase
-      .from('payment_notifications')
-      .select('*')
-      .eq('submitted_by', user?.id)
-      .order('created_at', { ascending: false });
-
-    setNotifications((fallbackQuery.data as PaymentNotificationRow[] | null) || []);
+    setNotifications((data as PaymentNotificationRow[] | null) || []);
   }, [user?.id]);
 
   const loadStudentData = useCallback(async () => {
@@ -403,37 +395,10 @@ export default function PaymentPortal() {
         reference: `REF-${Date.now()}`,
       };
 
-      let { data, error } = await supabase
+      const { error } = await supabase
         .from('payment_notifications')
         .insert(insertData)
         .select();
-
-      const missingColumnError = String(error?.message || '').toLowerCase();
-      if (error && (
-        missingColumnError.includes("could not find the 'bank' column") ||
-        missingColumnError.includes("column payment_notifications.user_id does not exist") ||
-        missingColumnError.includes("column payment_notifications.payer_name does not exist") ||
-        missingColumnError.includes("column payment_notifications.payment_details does not exist") ||
-        missingColumnError.includes("column payment_notifications.reference does not exist")
-      )) {
-        const legacyInsertData: PaymentNotificationInsert = {
-          tenant_id: student.tenant_id,
-          student_id: student.id,
-          amount: paymentAmount,
-          payment_date: format(paymentDate, 'yyyy-MM-dd'),
-          status: 'pending',
-          submitted_by: user!.id,
-          voucher_url: null,
-        };
-
-        const legacyResult = await supabase
-          .from('payment_notifications')
-          .insert(legacyInsertData)
-          .select();
-
-        data = legacyResult.data;
-        error = legacyResult.error;
-      }
 
       if (error) {
         console.error('Error inserting payment notification:', error);

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.78.0";
+import { canManageParentUsers } from "../_shared/parentUserPermissions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
         .select("role")
         .eq("tenant_id", tenantId)
         .eq("user_id", callerUser.id)
-        .eq("role", "owner")
+        .in("role", ["owner", "master", "admin"])
         .eq("status", "active")
         .maybeSingle(),
       supabaseAdmin
@@ -90,7 +91,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const canManageParents = Boolean(appUser?.is_superadmin || ownerTenant || memberRole);
+    const canManageParents = canManageParentUsers({
+      isSuperadmin: appUser?.is_superadmin,
+      ownsTenant: Boolean(ownerTenant),
+      tenantRole: memberRole?.role ?? null,
+    });
     if (!canManageParents) {
       return new Response(
         JSON.stringify({ error: "No autorizado para crear apoderados en este tenant" }),

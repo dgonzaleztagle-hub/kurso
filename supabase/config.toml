@@ -24,6 +24,9 @@ verify_jwt = true
 [functions.check-default-password]
 verify_jwt = true
 
+[functions.check-subscriptions]
+verify_jwt = true
+
 [functions.reset-password-by-email]
 verify_jwt = true
 
@@ -36,8 +39,20 @@ verify_jwt = false
 [functions.mercadopago-checkout]
 verify_jwt = true
 
+[functions.manage-reimbursement]
+verify_jwt = true
+
 [functions.mercadopago-webhook]
 verify_jwt = false
 
 [functions.public-branding]
 verify_jwt = false
+
+[functions.send-payment-notification]
+verify_jwt = true
+
+[functions.send-reimbursement-notification]
+verify_jwt = true
+
+[functions.send-whatsapp-notification]
+verify_jwt = true

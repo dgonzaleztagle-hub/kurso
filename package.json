@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:business": "npx tsx --test tests/unit/paymentNotificationEntries.test.ts tests/unit/parentUserPermissions.test.ts tests/unit/reimbursementActions.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "generate-accounts": "tsx scripts/generate_accounts.ts",
