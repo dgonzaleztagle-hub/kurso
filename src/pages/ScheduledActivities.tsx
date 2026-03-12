@@ -32,6 +32,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 import { toast } from "sonner";
+import { isStaffRole } from "@/lib/roles";
 
 const COMMON_UNITS = [
   "gramos",
@@ -348,23 +349,44 @@ export default function ScheduledActivities() {
       .from("scheduled_activities")
       .select("id")
       .eq("tenant_id", currentTenant.id)
-      .eq("name", activity.name)
-      .eq("scheduled_date", activity.activity_date)
+      .eq("activity_id", Number(activity.id))
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (existingError) throw existingError;
     if (existing?.id) return String(existing.id);
+
+    const { data: legacyMatch, error: legacyMatchError } = await supabase
+      .from("scheduled_activities")
+      .select("id")
+      .eq("tenant_id", currentTenant.id)
+      .eq("name", activity.name)
+      .eq("scheduled_date", activity.activity_date)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (legacyMatchError) throw legacyMatchError;
+    if (legacyMatch?.id) {
+      await supabase
+        .from("scheduled_activities")
+        .update({ activity_id: Number(activity.id) })
+        .eq("id", legacyMatch.id);
+      return String(legacyMatch.id);
+    }
+
     if (!createIfMissing) return null;
 
     const { data: created, error: createError } = await supabase
       .from("scheduled_activities")
       .insert({
         tenant_id: currentTenant.id,
+        activity_id: Number(activity.id),
         name: activity.name,
         scheduled_date: activity.activity_date,
-        amount: Number(activity.amount || 0),
+        fee_amount: Number(activity.amount || 0),
+        is_with_fee: Boolean(activity.is_with_fee),
         is_with_donations: activity.is_with_donations,
         completed: activity.completed,
       } as ScheduledActivityInsert)
@@ -413,6 +435,7 @@ export default function ScheduledActivities() {
       const nextDescription = buildDescription(editingActivity?.description || null, {
         requires_management: formData.requires_management,
         is_with_donations: formData.is_with_donations,
+        is_with_fee: formData.is_with_fee,
         fee_amount: formData.fee_amount,
         completed: editingActivity?.completed || false,
       });
@@ -457,6 +480,21 @@ export default function ScheduledActivities() {
           is_with_donations: formData.is_with_donations,
           completed: editingActivity?.completed || false,
         });
+      }
+
+      if (activityId) {
+        await getScheduledActivityId({
+          id: activityId,
+          name: formData.name.trim(),
+          activity_date: formData.activity_date,
+          amount: formData.is_with_fee ? Number(formData.fee_amount || 0) : 0,
+          description: nextDescription,
+          requires_management: formData.requires_management,
+          is_with_fee: formData.is_with_fee,
+          fee_amount: formData.is_with_fee ? Number(formData.fee_amount || 0) : null,
+          is_with_donations: formData.is_with_donations,
+          completed: editingActivity?.completed || false,
+        }, true);
       }
 
       setDialogOpen(false);
@@ -1007,7 +1045,7 @@ export default function ScheduledActivities() {
     [donations, eligibleDonationStudents],
   );
 
-  const canReopenActivities = roleInCurrentTenant === "owner" || roleInCurrentTenant === "admin" || roleInCurrentTenant === "master" || userRole === "master";
+  const canReopenActivities = isStaffRole(roleInCurrentTenant) || isStaffRole(userRole);
 
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Cargando actividades...</div>;

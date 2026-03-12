@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tenant } from '@/types/db';
 import type { Enums } from '@/integrations/supabase/types';
 import { useAuth } from './AuthContext';
+import { normalizeRole } from '@/lib/roles';
 
 interface TenantContextType {
     currentTenant: Tenant | null;
@@ -52,7 +53,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
             console.warn('Could not resolve tenant role from tenant_members, using safe fallback:', error);
         }
 
-        setRoleInCurrentTenant(data?.role ?? null);
+        setRoleInCurrentTenant(normalizeRole(data?.role) ?? data?.role ?? null);
     }, [appUser?.is_superadmin]);
 
     const fetchTenants = useCallback(async (preferredTenantId?: string, attempt = 0) => {

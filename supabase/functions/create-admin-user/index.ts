@@ -140,13 +140,13 @@ Deno.serve(async (req) => {
       // No fallamos fatalmente aquí, pero es bueno loguearlo
     }
 
-    // 3. Asignar membresía al Tenant (Rol staff/admin)
+    // 3. Asignar membresía al Tenant con rol canónico
     const { error: memberError } = await supabaseAdmin
       .from('tenant_members')
       .insert({
         tenant_id: tenantId,
         user_id: newUser.user.id,
-        role: 'admin',
+        role: 'staff',
         status: 'active'
       })
 
@@ -163,12 +163,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // 4. (Opcional) Legacy support: user_roles
-    // Intentamos escribir en user_roles por si acaso, pero ignoramos error si la tabla no existe o falla
+    // 4. Compatibilidad: user_roles sigue usándose para first_login y metadatos
     try {
       await supabaseAdmin.from('user_roles').insert({
         user_id: newUser.user.id,
-        role: 'admin',
+        role: 'staff',
         user_name: userName,
         position: position,
         phone: phone || null

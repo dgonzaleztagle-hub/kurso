@@ -3,12 +3,13 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser } from '@/types/db';
+import { normalizeRole, type AppRole as KnownRole } from '@/lib/roles';
 
 type AppModule = 'dashboard' | 'students' | 'income' | 'expenses' | 'debt_reports' | 'payment_reports' | 'balance' | 'import' | 'movements' | 'activities' | 'activity_exclusions' | 'activity_payments' | 'monthly_fees' | 'payment_notifications' | 'reimbursements' | 'scheduled_activities' | 'student_profile' | 'credit_management' | 'credit_movements';
 
 // Importante: El rol ya no es global, sino por Tenant. Pero mantenemos userRole para compatibilidad temp con Layout
 // En el futuro, Layout debe leer useTenant()
-type LegacyRole = 'master' | 'admin' | 'alumnos' | 'owner' | 'member' | 'student';
+type LegacyRole = KnownRole;
 type AuthErrorLike = AuthError | Error;
 type SignInResult = { error: AuthErrorLike | null };
 type SignUpResult = {
@@ -135,10 +136,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (roleData) {
         // Normalize role
         const dbRole = roleData.role as LegacyRole;
-        setUserRole(dbRole);
+        setUserRole(normalizeRole(dbRole) ?? dbRole);
         setFirstLogin(roleData.first_login || false);
 
-        if (dbRole === 'admin') {
+        if (normalizeRole(dbRole) === 'staff') {
           const { data: permissionRows, error: permissionError } = await supabase
             .from('admin_permissions')
             .select('module')
@@ -158,7 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         // Fallback if no user_roles entry
-        if (appData?.is_superadmin) setUserRole('master');
+        if (appData?.is_superadmin) setUserRole('owner');
         else setUserRole(null);
         setFirstLogin(false);
         setAdminPermissions([]);
@@ -222,8 +223,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Legacy Permission Check
   const hasPermission = (module: AppModule) => {
-    if (userRole === 'master' || userRole === 'owner') return true;
-    if (userRole === 'admin') return !adminPermissions.includes(module);
+    const normalizedRole = normalizeRole(userRole);
+    if (normalizedRole === 'owner') return true;
+    if (normalizedRole === 'staff') return !adminPermissions.includes(module);
     return false;
   };
 

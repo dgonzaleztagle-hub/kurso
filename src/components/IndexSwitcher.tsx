@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import Dashboard from "@/pages/Dashboard";
 import Landing from "@/pages/Landing";
 import { Layout } from "@/components/Layout";
+import { isGuardianRole } from "@/lib/roles";
 
 import { Loader2 } from "lucide-react";
 
@@ -39,7 +40,7 @@ export const IndexSwitcher = () => {
     }
 
     // ROLE REDIRECTION: Students/Parents go to Mobile View
-    if (roleInCurrentTenant === 'student' || roleInCurrentTenant === 'alumnos') {
+    if (isGuardianRole(roleInCurrentTenant)) {
         return <Navigate to="/mobile" replace />;
     }
 

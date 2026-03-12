@@ -65,7 +65,7 @@ serve(async (req) => {
         .select("role")
         .eq("tenant_id", tenantId)
         .eq("user_id", callerUser.id)
-        .in("role", ["owner", "master", "admin"])
+        .in("role", ["owner", "staff", "master", "admin"])
         .eq("status", "active")
         .maybeSingle(),
     ]);
@@ -150,13 +150,13 @@ serve(async (req) => {
       await supabaseAdmin.from("tenant_members").upsert({
         tenant_id: tenantId,
         user_id: userId,
-        role: "alumnos",
+        role: "guardian",
         status: "active",
       }, { onConflict: "tenant_id,user_id" });
 
       await supabaseAdmin.from("user_roles").upsert({
         user_id: userId,
-        role: "alumnos",
+        role: "guardian",
       }, { onConflict: "user_id" });
 
       const { error: linkError } = await supabaseAdmin

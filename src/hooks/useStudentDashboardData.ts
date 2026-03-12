@@ -62,8 +62,8 @@ type StudentDashboardDataState = {
 };
 
 type PaymentRow = Tables<"payments">;
-type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "amount" | "activity_date">;
-type ScheduledActivityRow = Pick<Tables<"scheduled_activities">, "id" | "name" | "scheduled_date" | "completed">;
+type ActivityRow = Pick<Tables<"activities">, "id" | "name" | "amount" | "activity_date" | "description">;
+type ScheduledActivityRow = Pick<Tables<"scheduled_activities">, "id" | "activity_id" | "name" | "scheduled_date" | "completed">;
 type NotificationRow = Pick<Tables<"dashboard_notifications">, "id" | "message" | "created_at">;
 type StudentCreditRow = Pick<Tables<"student_credits">, "amount">;
 type CreditApplicationRow = Pick<Tables<"credit_applications">, "amount" | "reversed_amount" | "target_type" | "target_month" | "target_activity_id">;
@@ -86,6 +86,23 @@ const initialState: StudentDashboardDataState = {
   creditBalance: 0,
   loading: true,
 };
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const parseActivityMetadata = (description: string | null | undefined) => {
+  if (!description) return {};
+
+  try {
+    const parsed = JSON.parse(description);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+};
+
+const buildActivityKey = (name: string, date: string | null | undefined) =>
+  `${String(name || "").trim().toUpperCase()}|${String(date || "")}`;
 
 export async function fetchStudentDashboardData(studentId: string | number) {
   return fetchStudentDashboardDataForPeriod(studentId, "current");
@@ -115,8 +132,8 @@ export async function fetchStudentDashboardDataForPeriod(
 
   const [tenantResult, activitiesResult, scheduledActivitiesResult, notificationsResult] = await Promise.all([
     supabase.from("tenants").select("settings").eq("id", tenantId).maybeSingle(),
-    supabase.from("activities").select("id, name, amount, activity_date").eq("tenant_id", tenantId),
-    supabase.from("scheduled_activities").select("id, name, scheduled_date, completed").eq("tenant_id", tenantId).order("scheduled_date", { ascending: false }),
+    supabase.from("activities").select("id, name, amount, activity_date, description").eq("tenant_id", tenantId),
+    supabase.from("scheduled_activities").select("id, activity_id, name, scheduled_date, completed").eq("tenant_id", tenantId).order("scheduled_date", { ascending: false }),
     supabase.from("dashboard_notifications").select("id, message, created_at").eq("tenant_id", tenantId).eq("is_active", true).order("created_at", { ascending: false }).limit(5),
   ]);
 
@@ -128,38 +145,58 @@ export async function fetchStudentDashboardDataForPeriod(
   const fullName = `${studentResult.data.first_name || ""} ${studentResult.data.last_name || ""}`.trim() || "Sin Nombre";
   const scheduledActivities = ((scheduledActivitiesResult.data as ScheduledActivityRow[] | null) || [])
     .filter((activity) => Boolean(activity.id) && Boolean(activity.name) && Boolean(activity.scheduled_date));
+  const scheduledByActivityId = new Map<number, ScheduledActivityRow>();
+  const scheduledByKey = new Map<string, ScheduledActivityRow>();
+  scheduledActivities.forEach((activity) => {
+    if (typeof activity.activity_id === "number") {
+      scheduledByActivityId.set(activity.activity_id, activity);
+    }
+    scheduledByKey.set(buildActivityKey(activity.name, activity.scheduled_date), activity);
+  });
 
   const activeActivitiesMap = new Map<string, StudentDashboardScheduledActivity>();
-  scheduledActivities.forEach((activity) => {
-    if (activity.completed === true) return;
-    activeActivitiesMap.set(String(activity.id), {
-      id: String(activity.id),
-      name: activity.name,
-      scheduled_date: activity.scheduled_date,
-      completed: false,
-      source: "scheduled",
-    });
-  });
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   for (const activity of ((activitiesResult.data as ActivityRow[] | null) || [])) {
     if (!activity.activity_date) continue;
+    const metadata = parseActivityMetadata(activity.description);
+    const isCompleted = Boolean(metadata.completed);
+    if (isCompleted) continue;
 
     const activityDate = new Date(activity.activity_date);
     activityDate.setHours(0, 0, 0, 0);
     if (activityDate < today) continue;
 
-    const mergedKey = `activity-${activity.id}`;
-    activeActivitiesMap.set(mergedKey, {
-      id: mergedKey,
+    const scheduledActivity =
+      scheduledByActivityId.get(activity.id) ||
+      scheduledByKey.get(buildActivityKey(activity.name, activity.activity_date));
+    const resolvedId = scheduledActivity?.id ? String(scheduledActivity.id) : `activity-${activity.id}`;
+    activeActivitiesMap.set(resolvedId, {
+      id: resolvedId,
       name: activity.name,
       scheduled_date: activity.activity_date,
       completed: false,
-      source: "activity",
+      source: scheduledActivity ? "scheduled" : "activity",
     });
   }
+
+  scheduledActivities.forEach((activity) => {
+    const activityDate = new Date(activity.scheduled_date);
+    activityDate.setHours(0, 0, 0, 0);
+    if (activity.completed === true || activityDate < today) return;
+
+    if (!activeActivitiesMap.has(String(activity.id))) {
+      activeActivitiesMap.set(String(activity.id), {
+        id: String(activity.id),
+        name: activity.name,
+        scheduled_date: activity.scheduled_date,
+        completed: false,
+        source: "scheduled",
+      });
+    }
+  });
 
   const activeActivities = Array.from(activeActivitiesMap.values())
     .filter((activity) => {
@@ -172,6 +209,11 @@ export async function fetchStudentDashboardDataForPeriod(
   const donationsMap: { [activityId: string]: StudentDashboardDonation[] } = {};
 
   for (const nextAct of activeActivities) {
+    if (!isUuid(nextAct.id)) {
+      donationsMap[nextAct.id] = [];
+      continue;
+    }
+
     const { data: nextActDonations, error: donationsError } = await supabase
       .from("activity_donations")
       .select("id, name, amount, unit, donated_at")
@@ -266,7 +308,7 @@ export async function fetchStudentDashboardDataForPeriod(
     monthlyDebtItems,
     activityDebtItems,
     paymentHistory,
-    activities: scheduledActivities,
+    activities: activeActivities,
     notifications: ((notificationsResult.data as NotificationRow[] | null) || []) as StudentDashboardNotification[],
     upcomingActivities: activeActivities,
     activityDonations: donationsMap,

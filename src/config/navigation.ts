@@ -86,7 +86,6 @@ export const mainNavigation: NavCategory[] = [
         icon: Calendar,
         isTab: true,
         items: [
-            { name: "Actividades", href: "/activities", icon: Calendar, module: "activities" },
             { name: "Exclusiones", href: "/activity-exclusions", icon: UserX, module: "activity_exclusions" },
             { name: "Calendarización", href: "/scheduled-activities", icon: CalendarClock, module: "scheduled_activities" },
         ],
@@ -117,8 +116,8 @@ export const mainNavigation: NavCategory[] = [
         isTab: true,
         items: [
             { name: "Marca Blanca", href: "/branding", icon: Building2 },
-            { name: "Usuarios", href: "/user-management", icon: UserCog, masterOnly: true },
-            { name: "Historial de Cambios", href: "/admin/audit-logs", icon: ShieldCheck, masterOnly: true },
+            { name: "Usuarios", href: "/user-management", icon: UserCog },
+            { name: "Historial de Cambios", href: "/admin/audit-logs", icon: ShieldCheck },
             { name: "Formularios", href: "/formularios", icon: FileQuestion },
             { name: "Cierre de Año", href: "/close-year", icon: Archive, masterOnly: true }, // Restricted to admins/owners
         ],

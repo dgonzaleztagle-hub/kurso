@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { LogOut, User, Users, Phone, Mail, GraduationCap, Pencil, Save, X } from "lucide-react";
 import { toast } from "sonner";
+import { isGuardianRole } from "@/lib/roles";
 
 interface Student {
     id: string;
@@ -36,7 +37,7 @@ export default function MobileProfile() {
 
     const fetchStudents = useCallback(async () => {
         try {
-            if (userRole === 'alumnos') {
+            if (isGuardianRole(userRole)) {
                 const { data, error } = await supabase
                     .from('user_students')
                     .select(`
@@ -57,7 +58,7 @@ export default function MobileProfile() {
                     setMyStudents(list);
                 }
             } else {
-                // Guardian/staff view: children associated in this tenant
+                // Staff/owner view: children associated in this tenant
                 const { data, error } = await supabase
                     .from('student_guardians')
                     .select(`
@@ -123,7 +124,7 @@ export default function MobileProfile() {
             .substring(0, 2);
     };
 
-    const isStudentRole = userRole === 'alumnos';
+    const isStudentRole = isGuardianRole(userRole);
 
     return (
         <div className="pb-24 pt-6 px-4 max-w-md mx-auto min-h-screen bg-gray-50/50 dark:bg-gray-900/50">

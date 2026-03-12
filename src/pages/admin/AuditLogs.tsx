@@ -15,18 +15,16 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Search, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Json, Tables } from "@/integrations/supabase/types";
 
 interface AuditLog {
     id: string;
-    created_at: string;
-    user_id: string;
+    created_at: string | null;
+    user_id: string | null;
     action: string;
-    entity_name: string;
-    entity_id: string;
-    details: Json | null;
-    user_email?: string; // Loaded via join or secondary query if needed, or stored in log
+    table_name: string | null;
+    record_id: string | null;
+    payload: Json | null;
 }
 
 type AppUserLookup = Tables<"app_users">;
@@ -122,7 +120,7 @@ export default function AuditLogs() {
     };
 
     const filteredLogs = logs.filter(log =>
-        (log.entity_name && log.entity_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (log.table_name && log.table_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (log.action && log.action.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (log.user_id && log.user_id.toLowerCase().includes(searchTerm.toLowerCase()))
     );
@@ -191,7 +189,7 @@ export default function AuditLogs() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="font-mono text-sm">
-                                                    {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss", { locale: es })}
+                                                    {log.created_at ? format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss", { locale: es }) : "Sin fecha"}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge className={getActionColor(log.action)}>
@@ -199,7 +197,7 @@ export default function AuditLogs() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="font-medium">
-                                                    {formatEntity(log.entity_name)}
+                                                    {formatEntity(log.table_name || "")}
                                                 </TableCell>
                                                 <TableCell className="text-sm" title={log.user_id}>
                                                     {userMap[log.user_id] || (log.user_id ? "Usuario Sistema" : "Anónimo")}
@@ -212,7 +210,10 @@ export default function AuditLogs() {
                                                         <div className="p-4 space-y-2">
                                                             <h4 className="text-sm font-semibold text-muted-foreground mb-2">Detalles del Cambio</h4>
                                                             <pre className="bg-black/50 p-4 rounded-md overflow-x-auto text-xs font-mono text-green-400 border border-green-900/30">
-                                                                {JSON.stringify(log.details, null, 2)}
+                                                                {JSON.stringify({
+                                                                    record_id: log.record_id,
+                                                                    payload: log.payload,
+                                                                }, null, 2)}
                                                             </pre>
                                                         </div>
                                                     </TableCell>

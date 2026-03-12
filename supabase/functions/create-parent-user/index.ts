@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         .select("role")
         .eq("tenant_id", tenantId)
         .eq("user_id", callerUser.id)
-        .in("role", ["owner", "master", "admin"])
+        .in("role", ["owner", "staff", "master", "admin"])
         .eq("status", "active")
         .maybeSingle(),
       supabaseAdmin
@@ -143,10 +143,10 @@ Deno.serve(async (req) => {
 
     const { error: memberError } = await supabaseAdmin
       .from("tenant_members")
-      .insert({
+        .insert({
         tenant_id: tenantId,
         user_id: newUserId,
-        role: "alumnos",
+        role: "guardian",
         status: "active",
       });
 
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       .from("user_roles")
       .upsert({
         user_id: newUserId,
-        role: "alumnos",
+        role: "guardian",
         first_login: true,
         user_name: resolvedDisplayName,
       }, { onConflict: "user_id" });

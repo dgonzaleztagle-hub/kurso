@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 
 import { canManageParentUsers } from "../../supabase/functions/_shared/parentUserPermissions.ts";
 
-test("canManageParentUsers allows superadmin, owner and admin roles", () => {
+test("canManageParentUsers allows superadmin, owner and staff roles", () => {
   assert.equal(canManageParentUsers({ isSuperadmin: true }), true);
   assert.equal(canManageParentUsers({ ownsTenant: true }), true);
   assert.equal(canManageParentUsers({ tenantRole: "owner" }), true);
+  assert.equal(canManageParentUsers({ tenantRole: "staff" }), true);
   assert.equal(canManageParentUsers({ tenantRole: "admin" }), true);
 });
 

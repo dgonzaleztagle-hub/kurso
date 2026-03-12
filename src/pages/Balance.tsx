@@ -49,6 +49,7 @@ type PaymentRow = Tables<"payments">;
 type ExpenseRow = Tables<"expenses">;
 type OpeningBalanceRow = OpeningBalance;
 type QueryResult<T> = Promise<{ data: T[] | null; error: PostgrestError | null }>;
+const formatClp = (value: number) => `$${Math.round(Number(value || 0)).toLocaleString("es-CL")}`;
 
 export default function Balance() {
   const { currentTenant } = useTenant();
@@ -315,7 +316,7 @@ export default function Balance() {
       doc.setTextColor(34, 197, 94);
       doc.text("INGRESOS", 36, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${totalIncome.toLocaleString("es-CL")}`, 36, yPos + 14, { align: "center" });
+      doc.text(formatClp(totalIncome), 36, yPos + 14, { align: "center" });
 
       doc.setFillColor(255, 247, 237);
       doc.roundedRect(61.5, yPos, 42, 20, 2, 2, 'F');
@@ -323,7 +324,7 @@ export default function Balance() {
       doc.setTextColor(234, 88, 12);
       doc.text("SALDO INICIAL", 82.5, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${openingBalance.toLocaleString("es-CL")}`, 82.5, yPos + 14, { align: "center" });
+      doc.text(formatClp(openingBalance), 82.5, yPos + 14, { align: "center" });
 
       doc.setFillColor(254, 242, 242);
       doc.roundedRect(108, yPos, 42, 20, 2, 2, 'F');
@@ -331,7 +332,7 @@ export default function Balance() {
       doc.setTextColor(220, 38, 38);
       doc.text("EGRESOS", 129, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${totalExpenses.toLocaleString("es-CL")}`, 129, yPos + 14, { align: "center" });
+      doc.text(formatClp(totalExpenses), 129, yPos + 14, { align: "center" });
 
       const balanceColor = balance >= 0 ? [30, 58, 138] : [220, 38, 38];
       doc.setFillColor(balance >= 0 ? 240 : 254, balance >= 0 ? 245 : 242, balance >= 0 ? 255 : 242);
@@ -340,7 +341,7 @@ export default function Balance() {
       doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
       doc.text("SALDO BANCO", 174.75, yPos + 6, { align: "center" });
       doc.setFontSize(12);
-      doc.text(`$${balance.toLocaleString("es-CL")}`, 174.75, yPos + 14, { align: "center" });
+      doc.text(formatClp(balance), 174.75, yPos + 14, { align: "center" });
 
       yPos += 30;
 
@@ -387,7 +388,7 @@ export default function Balance() {
           doc.text(item.count.toString(), 140, yPos);
         }
         doc.setTextColor(34, 197, 94);
-        doc.text(`$${item.amount.toLocaleString("es-CL")}`, 190, yPos, { align: "right" });
+        doc.text(formatClp(item.amount), 190, yPos, { align: "right" });
         yPos += 6;
       });
 
@@ -398,7 +399,7 @@ export default function Balance() {
       doc.setTextColor(34, 197, 94);
       doc.setFontSize(10);
       doc.text("TOTAL INGRESOS", 20, yPos + 2);
-      doc.text(`$${totalIncome.toLocaleString("es-CL")}`, 190, yPos + 2, { align: "right" });
+      doc.text(formatClp(totalIncome), 190, yPos + 2, { align: "right" });
       yPos += 15;
 
       // Expense Table
@@ -449,7 +450,7 @@ export default function Balance() {
           doc.text(item.count.toString(), 140, yPos);
         }
         doc.setTextColor(220, 38, 38);
-        doc.text(`$${item.amount.toLocaleString("es-CL")}`, 190, yPos, { align: "right" });
+        doc.text(formatClp(item.amount), 190, yPos, { align: "right" });
         yPos += 6;
       });
 
@@ -460,7 +461,7 @@ export default function Balance() {
       doc.setTextColor(220, 38, 38);
       doc.setFontSize(10);
       doc.text("TOTAL EGRESOS", 20, yPos + 2);
-      doc.text(`$${totalExpenses.toLocaleString("es-CL")}`, 190, yPos + 2, { align: "right" });
+      doc.text(formatClp(totalExpenses), 190, yPos + 2, { align: "right" });
       yPos += 15;
 
       // Final balance
@@ -476,7 +477,7 @@ export default function Balance() {
       doc.setFontSize(12);
       doc.text("SALDO FINAL", 20, yPos + 4);
       doc.setFontSize(14);
-      doc.text(`$${balance.toLocaleString("es-CL")}`, 190, yPos + 4, { align: "right" });
+      doc.text(formatClp(balance), 190, yPos + 4, { align: "right" });
 
       // Signature
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -537,7 +538,7 @@ export default function Balance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              ${totalIncome.toLocaleString("es-CL")}
+              {formatClp(totalIncome)}
             </div>
           </CardContent>
         </Card>
@@ -549,7 +550,7 @@ export default function Balance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              ${totalExpenses.toLocaleString("es-CL")}
+              {formatClp(totalExpenses)}
             </div>
           </CardContent>
         </Card>
@@ -561,7 +562,7 @@ export default function Balance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              ${openingBalance.toLocaleString("es-CL")}
+              {formatClp(openingBalance)}
             </div>
           </CardContent>
         </Card>
@@ -573,7 +574,7 @@ export default function Balance() {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${balance >= 0 ? 'text-primary' : 'text-red-600'}`}>
-              ${balance.toLocaleString("es-CL")}
+              {formatClp(balance)}
             </div>
           </CardContent>
         </Card>
@@ -635,7 +636,7 @@ export default function Balance() {
                       <TableCell className="text-right">{item.count}</TableCell>
                     )}
                     <TableCell className="text-right font-semibold text-green-600">
-                      ${item.amount.toLocaleString("es-CL")}
+                      {formatClp(item.amount)}
                     </TableCell>
                   </TableRow>
                 ))
@@ -644,7 +645,7 @@ export default function Balance() {
                 <TableCell>TOTAL INGRESOS</TableCell>
                 {viewType === "detailed" && <TableCell></TableCell>}
                 <TableCell className="text-right text-green-600">
-                  ${totalIncome.toLocaleString("es-CL")}
+                  {formatClp(totalIncome)}
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -687,7 +688,7 @@ export default function Balance() {
                       <TableCell className="text-right">{item.count}</TableCell>
                     )}
                     <TableCell className="text-right font-semibold text-red-600">
-                      ${item.amount.toLocaleString("es-CL")}
+                      {formatClp(item.amount)}
                     </TableCell>
                   </TableRow>
                 ))
@@ -696,7 +697,7 @@ export default function Balance() {
                 <TableCell>TOTAL EGRESOS</TableCell>
                 {viewType === "detailed" && <TableCell></TableCell>}
                 <TableCell className="text-right text-red-600">
-                  ${totalExpenses.toLocaleString("es-CL")}
+                  {formatClp(totalExpenses)}
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -715,7 +716,7 @@ export default function Balance() {
           <div className="flex justify-between items-center text-lg">
             <span className="font-medium">Saldo inicial + Ingresos - Egresos =</span>
             <span className={`text-3xl font-bold ${balance >= 0 ? 'text-primary' : 'text-red-600'}`}>
-              ${balance.toLocaleString("es-CL")}
+              {formatClp(balance)}
             </span>
           </div>
         </CardContent>
@@ -744,14 +745,14 @@ export default function Balance() {
                     <TableCell className="font-medium">{item.concept}</TableCell>
                     <TableCell className="text-right">{item.count}</TableCell>
                     <TableCell className={`text-right font-semibold ${selectedType === "income" ? "text-green-600" : "text-red-600"}`}>
-                      ${item.amount.toLocaleString("es-CL")}
+                      {formatClp(item.amount)}
                     </TableCell>
                   </TableRow>
                 ))}
                 <TableRow className={selectedType === "income" ? "bg-green-50 font-bold" : "bg-red-50 font-bold"}>
                   <TableCell colSpan={2}>TOTAL</TableCell>
                   <TableCell className={`text-right ${selectedType === "income" ? "text-green-600" : "text-red-600"}`}>
-                    ${getDetailedItemsForCategory().reduce((sum, item) => sum + item.amount, 0).toLocaleString("es-CL")}
+                    {formatClp(getDetailedItemsForCategory().reduce((sum, item) => sum + item.amount, 0))}
                   </TableCell>
                 </TableRow>
               </TableBody>

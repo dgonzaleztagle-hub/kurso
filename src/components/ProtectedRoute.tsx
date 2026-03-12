@@ -2,7 +2,7 @@ import { ReactNode, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
-import { hasAnyRoleAccess } from '@/lib/roles';
+import { hasAnyRoleAccess, isGuardianRole, normalizeRole } from '@/lib/roles';
 
 type AppModule =
   | 'dashboard'
@@ -27,7 +27,7 @@ type AppModule =
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  allowedRoles?: ('master' | 'admin' | 'alumnos' | 'owner')[];
+  allowedRoles?: string[];
   requiredModule?: AppModule;
 }
 
@@ -37,7 +37,8 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: Prote
   const navigate = useNavigate();
   const location = useLocation();
   const effectiveRole = roleInCurrentTenant || userRole;
-  const isModuleAllowed = !requiredModule || effectiveRole !== 'admin' || !adminPermissions.includes(requiredModule);
+  const normalizedRole = normalizeRole(effectiveRole);
+  const isModuleAllowed = !requiredModule || normalizedRole !== 'staff' || !adminPermissions.includes(requiredModule);
 
   useEffect(() => {
     if (!loading && !tenantLoading) {
@@ -46,7 +47,7 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredModule }: Prote
           state: { from: location.pathname + location.search },
         });
       } else if (allowedRoles && !hasAnyRoleAccess(effectiveRole, allowedRoles)) {
-        if (effectiveRole === 'alumnos' || effectiveRole === 'student') {
+        if (isGuardianRole(effectiveRole)) {
           navigate('/mobile');
         } else {
           navigate('/');

@@ -4,7 +4,7 @@ type PermissionInputs = {
   tenantRole?: string | null;
 };
 
-const MANAGE_PARENT_ROLES = new Set(["owner", "master", "admin"]);
+const MANAGE_PARENT_ROLES = new Set(["owner", "staff", "master", "admin"]);
 
 export function canManageParentUsers({
   isSuperadmin,

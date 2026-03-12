@@ -14,6 +14,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { AdminRoute } from "./components/AdminRoute";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { MobileLayout } from "./components/layouts/MobileLayout";
+import { isGuardianRole } from "./lib/roles";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Students = lazy(() => import("./pages/Students"));
@@ -82,7 +83,7 @@ const queryClient = new QueryClient();
 function AppRoutes() {
   // CHECK: First Login
   const { firstLogin, userRole, refreshUserData } = useAuth();
-  if (firstLogin && (userRole === 'alumnos' || userRole === 'admin' || userRole === 'master' || userRole === 'owner')) {
+  if (firstLogin && (isGuardianRole(userRole) || userRole === 'staff' || userRole === 'owner')) {
     return <FirstLoginPasswordChange onPasswordChanged={refreshUserData} />;
   }
 
@@ -112,7 +113,7 @@ function AppRoutes() {
 
       {/* Tenant Admin Routes */}
       <Route path="/close-year" element={
-        <ProtectedRoute allowedRoles={['owner', 'master', 'admin']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout>
             <CloseYear />
           </Layout>
@@ -133,27 +134,27 @@ function AppRoutes() {
       <Route path="/casos/transparencia-total-colegio-chile" element={<ImplementacionExitosa />} />
       <Route path="/formulario/:id" element={<PublicForm />} />
       <Route path="/donaciones/:activityId" element={
-        <ProtectedRoute allowedRoles={['alumnos']}>
+        <ProtectedRoute allowedRoles={['guardian']}>
           <SelectDonation />
         </ProtectedRoute>
       } />
       <Route path="/formularios" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <FormList />
         </ProtectedRoute>
       } />
       <Route path="/formularios/nuevo" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <FormBuilder />
         </ProtectedRoute>
       } />
       <Route path="/formularios/:id/editar" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <FormBuilder />
         </ProtectedRoute>
       } />
       <Route path="/formularios/:id/respuestas" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <FormResponses />
         </ProtectedRoute>
       } />
@@ -163,153 +164,153 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/user-management" element={
-        <ProtectedRoute allowedRoles={['master', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout><UserManagement /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/branding" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout><TenantBranding /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/credit-management" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="credit_management">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="credit_management">
           <Layout><CreditManagement /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/credit-movements" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="credit_movements">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="credit_movements">
           <Layout><CreditMovements /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/student-profile" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="student_profile">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="student_profile">
           <Layout><StudentProfile /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/" element={<IndexSwitcher />} />
       <Route path="/admin/rollover" element={
-        <ProtectedRoute allowedRoles={['owner', 'master', 'admin']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <YearRolloverWizard />
         </ProtectedRoute>
       } />
       <Route path="/dashboard" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="dashboard">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="dashboard">
           <Layout><Dashboard /></Layout>
         </ProtectedRoute>
       } />
 
       <Route path="/student-dashboard" element={
-        <ProtectedRoute allowedRoles={['alumnos']}>
+        <ProtectedRoute allowedRoles={['guardian']}>
           <Navigate to="/mobile/board" replace />
         </ProtectedRoute>
       } />
 
       <Route path="/students" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="students">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="students">
           <Layout><Students /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/income" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="income">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="income">
           <Layout><Income /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/expenses" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="expenses">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="expenses">
           <Layout><Expenses /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/debt-reports" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="debt_reports">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="debt_reports">
           <Layout><DebtReports /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/payment-reports" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="payment_reports">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="payment_reports">
           <Layout><PaymentReports /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/balance" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="balance">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="balance">
           <Layout><Balance /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/import" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="import">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="import">
           <Layout><ImportData /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/historical-setup" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout><HistoricalSetup /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/movements" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="movements">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="movements">
           <Layout><Movements /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/activities" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="activities">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="activities">
           <Layout><Activities /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/activity-exclusions" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="activity_exclusions">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="activity_exclusions">
           <Layout><ActivityExclusions /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/activity-payments" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="activity_payments">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="activity_payments">
           <Layout><ActivityPayments /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/monthly-fees" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="monthly_fees">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="monthly_fees">
           <Layout><MonthlyFees /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/payment-portal" element={
-        <ProtectedRoute allowedRoles={['alumnos']}>
+        <ProtectedRoute allowedRoles={['guardian']}>
           <Navigate to="/mobile/payment-portal" replace />
         </ProtectedRoute>
       } />
       <Route path="/payment-notifications" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="payment_notifications">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="payment_notifications">
           <Layout><PaymentNotifications /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/reimbursements" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="reimbursements">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="reimbursements">
           <Layout><Reimbursements /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/scheduled-activities" element={
-        <ProtectedRoute allowedRoles={['master', 'admin', 'owner']} requiredModule="scheduled_activities">
+        <ProtectedRoute allowedRoles={['owner', 'staff']} requiredModule="scheduled_activities">
           <Layout><ScheduledActivities /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/admin/audit-logs" element={
-        <ProtectedRoute allowedRoles={['master', 'owner', 'admin']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout><AuditLogs /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/meeting-minutes" element={
-        <ProtectedRoute allowedRoles={['master', 'owner', 'admin', 'alumnos']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff', 'guardian']}>
           <Layout><MeetingMinutes /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/posts" element={
-        <ProtectedRoute allowedRoles={['master', 'owner', 'admin']}>
+        <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout><PostManagement /></Layout>
         </ProtectedRoute>
       } />
 
       {/* STITCH MOBILE ROUTES */}
       <Route path="/mobile" element={
-        <ProtectedRoute allowedRoles={['alumnos']}>
+        <ProtectedRoute allowedRoles={['guardian']}>
           <MobileLayout />
         </ProtectedRoute>
       }>

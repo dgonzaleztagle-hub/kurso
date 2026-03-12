@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
         .select("role")
         .eq("tenant_id", reimbursement.tenant_id)
         .eq("user_id", callerUser.id)
-        .in("role", ["owner", "master", "admin"])
+        .in("role", ["owner", "staff", "master", "admin"])
         .eq("status", "active")
         .maybeSingle(),
     ]);

@@ -13,13 +13,12 @@ import { StudentCombobox } from "@/components/StudentCombobox";
 import { AdminPermissionsDialog } from "@/components/AdminPermissionsDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Tables } from "@/integrations/supabase/types";
+import { canManageGuardians, canManageStaff, getRoleLabel, isStaffRole, normalizeRole, type AppRole } from "@/lib/roles";
 
 interface Student {
   id: number;
   name: string;
 }
-
-type AppRole = 'master' | 'owner' | 'admin' | 'alumnos';
 
 interface UserWithRole {
   id: string;
@@ -59,6 +58,9 @@ const getErrorMessage = (error: unknown) => {
 export default function UserManagement() {
   const { userRole } = useAuth();
   const { roleInCurrentTenant, currentTenant } = useTenant(); // Needed currentTenant for ID
+  const effectiveRole = roleInCurrentTenant || userRole;
+  const canCreateStaff = canManageStaff(effectiveRole);
+  const canCreateGuardians = canManageGuardians(effectiveRole);
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,8 +97,17 @@ export default function UserManagement() {
 
     setLoading(true);
     try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesión no válida. Vuelva a iniciar sesión.");
+      }
+
       const { data, error } = await supabase.functions.invoke("get-users-with-roles", {
         body: { tenantId: currentTenant.id },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       const response = data as UsersByTenantResponse | null;
@@ -117,10 +128,10 @@ export default function UserManagement() {
   }, [currentTenant]);
 
   useEffect(() => {
-    if (userRole === 'master' || roleInCurrentTenant === 'owner' || roleInCurrentTenant === 'admin') {
+    if (isStaffRole(effectiveRole)) {
       void fetchUsers();
     }
-  }, [fetchUsers, roleInCurrentTenant, userRole]);
+  }, [effectiveRole, fetchUsers]);
 
   const fetchStudents = useCallback(async () => {
     if (!currentTenant?.id) return;
@@ -170,11 +181,10 @@ export default function UserManagement() {
     setCreatingAdmin(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        toast.error("Debe estar autenticado");
-        return;
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Debe estar autenticado");
       }
 
       const resolvedUserName = (adminUserName || adminName).trim();
@@ -187,7 +197,10 @@ export default function UserManagement() {
           position: adminPosition,
           phone: adminPhone || null,
           tenantId: currentTenant.id
-        }
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       if (error) throw error;
@@ -212,8 +225,17 @@ export default function UserManagement() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesión no válida. Vuelva a iniciar sesión.");
+      }
+
       const { data, error } = await supabase.functions.invoke("delete-user", {
         body: { userId, tenantId: currentTenant?.id },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       const result = data as FunctionResponse | null;
@@ -236,6 +258,12 @@ export default function UserManagement() {
 
     setCreatingParent(true);
     try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesión no válida. Vuelva a iniciar sesión.");
+      }
+
       const { data, error } = await supabase.functions.invoke("create-parent-user", {
         body: {
           email: parentEmail,
@@ -243,6 +271,9 @@ export default function UserManagement() {
           displayName: parentDisplayName || null,
           studentId: parentStudentId,
           tenantId: currentTenant?.id,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -279,11 +310,20 @@ export default function UserManagement() {
     setResettingPassword(true);
 
     try {
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Sesión no válida. Vuelva a iniciar sesión.");
+      }
+
       const { data, error } = await supabase.functions.invoke("reset-user-password", {
         body: {
           userId: resetPasswordDialog.userId,
           newPassword,
           tenantId: currentTenant?.id,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -335,19 +375,10 @@ export default function UserManagement() {
     }
   };
 
-  const getRoleBadgeVariant = (role?: AppRole) => {
-    switch (role) {
-      case 'master': return 'default';
-      case 'admin': return 'secondary';
-      case 'alumnos': return 'outline';
-      default: return 'outline';
-    }
-  };
-
-  if (userRole !== 'master' && roleInCurrentTenant !== 'owner') {
+  if (!isStaffRole(effectiveRole)) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-muted-foreground">Acceso denegado. Solo usuarios Master u Owner pueden acceder.</p>
+        <p className="text-muted-foreground">Acceso denegado. Solo owner o staff pueden acceder.</p>
       </div>
     );
   }
@@ -373,26 +404,30 @@ export default function UserManagement() {
             </div>
             <div className="flex flex-wrap gap-1.5 md:gap-2">
 
-              <Button
-                variant={showCreateAdmin ? "outline" : "default"}
-                onClick={() => setShowCreateAdmin(!showCreateAdmin)}
-                size="sm"
-                className="text-xs flex-1 sm:flex-initial h-8"
-              >
-                {showCreateAdmin ? "Cancelar" : "Nuevo Admin"}
-              </Button>
-              <Button
-                variant={showCreateParent ? "outline" : "default"}
-                onClick={() => setShowCreateParent(!showCreateParent)}
-                size="sm"
-                className="text-xs flex-1 sm:flex-initial h-8"
-              >
-                {showCreateParent ? "Cancelar" : "Nuevo Apoderado"}
-              </Button>
+              {canCreateStaff && (
+                <Button
+                  variant={showCreateAdmin ? "outline" : "default"}
+                  onClick={() => setShowCreateAdmin(!showCreateAdmin)}
+                  size="sm"
+                  className="text-xs flex-1 sm:flex-initial h-8"
+                >
+                  {showCreateAdmin ? "Cancelar" : "Nuevo Staff"}
+                </Button>
+              )}
+              {canCreateGuardians && (
+                <Button
+                  variant={showCreateParent ? "outline" : "default"}
+                  onClick={() => setShowCreateParent(!showCreateParent)}
+                  size="sm"
+                  className="text-xs flex-1 sm:flex-initial h-8"
+                >
+                  {showCreateParent ? "Cancelar" : "Nueva Cuenta Familiar"}
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
-        {showCreateAdmin && (
+        {canCreateStaff && showCreateAdmin && (
           <CardContent className="p-3 md:p-6">
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
@@ -494,13 +529,13 @@ export default function UserManagement() {
                     Creando...
                   </>
                 ) : (
-                  "Crear Admin"
+                  "Crear Staff"
                 )}
               </Button>
             </div>
           </CardContent>
         )}
-        {showCreateParent && (
+        {canCreateGuardians && showCreateParent && (
           <CardContent className="p-3 md:p-6">
             <div className="grid gap-3">
               <div className="space-y-1.5">
@@ -546,17 +581,17 @@ export default function UserManagement() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="parent-display" className="text-xs md:text-sm">Nombre del Apoderado (opcional)</Label>
+                <Label htmlFor="parent-display" className="text-xs md:text-sm">Nombre visible (opcional)</Label>
                 <Input
                   id="parent-display"
-                  placeholder="Ej: Papá de Julieta"
+                  placeholder="Ej: Familia de Julieta"
                   value={parentDisplayName}
                   onChange={(e) => setParentDisplayName(e.target.value)}
                   disabled={creatingParent}
                   className="text-sm h-9"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Si no se ingresa, se usará "Apoderado de [Alumno]"
+                  Si no se ingresa, se usará un nombre automático vinculado al alumno
                 </p>
               </div>
             </div>
@@ -573,7 +608,7 @@ export default function UserManagement() {
                     Creando...
                   </>
                 ) : (
-                  "Crear Apoderado"
+                  "Crear Cuenta Familiar"
                 )}
               </Button>
             </div>
@@ -582,22 +617,21 @@ export default function UserManagement() {
       </Card>
 
       <div className="space-y-3 md:space-y-6">
-        {/* Master Users */}
-        {users.filter(u => u.role === 'master').length > 0 && (
+        {users.filter((u) => normalizeRole(u.role) === 'owner').length > 0 && (
           <Card>
             <CardHeader className="py-3 md:py-6">
-              <CardTitle className="text-base md:text-lg">Usuarios Master</CardTitle>
+              <CardTitle className="text-base md:text-lg">Owners</CardTitle>
             </CardHeader>
             <CardContent className="p-3 md:p-6">
               <div className="space-y-2">
-                {users.filter(u => u.role === 'master').map((user) => (
+                {users.filter((u) => normalizeRole(u.role) === 'owner').map((user) => (
                   <div key={user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 md:p-3 border rounded-lg bg-primary/5">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm md:text-base">
                           {user.displayName || user.name || user.email}
                         </p>
-                        <Badge variant="default" className="text-xs">Master</Badge>
+                        <Badge variant="default" className="text-xs">Owner</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
@@ -632,22 +666,21 @@ export default function UserManagement() {
           </Card>
         )}
 
-        {/* Admin/Owner Users */}
-        {users.filter(u => ['admin', 'owner'].includes(u.role)).length > 0 && (
+        {users.filter((u) => normalizeRole(u.role) === 'staff').length > 0 && (
           <Card>
             <CardHeader className="py-3 md:py-6">
-              <CardTitle className="text-base md:text-lg">Gestores (Owners)</CardTitle>
+              <CardTitle className="text-base md:text-lg">Staff</CardTitle>
             </CardHeader>
             <CardContent className="p-3 md:p-6">
               <div className="space-y-2">
-                {users.filter(u => ['admin', 'owner'].includes(u.role)).map((user) => (
+                {users.filter((u) => normalizeRole(u.role) === 'staff').map((user) => (
                   <div key={user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 md:p-3 border rounded-lg bg-muted/30">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-sm md:text-base">
                           {user.displayName || user.name || user.email}
                         </p>
-                        <Badge variant="secondary" className="text-xs uppercase">{user.role}</Badge>
+                        <Badge variant="secondary" className="text-xs uppercase">{getRoleLabel(user.role)}</Badge>
                         {user.phone && (
                           <Badge variant="outline" className="text-xs gap-1">
                             <Phone className="h-3 w-3" />
@@ -718,14 +751,13 @@ export default function UserManagement() {
           </Card>
         )}
 
-        {/* Alumnos Users - Collapsible */}
-        {users.filter(u => u.role === 'alumnos').length > 0 && (
+        {users.filter((u) => normalizeRole(u.role) === 'guardian').length > 0 && (
           <Card>
             <Collapsible open={alumnosOpen} onOpenChange={setAlumnosOpen}>
               <CardHeader className="py-3 md:py-6 cursor-pointer" onClick={() => setAlumnosOpen(!alumnosOpen)}>
                 <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-80 transition-opacity">
                   <CardTitle className="text-base md:text-lg">
-                    Usuarios Alumnos ({users.filter(u => u.role === 'alumnos').length})
+                    Cuentas Familiares ({users.filter((u) => normalizeRole(u.role) === 'guardian').length})
                   </CardTitle>
                   <ChevronDown className={`h-4 w-4 transition-transform ${alumnosOpen ? 'rotate-180' : ''}`} />
                 </CollapsibleTrigger>
@@ -733,12 +765,12 @@ export default function UserManagement() {
               <CollapsibleContent>
                 <CardContent className="p-3 md:p-6 pt-0">
                   <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {users.filter(u => u.role === 'alumnos').map((user) => (
+                    {users.filter((u) => normalizeRole(u.role) === 'guardian').map((user) => (
                       <div key={user.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 md:p-3 border rounded-lg bg-muted/30">
                         <div className="space-y-0.5">
                           <p className="font-medium text-sm md:text-base">{user.email}</p>
                           <div className="flex flex-col gap-0.5">
-                            <Badge variant="outline" className="text-xs w-fit">Alumno</Badge>
+                            <Badge variant="outline" className="text-xs w-fit">Guardian</Badge>
                             {user.studentId && user.name && (
                               <p className="text-xs text-muted-foreground">
                                 {user.name}

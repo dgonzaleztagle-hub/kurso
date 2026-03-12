@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { mainNavigation, type NavCategory, type NavItem } from "@/config/navigation";
 import { resolveBranding } from "@/lib/branding";
-import { hasRoleAccess } from "@/lib/roles";
+import { hasRoleAccess, isGuardianRole, isOwnerRole } from "@/lib/roles";
 import { SaasBillingBanner } from "@/components/subscription/SaasBillingBanner";
 import { getCommercialStatusLabel } from "@/lib/saasBilling";
 
@@ -41,7 +41,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     // If not in a tenant context (e.g. creating one), fallback might be needed
     const activeRole = roleInCurrentTenant || globalRole;
 
-    const greeting = activeRole === 'admin' || activeRole === 'owner' || activeRole === 'master'
+    const greeting = !isGuardianRole(activeRole)
         ? 'Panel de Control'
         : 'Mi Cuenta';
 
@@ -65,16 +65,15 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
             }
 
             const filteredItems = category.items.filter((item) => {
-                if (hasRoleAccess(activeRole, "master")) return true;
+                if (isOwnerRole(activeRole)) return true;
                 if (item.masterOnly) return false;
 
-                // Students/Members restrictions
-                if (activeRole === 'student' || activeRole === 'member') {
+                if (isGuardianRole(activeRole)) {
                     // Allow specific items for students (like Meeting Minutes)
                     if (!item.allowStudent) return false;
                 }
 
-                if (activeRole === 'admin' && item.module) {
+                if (hasRoleAccess(activeRole, "staff") && !isOwnerRole(activeRole) && item.module) {
                     return !adminPermissions.includes(item.module as AppModule);
                 }
 

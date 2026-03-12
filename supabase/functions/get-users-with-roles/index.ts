@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
         .select("role")
         .eq("tenant_id", tenantId)
         .eq("user_id", callerUser.id)
-        .in("role", ["owner", "master", "admin"])
+        .in("role", ["owner", "staff", "master", "admin"])
         .eq("status", "active")
         .maybeSingle(),
     ]);
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
 
       return {
         id: userId,
-        role: role?.role ?? member?.role ?? "member",
+        role: role?.role ?? member?.role ?? "guardian",
         roleId: role?.id ?? null,
         email: authUser?.email || "Email no disponible",
         name: authUser?.user_metadata?.name || authUser?.user_metadata?.full_name || null,

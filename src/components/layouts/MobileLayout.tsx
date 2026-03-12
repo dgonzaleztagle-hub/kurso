@@ -4,6 +4,7 @@ import { Home, Wallet, MessageCircle, Calendar, FileText, User } from "lucide-re
 import { cn } from "@/lib/utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { isGuardianRole } from "@/lib/roles";
 
 export const MobileLayout = () => {
     const navigate = useNavigate();
@@ -14,7 +15,7 @@ export const MobileLayout = () => {
 
     useEffect(() => {
         if (authLoading || tenantLoading) return;
-        if (effectiveRole !== "alumnos" && effectiveRole !== "student") {
+        if (!isGuardianRole(effectiveRole)) {
             navigate("/", { replace: true });
         }
     }, [authLoading, tenantLoading, effectiveRole, navigate]);

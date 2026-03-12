@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveBranding } from "@/lib/branding";
+import { isOwnerRole, isStaffRole } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -100,10 +101,8 @@ export function TenantBrandingSettings() {
 
   const canEdit =
     appUser?.is_superadmin ||
-    userRole === "master" ||
-    roleInCurrentTenant === "owner" ||
-    roleInCurrentTenant === "admin" ||
-    roleInCurrentTenant === "master";
+    isOwnerRole(userRole) ||
+    isStaffRole(roleInCurrentTenant);
 
   return (
     <Card>

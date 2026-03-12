@@ -4,9 +4,12 @@ export const getVisibleUpcomingActivities = (
   activities: StudentDashboardScheduledActivity[],
   upcomingActivities: StudentDashboardScheduledActivity[],
 ) => {
-  const base = upcomingActivities.length > 0 ? upcomingActivities : activities;
+  const merged = new Map<string, StudentDashboardScheduledActivity>();
+  [...activities, ...upcomingActivities].forEach((activity) => {
+    merged.set(activity.id, activity);
+  });
 
-  return base
+  return Array.from(merged.values())
     .filter((activity) => !activity.completed)
     .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
 };

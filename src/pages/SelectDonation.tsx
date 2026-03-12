@@ -103,8 +103,7 @@ export default function SelectDonation() {
             .from("scheduled_activities")
             .select("id, name, scheduled_date")
             .eq("tenant_id", typedStudent.tenant_id)
-            .eq("name", sourceActivityData.name)
-            .eq("scheduled_date", sourceActivityData.activity_date)
+            .eq("activity_id", activityNumericId)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -112,11 +111,30 @@ export default function SelectDonation() {
           if (byNameDate.data) {
             scheduledActivity = byNameDate.data as ScheduledActivityRow;
           } else {
+            const legacyMatch = await supabase
+              .from("scheduled_activities")
+              .select("id, name, scheduled_date")
+              .eq("tenant_id", typedStudent.tenant_id)
+              .eq("name", sourceActivityData.name)
+              .eq("scheduled_date", sourceActivityData.activity_date)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (legacyMatch.error) throw legacyMatch.error;
+            if (legacyMatch.data) {
+              await supabase
+                .from("scheduled_activities")
+                .update({ activity_id: activityNumericId })
+                .eq("id", legacyMatch.data.id);
+              scheduledActivity = legacyMatch.data as ScheduledActivityRow;
+            } else {
             const payload: ScheduledActivityInsert = {
               tenant_id: typedStudent.tenant_id,
+              activity_id: activityNumericId,
               name: sourceActivityData.name,
               scheduled_date: sourceActivityData.activity_date,
-              amount: Number(sourceActivityData.amount || 0),
+              fee_amount: Number(sourceActivityData.amount || 0),
+              is_with_fee: Number(sourceActivityData.amount || 0) > 0,
               completed: false,
               is_with_donations: true,
             };
@@ -127,6 +145,7 @@ export default function SelectDonation() {
               .single();
             if (created.error) throw created.error;
             scheduledActivity = created.data as ScheduledActivityRow;
+            }
           }
         }
       }

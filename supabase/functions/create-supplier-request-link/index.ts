@@ -68,7 +68,7 @@ serve(async (req) => {
         .select("role")
         .eq("tenant_id", tenantId)
         .eq("user_id", user.id)
-        .in("role", ["owner", "master", "admin"])
+        .in("role", ["owner", "staff", "master", "admin"])
         .eq("status", "active")
         .maybeSingle(),
     ]);

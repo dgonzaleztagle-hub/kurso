@@ -191,6 +191,8 @@ export default function Reimbursements() {
           : 'Proveedor externo';
         return {
           ...reimbursement,
+          folio: reimbursement.folio !== null && reimbursement.folio !== undefined ? Number(reimbursement.folio) : null,
+          expense_folio: reimbursement.expense_folio !== null && reimbursement.expense_folio !== undefined ? Number(reimbursement.expense_folio) : null,
           status: reimbursement.status as Reimbursement['status'],
           type: reimbursement.type as Reimbursement['type'],
           user_display_name: displayName,

@@ -5,6 +5,7 @@ import { MainLayout } from "@/layouts/MainLayout";
 import { StudentLayout } from "@/layouts/StudentLayout";
 import { LockModal } from "./subscription/LockModal";
 import { getTenantBillingState } from "@/lib/saasBilling";
+import { isGuardianRole, isOwnerRole, isStaffRole } from "@/lib/roles";
 
 interface LayoutProps {
   children: ReactNode;
@@ -27,7 +28,7 @@ export const Layout = ({ children }: LayoutProps) => {
     // If Global Role is 'master', we might want to bypass lock to help user?
     // User Requirement: "lock de ingreso". 
     // Let's allow Master (SuperAdmin) to bypass lock to fix things if needed, or see the org.
-    if (globalRole === 'master') {
+    if (isOwnerRole(globalRole)) {
       setIsLocked(false);
     } else {
       setIsLocked(billingState.isBlocked);
@@ -35,9 +36,8 @@ export const Layout = ({ children }: LayoutProps) => {
 
   }, [currentTenant, globalRole]);
 
-  const activeRole = roleInCurrentTenant || globalRole;
-  // Owners, Admins and Masters see the full App
-  const showFullNav = activeRole === 'admin' || activeRole === 'master' || activeRole === 'owner';
+    const activeRole = roleInCurrentTenant || globalRole;
+  const showFullNav = isStaffRole(activeRole) && !isGuardianRole(activeRole);
 
   // If locked, we show the modal AND maybe hide content or just overlay?
   // User asked for "lock de ingreso". Best is to show modal and render nothing behind or blur.
