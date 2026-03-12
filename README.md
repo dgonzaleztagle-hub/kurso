@@ -62,7 +62,19 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/3513a0bb-1acc-47b5-ac4b-8cab9f2f721a) and click on Share -> Publish.
+This project is currently operated with Vercel plus Supabase, using `main` as the release branch.
+
+The active production runbook is here:
+
+- [RUNBOOK_GO_LIVE_2026-03-12.md](./RUNBOOK_GO_LIVE_2026-03-12.md)
+
+Before a production push, run:
+
+```sh
+npm run lint
+npm run test:business
+npm run build
+```
 
 ## Can I connect a custom domain to my Lovable project?
 
