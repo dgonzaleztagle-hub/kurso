@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   CheckCircle,
@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { getPdfBranding, loadImageElement } from "@/lib/pdfBranding";
 import { toast } from "sonner";
 
@@ -86,6 +87,38 @@ interface CompletionRate {
   total: number;
   received: number;
 }
+
+type ActivityRow = {
+  id: string | number;
+  name: string;
+  activity_date: string;
+  amount: number | string | null;
+  description: string | null;
+};
+
+type StudentRow = {
+  id: number | string;
+  first_name: string | null;
+  last_name: string | null;
+};
+
+type ScheduledActivityLookupRow = {
+  id: string | number;
+  name: string;
+  scheduled_date: string;
+};
+
+type ScheduledActivityExclusionRow = {
+  student_id: number | string;
+  scheduled_activity_id: string | number;
+};
+
+type ActivityDonationInsert = TablesInsert<"activity_donations">;
+type ScheduledActivityInsert = TablesInsert<"scheduled_activities">;
+
+const SCHEDULED_ACTIVITY_EXCLUSIONS = "scheduled_activity_exclusions" as never;
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Ocurrió un error inesperado";
 
 const emptyDonationItem = (): DonationItem => ({ name: "", amount: "", unit: "" });
 
@@ -153,32 +186,18 @@ export default function ScheduledActivities() {
     is_with_donations: false,
   });
 
-  useEffect(() => {
-    if (!currentTenant?.id) return;
-    void fetchActivities();
-    void fetchStudents();
-  }, [currentTenant?.id]);
-
-  useEffect(() => {
-    if (!activities.length || !students.length) {
-      setActivityCompletionRates({});
-      return;
-    }
-    void loadCompletionRates();
-  }, [activities, students]);
-
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
-        .eq("tenant_id", currentTenant?.id as string)
+        .eq("tenant_id", currentTenant?.id ?? "")
         .order("activity_date", { ascending: true });
 
       if (error) throw error;
 
       setActivities(
-        (data || []).map((activity: any) => {
+        ((data as ActivityRow[] | null) || []).map((activity) => {
           const metadata = parseMetadata(activity.description);
           return {
             id: String(activity.id),
@@ -194,50 +213,50 @@ export default function ScheduledActivities() {
           };
         }),
       );
-    } catch (error: any) {
-      toast.error("Error al cargar actividades: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al cargar actividades: ${getErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTenant?.id]);
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("students")
         .select("id, first_name, last_name")
-        .eq("tenant_id", currentTenant?.id as string)
+        .eq("tenant_id", currentTenant?.id ?? "")
         .order("last_name");
 
       if (error) throw error;
 
       setStudents(
-        (data || []).map((student) => ({
-          id: student.id as any,
+        ((data as StudentRow[] | null) || []).map((student) => ({
+          id: student.id,
           name: `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Sin Nombre",
         })),
       );
-    } catch (error: any) {
-      toast.error("Error al cargar estudiantes: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al cargar estudiantes: ${getErrorMessage(error)}`);
     }
-  };
+  }, [currentTenant?.id]);
 
-  const loadCompletionRates = async () => {
+  const loadCompletionRates = useCallback(async () => {
     try {
       const rates: Record<string, CompletionRate> = {};
       const [activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
+        supabase.from(SCHEDULED_ACTIVITY_EXCLUSIONS).select("student_id, scheduled_activity_id"),
       ]);
       const scheduledActivitiesResult = await supabase
         .from("scheduled_activities")
         .select("id, name, scheduled_date")
-        .eq("tenant_id", currentTenant?.id as string);
+        .eq("tenant_id", currentTenant?.id ?? "");
 
       const activityExclusions = activityExclusionsResult.data || [];
       const scheduledExclusions = scheduledExclusionsResult.data || [];
       const scheduledByKey = new Map<string, string>();
-      (scheduledActivitiesResult.data || []).forEach((row: any) => {
+      ((scheduledActivitiesResult.data as ScheduledActivityLookupRow[] | null) || []).forEach((row) => {
         scheduledByKey.set(buildScheduleKey(row.name, row.scheduled_date), String(row.id));
       });
 
@@ -247,8 +266,8 @@ export default function ScheduledActivities() {
           ...activityExclusions
             .filter((row) => String(row.activity_id) === String(activity.id))
             .map((row) => String(row.student_id)),
-          ...scheduledExclusions
-            .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId || ""))
+          ...(((scheduledExclusionsResult.data as ScheduledActivityExclusionRow[] | null) || []))
+            .filter((row) => String(row.scheduled_activity_id) === String(scheduledActivityId || ""))
             .map((row) => String(row.student_id)),
         ]);
 
@@ -258,10 +277,10 @@ export default function ScheduledActivities() {
         let received = 0;
 
         if (activity.is_with_donations && scheduledActivityId) {
-          const { data: donationRows, error } = await supabase
-            .from("activity_donations")
-            .select("name, unit, amount, cantidad_original, donated_at, student_id")
-            .eq("scheduled_activity_id", scheduledActivityId as any);
+            const { data: donationRows, error } = await supabase
+              .from("activity_donations")
+              .select("name, unit, amount, cantidad_original, donated_at, student_id")
+              .eq("scheduled_activity_id", scheduledActivityId);
 
           if (error) throw error;
 
@@ -293,7 +312,21 @@ export default function ScheduledActivities() {
     } catch (error) {
       console.error("Error al cargar tasas de cumplimiento:", error);
     }
-  };
+  }, [activities, currentTenant?.id, students]);
+
+  useEffect(() => {
+    if (!currentTenant?.id) return;
+    void fetchActivities();
+    void fetchStudents();
+  }, [currentTenant?.id, fetchActivities, fetchStudents]);
+
+  useEffect(() => {
+    if (!activities.length || !students.length) {
+      setActivityCompletionRates({});
+      return;
+    }
+    void loadCompletionRates();
+  }, [activities, loadCompletionRates, students]);
 
   const resetForm = () => {
     setEditingActivity(null);
@@ -334,7 +367,7 @@ export default function ScheduledActivities() {
         amount: Number(activity.amount || 0),
         is_with_donations: activity.is_with_donations,
         completed: activity.completed,
-      } as any)
+      } as ScheduledActivityInsert)
       .select("id")
       .single();
 
@@ -353,7 +386,7 @@ export default function ScheduledActivities() {
       .filter((item) => item.name.trim() && item.amount.trim())
       .map((item) => ({
         tenant_id: currentTenant.id,
-        scheduled_activity_id: scheduledActivityId as any,
+        scheduled_activity_id: scheduledActivityId,
         name: item.name.trim(),
         amount: item.amount.trim(),
         cantidad_original: item.amount.trim(),
@@ -364,7 +397,7 @@ export default function ScheduledActivities() {
 
     if (!validItems.length) return;
 
-    const { error } = await supabase.from("activity_donations").insert(validItems as any);
+    const { error } = await supabase.from("activity_donations").insert(validItems as ActivityDonationInsert[]);
     if (error) throw error;
   };
 
@@ -431,8 +464,8 @@ export default function ScheduledActivities() {
       await fetchActivities();
       await loadCompletionRates();
       toast.success(editingActivity ? "Actividad actualizada" : "Actividad creada");
-    } catch (error: any) {
-      toast.error("Error al guardar actividad: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al guardar actividad: ${getErrorMessage(error)}`);
     }
   };
 
@@ -457,7 +490,7 @@ export default function ScheduledActivities() {
       const { data } = await supabase
         .from("activity_donations")
         .select("name, amount, cantidad_original, unit")
-        .eq("scheduled_activity_id", scheduledActivityId as any)
+        .eq("scheduled_activity_id", scheduledActivityId)
         .is("student_id", null);
 
       setDonationItems(
@@ -495,8 +528,8 @@ export default function ScheduledActivities() {
 
       toast.success(activity.completed ? "Actividad reabierta" : "Actividad finalizada");
       await fetchActivities();
-    } catch (error: any) {
-      toast.error("Error al actualizar actividad: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al actualizar actividad: ${getErrorMessage(error)}`);
     }
   };
 
@@ -518,8 +551,8 @@ export default function ScheduledActivities() {
 
       toast.success("Actividad eliminada");
       await fetchActivities();
-    } catch (error: any) {
-      toast.error("Error al eliminar actividad: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al eliminar actividad: ${getErrorMessage(error)}`);
     }
   };
 
@@ -536,7 +569,7 @@ export default function ScheduledActivities() {
       const { data, error } = await supabase
         .from("activity_donations")
         .select("name, amount, cantidad_original, unit")
-        .eq("scheduled_activity_id", scheduledActivityId as any)
+        .eq("scheduled_activity_id", scheduledActivityId)
         .is("student_id", null);
 
       if (error) throw error;
@@ -551,8 +584,8 @@ export default function ScheduledActivities() {
           : [emptyDonationItem()],
       );
       setEditDonationsDialogOpen(true);
-    } catch (error: any) {
-      toast.error("Error al cargar donaciones: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al cargar donaciones: ${getErrorMessage(error)}`);
     }
   };
 
@@ -566,8 +599,8 @@ export default function ScheduledActivities() {
       await fetchActivities();
       await loadCompletionRates();
       toast.success("Items de donaciones actualizados");
-    } catch (error: any) {
-      toast.error("Error al guardar donaciones: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al guardar donaciones: ${getErrorMessage(error)}`);
     }
   };
 
@@ -579,10 +612,10 @@ export default function ScheduledActivities() {
     try {
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
         scheduledActivityId
-          ? supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId as any).not("student_id", "is", null)
-          : Promise.resolve({ data: [], error: null } as any),
+          ? supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId).not("student_id", "is", null)
+          : Promise.resolve({ data: [], error: null } as { data: Donation[]; error: null }),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
+        supabase.from(SCHEDULED_ACTIVITY_EXCLUSIONS).select("student_id, scheduled_activity_id"),
       ]);
 
       if (donationsResult.error) throw donationsResult.error;
@@ -591,16 +624,16 @@ export default function ScheduledActivities() {
         ...(activityExclusionsResult.data || [])
           .filter((row) => String(row.activity_id) === String(activity.id))
           .map((row) => String(row.student_id)),
-        ...(scheduledExclusionsResult.data || [])
-          .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId || ""))
+        ...(((scheduledExclusionsResult.data as ScheduledActivityExclusionRow[] | null) || []))
+          .filter((row) => String(row.scheduled_activity_id) === String(scheduledActivityId || ""))
           .map((row) => String(row.student_id)),
       ]);
 
       setDonations((donationsResult.data || []) as Donation[]);
       setEligibleDonationStudents(students.filter((student) => !excludedStudents.has(String(student.id))));
       setDonationsDialogOpen(true);
-    } catch (error: any) {
-      toast.error("Error al cargar donaciones: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al cargar donaciones: ${getErrorMessage(error)}`);
     }
   };
 
@@ -627,8 +660,8 @@ export default function ScheduledActivities() {
       setEditingStudentDonation(null);
       await loadCompletionRates();
       toast.success("Donación actualizada");
-    } catch (error: any) {
-      toast.error("Error al actualizar donación: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al actualizar donación: ${getErrorMessage(error)}`);
     }
   };
 
@@ -640,8 +673,8 @@ export default function ScheduledActivities() {
       setDonations((current) => current.filter((donation) => donation.id !== donationId));
       await loadCompletionRates();
       toast.success("Donación eliminada");
-    } catch (error: any) {
-      toast.error("Error al eliminar donación: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al eliminar donación: ${getErrorMessage(error)}`);
     }
   };
 
@@ -654,8 +687,8 @@ export default function ScheduledActivities() {
       setDonations((current) => current.map((item) => (item.id === donation.id ? { ...item, donated_at: donatedAt } : item)));
       await loadCompletionRates();
       toast.success(donatedAt ? "Donación marcada como recibida" : "Donación marcada como pendiente");
-    } catch (error: any) {
-      toast.error("Error al actualizar estado: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al actualizar estado: ${getErrorMessage(error)}`);
     }
   };
 
@@ -671,7 +704,7 @@ export default function ScheduledActivities() {
       const { data, error } = await supabase
         .from("activity_donations")
         .select("name, cantidad_original, unit")
-        .eq("scheduled_activity_id", scheduledActivityId as any)
+        .eq("scheduled_activity_id", scheduledActivityId)
         .is("student_id", null);
 
       if (error) throw error;
@@ -686,8 +719,8 @@ export default function ScheduledActivities() {
       setAssignToStudentId(studentId);
       setAssignDonationForm(emptyDonationItem());
       setAssignDonationDialogOpen(true);
-    } catch (error: any) {
-      toast.error("Error al cargar items de donación: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al cargar items de donación: ${getErrorMessage(error)}`);
     }
   };
 
@@ -713,9 +746,9 @@ export default function ScheduledActivities() {
 
     try {
       const scheduledActivityId = selectedScheduledActivityId || await getScheduledActivityId(selectedActivity, true);
-      const payload = {
+      const payload: ActivityDonationInsert = {
         tenant_id: currentTenant.id,
-        scheduled_activity_id: scheduledActivityId as any,
+        scheduled_activity_id: scheduledActivityId,
         student_id: assignToStudentId,
         name: assignDonationForm.name.trim(),
         amount: assignDonationForm.amount.trim(),
@@ -723,7 +756,7 @@ export default function ScheduledActivities() {
         donated_at: null,
       };
 
-      const { data, error } = await supabase.from("activity_donations").insert(payload as any).select().single();
+      const { data, error } = await supabase.from("activity_donations").insert(payload).select().single();
       if (error) throw error;
 
       setDonations((current) => [...current, data as Donation]);
@@ -732,8 +765,8 @@ export default function ScheduledActivities() {
       setAssignDonationForm(emptyDonationItem());
       await loadCompletionRates();
       toast.success("Donación asignada");
-    } catch (error: any) {
-      toast.error("Error al asignar donación: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al asignar donación: ${getErrorMessage(error)}`);
     }
   };
 
@@ -825,9 +858,9 @@ export default function ScheduledActivities() {
     try {
       const pdfBranding = getPdfBranding(currentTenant);
       const [donationsResult, activityExclusionsResult, scheduledExclusionsResult] = await Promise.all([
-        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId as any).order("name", { ascending: true }),
+        supabase.from("activity_donations").select("*").eq("scheduled_activity_id", scheduledActivityId).order("name", { ascending: true }),
         supabase.from("activity_exclusions").select("student_id, activity_id"),
-        supabase.from("scheduled_activity_exclusions" as any).select("student_id, scheduled_activity_id"),
+        supabase.from(SCHEDULED_ACTIVITY_EXCLUSIONS).select("student_id, scheduled_activity_id"),
       ]);
 
       if (donationsResult.error) throw donationsResult.error;
@@ -837,8 +870,8 @@ export default function ScheduledActivities() {
         ...(activityExclusionsResult.data || [])
           .filter((row) => String(row.activity_id) === String(activity.id))
           .map((row) => String(row.student_id)),
-        ...(scheduledExclusionsResult.data || [])
-          .filter((row) => String((row as any).scheduled_activity_id) === String(scheduledActivityId))
+        ...(((scheduledExclusionsResult.data as ScheduledActivityExclusionRow[] | null) || []))
+          .filter((row) => String(row.scheduled_activity_id) === String(scheduledActivityId))
           .map((row) => String(row.student_id)),
       ]);
 
@@ -946,8 +979,8 @@ export default function ScheduledActivities() {
       doc.text(pdfBranding.signatureInstitutionLine, 15, y + 22);
       doc.save(`Estado_Cumplimiento_${activity.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
       toast.success("Reporte de donaciones generado");
-    } catch (error: any) {
-      toast.error("Error al generar reporte: " + error.message);
+    } catch (error: unknown) {
+      toast.error(`Error al generar reporte: ${getErrorMessage(error)}`);
     }
   };
 
