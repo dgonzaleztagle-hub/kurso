@@ -4,7 +4,7 @@ import { HojaceroSignature } from "@/components/HojaceroSignature";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown, LifeBuoy, Shield, UserCircle2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
     DropdownMenu,
@@ -120,18 +120,51 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                         <span className="text-xs sm:text-sm text-muted-foreground">{greeting}</span>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                                await signOut();
-                                window.location.href = '/';
-                            }}
-                            className="gap-2"
-                        >
-                            <LogOut className="h-4 w-4" />
-                            <span className="hidden sm:inline">Salir</span>
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-2">
+                                    <UserCircle2 className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Cuenta</span>
+                                    <ChevronDown className="h-3 w-3" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuItem asChild>
+                                    <Link to="/mi-cuenta" className="flex items-center gap-2">
+                                        <UserCircle2 className="h-4 w-4" />
+                                        <span>Mi cuenta</span>
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link to="/soporte" className="flex items-center gap-2">
+                                        <LifeBuoy className="h-4 w-4" />
+                                        <span>Soporte</span>
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link to="/privacidad" className="flex items-center gap-2">
+                                        <Shield className="h-4 w-4" />
+                                        <span>Privacidad</span>
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link to="/mi-cuenta" className="flex items-center gap-2 text-red-600 focus:text-red-600">
+                                        <Trash2 className="h-4 w-4" />
+                                        <span>Eliminar cuenta</span>
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={async () => {
+                                        await signOut();
+                                        window.location.href = '/';
+                                    }}
+                                    className="gap-2"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                    <span>Salir</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
             </header>
@@ -217,6 +250,17 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
 
             <footer className="border-t border-white/5 py-12 px-4 flex flex-col items-center justify-center gap-2 text-center">
                 <HojaceroSignature />
+                <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+                    <Link to="/soporte" className="hover:text-primary hover:underline">
+                        Soporte
+                    </Link>
+                    <Link to="/privacidad" className="hover:text-primary hover:underline">
+                        Privacidad
+                    </Link>
+                    <Link to="/privacy-choices" className="hover:text-primary hover:underline">
+                        Derechos ARCO
+                    </Link>
+                </div>
                 <p className="text-[10px] text-muted-foreground/40 mt-4">
                     © {new Date().getFullYear()} {branding.appName}. Todos los derechos reservados.
                 </p>

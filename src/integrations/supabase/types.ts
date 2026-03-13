@@ -209,6 +209,56 @@ export type Database = {
           },
         ]
       }
+      account_deletion_requests: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          deletion_mode: string
+          email_before_deletion: string | null
+          id: string
+          metadata: Json
+          notes: string | null
+          processed_at: string | null
+          role_before_deletion: string | null
+          status: string
+          tenant_id: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          deletion_mode?: string
+          email_before_deletion?: string | null
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          processed_at?: string | null
+          role_before_deletion?: string | null
+          status?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          deletion_mode?: string
+          email_before_deletion?: string | null
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          processed_at?: string | null
+          role_before_deletion?: string | null
+          status?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_users: {
         Row: {
           avatar_url: string | null
@@ -889,6 +939,69 @@ export type Database = {
           valid_until?: string | null
         }
         Relationships: []
+      }
+      support_requests: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          metadata: Json
+          name: string
+          request_type: string
+          source: string
+          status: string
+          subject: string
+          tenant_id: string | null
+          tenant_name: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          metadata?: Json
+          name: string
+          request_type?: string
+          source?: string
+          status?: string
+          subject: string
+          tenant_id?: string | null
+          tenant_name?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          metadata?: Json
+          name?: string
+          request_type?: string
+          source?: string
+          status?: string
+          subject?: string
+          tenant_id?: string | null
+          tenant_name?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payment_notifications: {
         Row: {

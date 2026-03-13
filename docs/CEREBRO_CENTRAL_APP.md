@@ -205,6 +205,7 @@ Uso:
 
 - `/branding`
 - `/user-management`
+- `/mi-cuenta`
 - `/admin/audit-logs`
 - `/formularios`
 - `/close-year`
@@ -222,9 +223,9 @@ Uso:
 Rutas publicas relevantes en `src/App.tsx`:
 
 - `/auth`
-- `/privacy-policy`
+- `/privacidad`
 - `/privacy-choices`
-- `/support`
+- `/soporte`
 - `/blog`
 - `/blog/:slug`
 - `/pago-exitoso`
@@ -849,6 +850,8 @@ El codigo usa al menos estas tablas como columna vertebral:
 - `posts`
 - `meeting_minutes`
 - `audit_logs`
+- `support_requests`
+- `account_deletion_requests`
 - `tenant_opening_balances`
 - `organizations`
 - `saas_plans`
@@ -929,9 +932,9 @@ Checklist minimo antes de deploy:
 
 - `/auth`
 - `/solicitud-pago-proveedor`
-- `/privacy-policy`
+- `/privacidad`
 - `/privacy-choices`
-- `/support`
+- `/soporte`
 - `/blog`
 - `/blog/:slug`
 - `/pago-exitoso`
@@ -960,6 +963,7 @@ Checklist minimo antes de deploy:
 - `/formularios/:id/respuestas`
 - `/onboarding`
 - `/user-management`
+- `/mi-cuenta`
 - `/branding`
 - `/credit-management`
 - `/credit-movements`
@@ -1026,6 +1030,8 @@ Checklist minimo antes de deploy:
 - `send-reimbursement-notification`
 - `send-whatsapp-notification`
 - `submit-supplier-payment-request`
+- `submit-support-request`
+- `delete-my-account`
 
 ### Compartidas
 

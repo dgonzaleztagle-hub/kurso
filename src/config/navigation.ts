@@ -22,6 +22,8 @@ import {
     NotebookText,
     Archive,
     Building2,
+    LifeBuoy,
+    Shield,
     LucideIcon
 } from "lucide-react";
 
@@ -120,6 +122,15 @@ export const mainNavigation: NavCategory[] = [
             { name: "Historial de Cambios", href: "/admin/audit-logs", icon: ShieldCheck },
             { name: "Formularios", href: "/formularios", icon: FileQuestion },
             { name: "Cierre de Año", href: "/close-year", icon: Archive, masterOnly: true }, // Restricted to admins/owners
+        ],
+    },
+    {
+        name: "Ayuda",
+        icon: LifeBuoy,
+        isTab: true,
+        items: [
+            { name: "Soporte", href: "/soporte", icon: LifeBuoy },
+            { name: "Privacidad", href: "/privacidad", icon: Shield },
         ],
     },
 ];

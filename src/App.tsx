@@ -58,6 +58,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const PrivacyChoices = lazy(() => import("./pages/PrivacyChoices"));
 const Support = lazy(() => import("./pages/Support"));
+const AccountSettings = lazy(() => import("./pages/AccountSettings"));
 const FormList = lazy(() => import("./pages/FormList"));
 const FormBuilder = lazy(() => import("./pages/FormBuilder"));
 const FormResponses = lazy(() => import("./pages/FormResponses"));
@@ -121,8 +122,10 @@ function AppRoutes() {
       } />
 
       <Route path="/solicitud-pago-proveedor" element={<SupplierPaymentRequest />} />
+      <Route path="/privacidad" element={<PrivacyPolicy />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/privacy-choices" element={<PrivacyChoices />} />
+      <Route path="/soporte" element={<Support />} />
       <Route path="/support" element={<Support />} />
       <Route path="/blog" element={<Blog />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
@@ -166,6 +169,11 @@ function AppRoutes() {
       <Route path="/user-management" element={
         <ProtectedRoute allowedRoles={['owner', 'staff']}>
           <Layout><UserManagement /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/mi-cuenta" element={
+        <ProtectedRoute>
+          <Layout><AccountSettings /></Layout>
         </ProtectedRoute>
       } />
       <Route path="/branding" element={

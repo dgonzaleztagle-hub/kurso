@@ -32,9 +32,9 @@ Kurso ya tiene shell iOS base con Capacitor y lane inicial de Codemagic en `code
 - Nombre: `Kurso`
 - Subtitulo: `Gestion escolar transparente`
 - Categoria primaria: `Finance` o `Education`
-- Support URL: `https://mikurso.cl/support`
+- Support URL: `https://mikurso.cl/soporte`
 - Marketing URL: `https://mikurso.cl`
-- Privacy Policy URL: `https://mikurso.cl/privacy-policy`
+- Privacy Policy URL: `https://mikurso.cl/privacidad`
 - User Privacy Choices URL: `https://mikurso.cl/privacy-choices`
 - Keywords iniciales: `colegio,pagos,tesoreria,curso,apoderados`
 

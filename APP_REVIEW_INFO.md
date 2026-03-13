@@ -11,6 +11,7 @@ La app permite:
 - inicio de sesion por usuario invitado o creado por administradores del tenant
 - gestion de pagos, deudas y rendiciones
 - consulta de movimientos y portal publico asociado
+- eliminacion de cuenta desde la propia app cuando no exista bloqueo de transferencia de propiedad
 
 La app requiere autenticacion para la mayor parte de sus funciones. Para revision de Apple se debe entregar:
 
@@ -35,6 +36,7 @@ Completar antes del envio:
 3. Revisar pagos y movimientos.
 4. Abrir portal de pagos.
 5. Confirmar navegacion general y cierre de sesion.
+6. Revisar `Mi cuenta` o `Mi Perfil` y validar enlaces a `Privacidad`, `Soporte` y `Eliminar cuenta`.
 
 ## Aclaracion comercial
 

@@ -395,10 +395,10 @@ const Landing = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
-                        <Link to="/support" className="hover:text-primary transition-colors">
+                        <Link to="/soporte" className="hover:text-primary transition-colors">
                             Soporte
                         </Link>
-                        <Link to="/privacy-policy" className="hover:text-primary transition-colors">
+                        <Link to="/privacidad" className="hover:text-primary transition-colors">
                             Privacidad
                         </Link>
                         <Link to="/privacy-choices" className="hover:text-primary transition-colors">

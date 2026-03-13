@@ -108,6 +108,17 @@ export const StudentLayout = ({ children }: StudentLayoutProps) => {
 
             <footer className="border-t border-white/5 py-12 px-3 md:px-4 flex flex-col items-center justify-center gap-4 text-center">
                 <HojaceroSignature />
+                <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+                    <Link to="/soporte" className="hover:text-primary hover:underline">
+                        Soporte
+                    </Link>
+                    <Link to="/privacidad" className="hover:text-primary hover:underline">
+                        Privacidad
+                    </Link>
+                    <Link to="/privacy-choices" className="hover:text-primary hover:underline">
+                        Derechos ARCO
+                    </Link>
+                </div>
                 <p className="text-[10px] text-muted-foreground/40 mt-4">
                     <strong>{branding.appName}</strong>{branding.institutionName ? ` · ${branding.institutionName}` : ""}
                 </p>

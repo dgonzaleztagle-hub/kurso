@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -361,6 +361,17 @@ export default function Auth() {
         <p className="text-sm text-muted-foreground/80">
           {branding.authFooter}
         </p>
+        <div className="mt-3 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+          <Link to="/privacidad" className="hover:text-primary hover:underline">
+            Privacidad
+          </Link>
+          <Link to="/soporte" className="hover:text-primary hover:underline">
+            Soporte
+          </Link>
+          <Link to="/privacy-choices" className="hover:text-primary hover:underline">
+            Derechos ARCO
+          </Link>
+        </div>
         <p className="text-xs text-muted-foreground/60 mt-1">
           © {new Date().getFullYear()} {branding.legalName}
         </p>

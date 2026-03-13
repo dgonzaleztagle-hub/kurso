@@ -8,7 +8,7 @@ const PrivacyChoices = () => {
         <title>Opciones de Privacidad | Kurso</title>
         <meta
           name="description"
-          content="Opciones de privacidad, correccion y eliminacion de datos para usuarios de Kurso."
+          content="Opciones de privacidad, derechos ARCO y eliminación de cuenta para usuarios de mikurso.cl."
         />
         <link rel="canonical" href="https://mikurso.cl/privacy-choices" />
       </Helmet>
@@ -19,7 +19,7 @@ const PrivacyChoices = () => {
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Kurso</p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight">Opciones de Privacidad</h1>
             <p className="mt-3 text-muted-foreground">
-              Esta pagina explica como solicitar acceso, correccion o eliminacion de datos.
+              Esta página explica cómo ejercer derechos ARCO y cómo funciona la eliminación de cuenta en la app.
             </p>
           </div>
           <Link to="/" className="text-sm font-medium text-primary hover:underline">
@@ -35,13 +35,18 @@ const PrivacyChoices = () => {
               <li>Solicitar correccion de datos inexactos.</li>
               <li>Solicitar eliminacion cuando sea procedente y no exista obligacion legal de retencion.</li>
               <li>Solicitar cierre de cuenta o revision de acceso.</li>
+              <li>Solicitar acceso, rectificacion, cancelacion u oposicion conforme a Ley 19.628.</li>
             </ul>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xl font-semibold text-foreground">Como solicitarlo</h2>
             <p>
-              Escribe a{" "}
+              Puedes usar el formulario en{" "}
+              <Link to="/soporte" className="font-medium text-primary hover:underline">
+                /soporte
+              </Link>{" "}
+              o escribir a{" "}
               <a className="font-medium text-primary hover:underline" href="mailto:contacto@hojacero.cl">
                 contacto@hojacero.cl
               </a>{" "}
@@ -56,12 +61,22 @@ const PrivacyChoices = () => {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-xl font-semibold text-foreground">Eliminacion de cuenta</h2>
+            <p>
+              mikurso.cl permite iniciar la eliminación de cuenta desde el perfil del usuario autenticado.
+              El proceso elimina el acceso, anonimiza datos personales sensibles del perfil y conserva solo
+              los registros contables estrictamente necesarios para continuidad y auditoría del curso.
+            </p>
+            <p>
+              Si la cuenta mantiene la propiedad del curso como owner, puede exigirse transferencia previa
+              para evitar dejar el tenant sin administración responsable.
+            </p>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="text-xl font-semibold text-foreground">Canal alternativo</h2>
             <p>
-              Tambien puedes escribir por WhatsApp a{" "}
-              <a className="font-medium text-primary hover:underline" href="https://wa.me/56954031472" target="_blank" rel="noreferrer">
-                +56 9 5403 1472
-              </a>.
+              Si necesitas contexto adicional, también puedes usar el correo de soporte oficial.
             </p>
           </section>
         </div>

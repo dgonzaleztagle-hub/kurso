@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { LogOut, User, Users, Phone, Mail, GraduationCap, Pencil, Save, X } from "lucide-react";
+import { LogOut, User, Users, Phone, Mail, GraduationCap, Pencil, Save, X, LifeBuoy, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { isGuardianRole } from "@/lib/roles";
+import { Link } from "react-router-dom";
+import { AccountDeletionCard } from "@/components/AccountDeletionCard";
 
 interface Student {
     id: string;
@@ -237,6 +239,28 @@ export default function MobileProfile() {
                         </div>
                     )}
                 </div>
+
+                <Card className="p-5 border-none shadow-sm bg-white dark:bg-[#1c2630]">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">
+                        Ayuda y privacidad
+                    </h3>
+                    <div className="grid gap-2">
+                        <Button asChild variant="outline" className="justify-start">
+                            <Link to="/soporte">
+                                <LifeBuoy className="mr-2 h-4 w-4" />
+                                Soporte
+                            </Link>
+                        </Button>
+                        <Button asChild variant="outline" className="justify-start">
+                            <Link to="/privacidad">
+                                <Shield className="mr-2 h-4 w-4" />
+                                Politica de privacidad
+                            </Link>
+                        </Button>
+                    </div>
+                </Card>
+
+                <AccountDeletionCard compact />
 
                 {/* Logout Button */}
                 <div className="pt-4">
