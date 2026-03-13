@@ -83,6 +83,11 @@ npm run build
 - [docs/IOS_STORE_READINESS.md](./docs/IOS_STORE_READINESS.md)
 - [APP_REVIEW_INFO.md](./APP_REVIEW_INFO.md)
 
+## Internal Docs
+
+- [docs/MANUAL_USUARIO.md](./docs/MANUAL_USUARIO.md)
+- [docs/CEREBRO_CENTRAL_APP.md](./docs/CEREBRO_CENTRAL_APP.md)
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
