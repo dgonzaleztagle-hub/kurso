@@ -8,7 +8,8 @@ import {
     Menu,
     X,
     Settings,
-    CreditCard
+    CreditCard,
+    LifeBuoy
 } from "lucide-react";
 import { useState } from "react";
 import { resolveBranding } from "@/lib/branding";
@@ -31,6 +32,7 @@ export const AdminLayout = () => {
         { title: "Organizaciones", icon: Building2, path: "/admin/organizations" },
         { title: "Usuarios Globales", icon: Users, path: "/admin/users" },
         { title: "Billing SaaS", icon: CreditCard, path: "/admin/billing" },
+        { title: "Soporte", icon: LifeBuoy, path: "/admin/support" },
     ];
 
     return (

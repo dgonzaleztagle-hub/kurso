@@ -3,8 +3,8 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { supabase } from "@/integrations/supabase/client";
 import { resolveBranding } from "@/lib/branding";
+import { submitSupportTicket } from "@/lib/supportTickets";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ const Support = () => {
   const { appUser, user } = useAuth();
   const { currentTenant } = useTenant();
   const branding = resolveBranding(currentTenant?.settings, currentTenant?.name);
+  const isAuthenticated = Boolean(user);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<FormState>(() => ({
     name: appUser?.full_name || "",
@@ -79,20 +80,18 @@ const Support = () => {
     setSubmitting(true);
 
     try {
-      const { error } = await supabase.functions.invoke("submit-support-request", {
-        body: {
-          ...form,
-          source: "support_page",
-          tenantId: currentTenant?.id ?? null,
-          tenantName: currentTenant?.name ?? null,
-        },
+      const response = await submitSupportTicket({
+        ...form,
+        source: "support_page",
+        tenantId: currentTenant?.id ?? null,
+        tenantName: currentTenant?.name ?? null,
       });
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success("Tu solicitud fue enviada correctamente.");
+      toast.success(
+        response.followUpChannel === "in_app"
+          ? "Tu ticket fue creado. El seguimiento quedo disponible dentro de la app."
+          : "Tu solicitud fue enviada. La respuesta sera manual por correo.",
+      );
       setForm((current) => ({
         ...current,
         subject: "",
@@ -136,9 +135,27 @@ const Support = () => {
               <div>
                 <h2 className="text-xl font-semibold text-foreground">Formulario de contacto directo</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Puedes usar este formulario para soporte general, solicitudes ARCO, privacidad o eliminación de cuenta.
+                  {isAuthenticated
+                    ? "Como estas con sesion iniciada, el ticket quedara asociado a tu cuenta y podras seguirlo dentro de la app."
+                    : "Si no tienes acceso a tu cuenta, puedes usar este canal de contingencia. La respuesta sera manual por correo."}
                 </p>
               </div>
+
+              {isAuthenticated && (
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  <p>
+                    Curso actual: <span className="font-medium text-foreground">{currentTenant?.name || "Sin tenant activo"}</span>
+                  </p>
+                  <p className="mt-1">
+                    El owner del curso se resuelve automaticamente por tenant. No necesitas escribir su correo.
+                  </p>
+                  <div className="mt-3">
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/support/inbox">Ver tickets y respuestas</Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="grid gap-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -222,6 +239,11 @@ const Support = () => {
                   <a className="font-medium text-primary hover:underline" href="https://mikurso.cl" target="_blank" rel="noreferrer">
                     https://mikurso.cl
                   </a>
+                </p>
+                <p>
+                  Seguimiento:
+                  {" "}
+                  {isAuthenticated ? "si creas el ticket con sesion iniciada, la conversacion sigue dentro de la app." : "si envias el formulario sin sesion, la respuesta sera manual por correo."}
                 </p>
                 <p>
                   Para privacidad y cuenta también puedes revisar{" "}

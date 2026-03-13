@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Users, LayoutDashboard, Database, ArrowLeft, CreditCard } from "lucide-react";
+import { Building2, Users, LayoutDashboard, Database, ArrowLeft, CreditCard, LifeBuoy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function AdminDashboard() {
     const navigate = useNavigate();
     const { signOut } = useAuth();
-    const [stats, setStats] = useState({ orgs: 0, tenants: 0, users: 0, billingLogs: 0 });
+    const [stats, setStats] = useState({ orgs: 0, tenants: 0, users: 0, billingLogs: 0, supportTickets: 0 });
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -17,12 +17,14 @@ export default function AdminDashboard() {
             const { count: tenantsCount } = await supabase.from('tenants').select('*', { count: 'exact', head: true });
             const { count: usersCount } = await supabase.from('app_users').select('*', { count: 'exact', head: true });
             const { count: billingLogsCount } = await supabase.from('saas_payment_logs').select('*', { count: 'exact', head: true });
+            const { count: supportTicketsCount } = await supabase.from('support_requests').select('*', { count: 'exact', head: true });
 
             setStats({
                 orgs: orgsCount || 0,
                 tenants: tenantsCount || 0,
                 users: usersCount || 0,
                 billingLogs: billingLogsCount || 0,
+                supportTickets: supportTicketsCount || 0,
             });
         };
         fetchStats();
@@ -50,7 +52,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-5">
                     <Card
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => navigate("/admin/organizations")}
@@ -103,6 +105,19 @@ export default function AdminDashboard() {
                             <p className="text-xs text-muted-foreground">Transacciones auditadas</p>
                         </CardContent>
                     </Card>
+                    <Card
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate("/admin/support")}
+                    >
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Tickets Soporte</CardTitle>
+                            <LifeBuoy className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.supportTickets}</div>
+                            <p className="text-xs text-muted-foreground">Solicitudes registradas</p>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Actions Grid */}
@@ -146,6 +161,20 @@ export default function AdminDashboard() {
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
                                 Revisar transacciones, estados y recaudación de Mercado Pago.
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate("/admin/support")}>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <LifeBuoy className="h-5 w-5 text-cyan-500" />
+                                Soporte
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">
+                                Gestionar tickets internos y solicitudes publicas de soporte.
                             </p>
                         </CardContent>
                     </Card>

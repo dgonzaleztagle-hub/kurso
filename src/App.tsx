@@ -58,6 +58,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const PrivacyChoices = lazy(() => import("./pages/PrivacyChoices"));
 const Support = lazy(() => import("./pages/Support"));
+const SupportInbox = lazy(() => import("./pages/SupportInbox"));
 const AccountSettings = lazy(() => import("./pages/AccountSettings"));
 const FormList = lazy(() => import("./pages/FormList"));
 const FormBuilder = lazy(() => import("./pages/FormBuilder"));
@@ -71,6 +72,7 @@ const CloseYear = lazy(() => import("./pages/admin/CloseYear"));
 const TenantsList = lazy(() => import("./pages/admin/TenantsList"));
 const UsersList = lazy(() => import("./pages/admin/UsersList"));
 const SaasBilling = lazy(() => import("./pages/admin/SaasBilling"));
+const SupportTickets = lazy(() => import("./pages/admin/SupportTickets"));
 const OnboardingWizard = lazy(() => import("./pages/onboarding/OnboardingWizard"));
 const MobileFinances = lazy(() => import("./pages/mobile/MobileFinances"));
 const MobileAgenda = lazy(() => import("./pages/mobile/MobileAgenda"));
@@ -109,6 +111,7 @@ function AppRoutes() {
           <Route path="/admin/tenants" element={<TenantsList />} />
           <Route path="/admin/users" element={<UsersList />} />
           <Route path="/admin/billing" element={<SaasBilling />} />
+          <Route path="/admin/support" element={<SupportTickets />} />
         </Route>
       </Route>
 
@@ -127,6 +130,11 @@ function AppRoutes() {
       <Route path="/privacy-choices" element={<PrivacyChoices />} />
       <Route path="/soporte" element={<Support />} />
       <Route path="/support" element={<Support />} />
+      <Route path="/support/inbox" element={
+        <ProtectedRoute allowedRoles={['owner', 'staff', 'guardian']}>
+          <Layout><SupportInbox /></Layout>
+        </ProtectedRoute>
+      } />
       <Route path="/blog" element={<Blog />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/pago-exitoso" element={<BillingSuccess />} />

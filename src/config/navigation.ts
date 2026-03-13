@@ -130,6 +130,7 @@ export const mainNavigation: NavCategory[] = [
         isTab: true,
         items: [
             { name: "Soporte", href: "/soporte", icon: LifeBuoy },
+            { name: "Respuestas Soporte", href: "/support/inbox", icon: FileText, allowStudent: true },
             { name: "Privacidad", href: "/privacidad", icon: Shield },
         ],
     },

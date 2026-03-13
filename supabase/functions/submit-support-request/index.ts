@@ -1,9 +1,11 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.78.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import {
+  corsHeaders,
+  createAdminClient,
+  isValidEmail,
+  json,
+  normalizeText,
+  resolveActor,
+} from "../_shared/supportTickets.ts";
 
 const VALID_REQUEST_TYPES = new Set([
   "support",
@@ -18,107 +20,120 @@ const VALID_REQUEST_TYPES = new Set([
   "account_deletion",
 ]);
 
-function normalizeText(value: unknown, maxLength: number) {
-  return String(value ?? "").trim().slice(0, maxLength);
-}
-
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      },
-    );
-
+    const supabaseAdmin = createAdminClient();
+    const actor = await resolveActor(supabaseAdmin, req.headers.get("Authorization"));
     const payload = await req.json().catch(() => ({}));
+
     const name = normalizeText(payload?.name, 120);
-    const email = normalizeText(payload?.email, 160).toLowerCase();
+    const payloadEmail = normalizeText(payload?.email, 160).toLowerCase();
+    const email = actor.email ?? payloadEmail;
     const subject = normalizeText(payload?.subject, 160);
     const message = normalizeText(payload?.message, 5000);
     const requestType = normalizeText(payload?.requestType, 64) || "support";
     const source = normalizeText(payload?.source, 32) || "web";
-    const tenantId = normalizeText(payload?.tenantId, 64) || null;
-    const tenantName = normalizeText(payload?.tenantName, 160) || null;
+    const requestedTenantId = normalizeText(payload?.tenantId, 64) || null;
+    const tenantNameFromPayload = normalizeText(payload?.tenantName, 160) || null;
 
     if (!name || !email || !subject || !message) {
-      return new Response(
-        JSON.stringify({ error: "Nombre, email, asunto y mensaje son requeridos" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json({ error: "Nombre, email, asunto y mensaje son requeridos" }, 400);
     }
 
     if (!isValidEmail(email)) {
-      return new Response(
-        JSON.stringify({ error: "Debes ingresar un correo valido" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json({ error: "Debes ingresar un correo valido" }, 400);
     }
 
     if (!VALID_REQUEST_TYPES.has(requestType)) {
-      return new Response(
-        JSON.stringify({ error: "Tipo de solicitud no soportado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json({ error: "Tipo de solicitud no soportado" }, 400);
     }
 
-    let userId: string | null = null;
+    let tenantId: string | null = null;
+    let tenantName: string | null = tenantNameFromPayload;
+    let assignedOwnerUserId: string | null = null;
+    let visibilityMode: "authenticated_thread" | "public_email_only" = actor.userId
+      ? "authenticated_thread"
+      : "public_email_only";
 
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      userId = user?.id ?? null;
+    if (requestedTenantId) {
+      const { data: tenantRow } = await supabaseAdmin
+        .from("tenants")
+        .select("id, name, owner_id")
+        .eq("id", requestedTenantId)
+        .maybeSingle();
+
+      if (tenantRow) {
+        const actorCanUseTenant = actor.isSuperadmin || actor.tenantIds.includes(tenantRow.id);
+        if (actor.userId && !actorCanUseTenant) {
+          return json({ error: "No autorizado para abrir tickets en ese curso" }, 403);
+        }
+
+        tenantId = tenantRow.id;
+        tenantName = tenantRow.name ?? tenantName;
+        assignedOwnerUserId = tenantRow.owner_id ?? null;
+      }
     }
 
-    const { data, error } = await supabaseAdmin
+    const requesterRole = actor.isSuperadmin ? "superadmin" : actor.userId ? actor.role : "public";
+
+    const insertPayload = {
+      request_type: requestType,
+      status: "open",
+      name,
+      email,
+      subject,
+      message,
+      source,
+      tenant_id: tenantId,
+      tenant_name: tenantName,
+      user_id: actor.userId,
+      requester_user_id: actor.userId,
+      requester_email_normalized: email.toLowerCase(),
+      requester_role: requesterRole,
+      assigned_owner_user_id: assignedOwnerUserId,
+      visibility_mode: visibilityMode,
+      last_message_at: new Date().toISOString(),
+      metadata: {
+        path: req.headers.get("origin") ?? null,
+        userAgent: req.headers.get("user-agent") ?? null,
+      },
+    };
+
+    const { data: ticket, error: insertError } = await supabaseAdmin
       .from("support_requests")
-      .insert({
-        request_type: requestType,
-        status: "open",
-        name,
-        email,
-        subject,
-        message,
-        source,
-        tenant_id: tenantId,
-        tenant_name: tenantName,
-        user_id: userId,
-        metadata: {
-          path: req.headers.get("origin") ?? null,
-          userAgent: req.headers.get("user-agent") ?? null,
-        },
-      })
-      .select("id, created_at")
+      .insert(insertPayload)
+      .select("id, created_at, status, visibility_mode")
       .single();
 
-    if (error) {
-      throw error;
+    if (insertError) {
+      throw insertError;
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        request: data,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    if (visibilityMode === "authenticated_thread" && actor.userId) {
+      const { error: messageError } = await supabaseAdmin.from("support_request_messages").insert({
+        support_request_id: ticket.id,
+        author_user_id: actor.userId,
+        author_role: requesterRole,
+        body: message,
+      });
+
+      if (messageError) {
+        throw messageError;
+      }
+    }
+
+    return json({
+      success: true,
+      ticketId: ticket.id,
+      visibilityMode: ticket.visibility_mode,
+      status: ticket.status,
+      followUpChannel: visibilityMode === "authenticated_thread" ? "in_app" : "email_manual",
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Error desconocido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return json({ error: error instanceof Error ? error.message : "Error desconocido" }, 500);
   }
 });
