@@ -14,6 +14,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { AdminRoute } from "./components/AdminRoute";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { MobileLayout } from "./components/layouts/MobileLayout";
+import { PublicPageTracker } from "./components/analytics/PublicPageTracker";
 import { isGuardianRole } from "./lib/roles";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -49,6 +50,8 @@ const BillingFailure = lazy(() => import("./pages/BillingFailure"));
 const TesoreriaCurso = lazy(() => import("./pages/servicios/TesoreriaCurso"));
 const CentrosPadres = lazy(() => import("./pages/servicios/CentrosPadres"));
 const ImplementacionExitosa = lazy(() => import("./pages/casos/ImplementacionExitosa"));
+const SeoPage = lazy(() => import("./pages/SeoPage"));
+const SeoGuidePage = lazy(() => import("./pages/SeoGuidePage"));
 const CreditManagement = lazy(() => import("./pages/CreditManagement"));
 const CreditMovements = lazy(() => import("./pages/CreditMovements"));
 const StudentProfile = lazy(() => import("./pages/StudentProfile"));
@@ -137,6 +140,20 @@ function AppRoutes() {
       } />
       <Route path="/blog" element={<Blog />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
+      <Route path="/tesoreria-escolar" element={<SeoPage />} />
+      <Route path="/gestion-financiera-cursos-escolares" element={<SeoPage />} />
+      <Route path="/control-cuotas-curso" element={<SeoPage />} />
+      <Route path="/pagos-apoderados" element={<SeoPage />} />
+      <Route path="/gastos-e-ingresos-curso" element={<SeoPage />} />
+      <Route path="/software-tesorero-de-curso" element={<SeoPage />} />
+      <Route path="/tesoreria-escolar-gratis-vs-profesional" element={<SeoPage />} />
+      <Route path="/alternativa-a-excel-para-cuotas" element={<SeoPage />} />
+      <Route path="/alternativa-a-tesoreroescolar" element={<SeoPage />} />
+      <Route path="/como-llevar-la-tesoreria-de-un-curso" element={<SeoGuidePage />} />
+      <Route path="/como-cobrar-cuotas-de-curso-sin-whatsapp" element={<SeoGuidePage />} />
+      <Route path="/como-rendir-gastos-de-curso-a-apoderados" element={<SeoGuidePage />} />
+      <Route path="/errores-comunes-del-tesorero-de-curso" element={<SeoGuidePage />} />
+      <Route path="/planilla-vs-software-para-tesoreria-escolar" element={<SeoGuidePage />} />
       <Route path="/pago-exitoso" element={<BillingSuccess />} />
       <Route path="/pago-pendiente" element={<BillingPending />} />
       <Route path="/pago-fallido" element={<BillingFailure />} />
@@ -356,6 +373,7 @@ const App = () => (
           <BrowserRouter>
             <AuthProvider>
               <TenantProvider>
+                <PublicPageTracker />
                 <AppRoutes />
               </TenantProvider>
             </AuthProvider>

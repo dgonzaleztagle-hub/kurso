@@ -294,7 +294,7 @@ export default function CreditManagement() {
           if (!activity.activity_date) return false;
           if (exclusions.has(activity.id)) return false;
           const activityDate = parseDateFromDB(activity.activity_date);
-          return activityDate <= new Date() && studentEnrollment <= activityDate;
+          return studentEnrollment <= activityDate;
         })
         .map<ActivityDebtOption | null>((activity) => {
           const directPaid = paymentsData

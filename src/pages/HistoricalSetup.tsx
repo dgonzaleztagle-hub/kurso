@@ -54,7 +54,6 @@ type HistoricalPaymentImportRow = {
 };
 
 type PostgrestErrorLike = { code?: string; message?: string };
-type StudentId = string | number;
 type OpeningBalanceInsert = {
   tenant_id: string;
   folio: number;
@@ -210,7 +209,7 @@ export default function HistoricalSetup() {
     const paymentInsert: PaymentInsert & { created_by?: string | null } = {
       tenant_id: currentTenant.id,
       folio: folio || 1,
-      student_id: Number(studentId),
+      student_id: String(studentId),
       student_name: studentName,
       payment_date: date,
       amount,
@@ -277,7 +276,7 @@ export default function HistoricalSetup() {
 
       const { error: recomputeError } = await supabase.rpc("recompute_student_credit_balance", {
         p_tenant_id: currentTenant.id,
-        p_student_id: Number(creditStudentId),
+        p_student_id: String(creditStudentId),
       });
       if (recomputeError) throw recomputeError;
 

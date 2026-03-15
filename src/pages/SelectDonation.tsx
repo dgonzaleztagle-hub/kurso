@@ -26,7 +26,7 @@ interface DonationItem {
   name: string;
   amount: string;
   unit: string;
-  student_id: number | null;
+  student_id: string | null;
   scheduled_activity_id: string;
   cantidad_original: number;
   cantidad_disponible: number;
@@ -63,13 +63,11 @@ export default function SelectDonation() {
       setLoading(true);
       if (!activityId) throw new Error("Actividad no especificada");
       if (!studentId) throw new Error("No hay alumno autenticado");
-      const studentIdNumber = Number(studentId);
-      if (!Number.isFinite(studentIdNumber)) throw new Error("ID de alumno inválido");
 
       const { data: studentData, error: studentError } = await supabase
         .from("students")
         .select("tenant_id")
-        .eq("id", studentIdNumber)
+        .eq("id", String(studentId))
         .maybeSingle();
       if (studentError) throw studentError;
       const typedStudent = studentData as StudentTenantRow | null;
@@ -103,7 +101,8 @@ export default function SelectDonation() {
             .from("scheduled_activities")
             .select("id, name, scheduled_date")
             .eq("tenant_id", typedStudent.tenant_id)
-            .eq("activity_id", activityNumericId)
+            .eq("name", sourceActivityData.name)
+            .eq("scheduled_date", sourceActivityData.activity_date)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -130,11 +129,9 @@ export default function SelectDonation() {
             } else {
             const payload: ScheduledActivityInsert = {
               tenant_id: typedStudent.tenant_id,
-              activity_id: activityNumericId,
               name: sourceActivityData.name,
               scheduled_date: sourceActivityData.activity_date,
-              fee_amount: Number(sourceActivityData.amount || 0),
-              is_with_fee: Number(sourceActivityData.amount || 0) > 0,
+              amount: Number(sourceActivityData.amount || 0),
               completed: false,
               is_with_donations: true,
             };
@@ -290,17 +287,12 @@ export default function SelectDonation() {
 
     // ADVERTENCIA: Verificar si el estudiante ya tiene donaciones registradas
     if (studentId && resolvedScheduledActivityId && studentTenantId) {
-      const studentIdNumber = Number(studentId);
-      if (!Number.isFinite(studentIdNumber)) {
-        toast.error("ID de alumno inválido");
-        return;
-      }
       const { data: existingDonations } = await supabase
         .from("activity_donations")
         .select("id, name, amount, unit")
         .eq("tenant_id", studentTenantId)
         .eq("scheduled_activity_id", resolvedScheduledActivityId)
-        .eq("student_id", studentIdNumber);
+        .eq("student_id", String(studentId));
 
       if (existingDonations && existingDonations.length > 0) {
         const donationsList = existingDonations
@@ -321,11 +313,6 @@ export default function SelectDonation() {
     if (!studentId) return;
     if (!resolvedScheduledActivityId || !studentTenantId) {
       toast.error("No se pudo resolver la actividad de donaciones");
-      return;
-    }
-    const studentIdNumber = Number(studentId);
-    if (!Number.isFinite(studentIdNumber)) {
-      toast.error("ID de alumno inválido");
       return;
     }
 
@@ -375,7 +362,7 @@ export default function SelectDonation() {
           name: item.name,
           amount: "1", // Cada registro representa 1 unidad
           unit: item.unit,
-          student_id: studentIdNumber,
+          student_id: String(studentId),
           cantidad_original: baseItem.cantidad_original,
           donated_at: null, // Admin confirmará después
         }));

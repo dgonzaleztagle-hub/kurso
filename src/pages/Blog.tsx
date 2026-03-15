@@ -9,6 +9,14 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { BLOG_POSTS } from "@/data/blogData";
 import { resolveBranding } from "@/lib/branding";
 
+const SEO_GUIDES = [
+    { title: "Cómo llevar la tesorería de un curso", path: "/como-llevar-la-tesoreria-de-un-curso" },
+    { title: "Cómo cobrar cuotas de curso sin WhatsApp", path: "/como-cobrar-cuotas-de-curso-sin-whatsapp" },
+    { title: "Cómo rendir gastos de curso a apoderados", path: "/como-rendir-gastos-de-curso-a-apoderados" },
+    { title: "Errores comunes del tesorero de curso", path: "/errores-comunes-del-tesorero-de-curso" },
+    { title: "Planilla vs software para tesorería escolar", path: "/planilla-vs-software-para-tesoreria-escolar" },
+];
+
 const Blog = () => {
     const branding = resolveBranding();
 
@@ -73,6 +81,31 @@ const Blog = () => {
 
             {/* Blog Grid */}
             <main className="max-w-7xl mx-auto px-4 py-16">
+                <section className="mb-16 rounded-3xl border bg-primary/5 p-8">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                        <div className="max-w-2xl">
+                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Guías SEO</p>
+                            <h2 className="mt-3 text-3xl font-bold tracking-tight">Páginas pensadas para dudas reales de tesorería escolar</h2>
+                            <p className="mt-3 text-muted-foreground">
+                                Además del blog, Kurso ahora tiene guías específicas para cobros, rendición, comparativas y operación diaria.
+                            </p>
+                        </div>
+                        <Button asChild variant="outline" className="rounded-full">
+                            <Link to="/tesoreria-escolar">Ver solución principal</Link>
+                        </Button>
+                    </div>
+                    <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {SEO_GUIDES.map((guide) => (
+                            <Link key={guide.path} to={guide.path} className="group rounded-2xl border bg-background px-5 py-4 transition-colors hover:border-primary/30 hover:bg-primary/5">
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="font-medium">{guide.title}</span>
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+
                 <motion.div 
                     variants={stagger}
                     initial="initial"

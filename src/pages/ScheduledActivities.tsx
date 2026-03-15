@@ -161,6 +161,8 @@ export default function ScheduledActivities() {
   const [activities, setActivities] = useState<ScheduledActivity[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<ScheduledActivity | null>(null);
   const [donationsDialogOpen, setDonationsDialogOpen] = useState(false);
@@ -297,7 +299,7 @@ export default function ScheduledActivities() {
           const { data: payments, error } = await supabase
             .from("payments")
             .select("student_id")
-            .eq("activity_id", Number(activity.id));
+            .eq("activity_id", String(activity.id));
 
           if (error) throw error;
 
@@ -344,36 +346,19 @@ export default function ScheduledActivities() {
 
   const getScheduledActivityId = async (activity: ScheduledActivity, createIfMissing = false) => {
     if (!currentTenant?.id) throw new Error("Tenant no disponible");
-
-    const { data: existing, error: existingError } = await supabase
-      .from("scheduled_activities")
-      .select("id")
-      .eq("tenant_id", currentTenant.id)
-      .eq("activity_id", Number(activity.id))
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existingError) throw existingError;
-    if (existing?.id) return String(existing.id);
-
-    const { data: legacyMatch, error: legacyMatchError } = await supabase
+    const { data: matches, error: matchError } = await supabase
       .from("scheduled_activities")
       .select("id")
       .eq("tenant_id", currentTenant.id)
       .eq("name", activity.name)
       .eq("scheduled_date", activity.activity_date)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
 
-    if (legacyMatchError) throw legacyMatchError;
-    if (legacyMatch?.id) {
-      await supabase
-        .from("scheduled_activities")
-        .update({ activity_id: Number(activity.id) })
-        .eq("id", legacyMatch.id);
-      return String(legacyMatch.id);
+    if (matchError) throw matchError;
+
+    if (matches && matches.length > 0) {
+      return String(matches[0].id);
     }
 
     if (!createIfMissing) return null;
@@ -382,11 +367,9 @@ export default function ScheduledActivities() {
       .from("scheduled_activities")
       .insert({
         tenant_id: currentTenant.id,
-        activity_id: Number(activity.id),
         name: activity.name,
         scheduled_date: activity.activity_date,
-        fee_amount: Number(activity.amount || 0),
-        is_with_fee: Boolean(activity.is_with_fee),
+        amount: Number(activity.amount || 0),
         is_with_donations: activity.is_with_donations,
         completed: activity.completed,
       } as ScheduledActivityInsert)
@@ -432,6 +415,7 @@ export default function ScheduledActivities() {
     }
 
     try {
+      setSavingActivity(true);
       const nextDescription = buildDescription(editingActivity?.description || null, {
         requires_management: formData.requires_management,
         is_with_donations: formData.is_with_donations,
@@ -454,7 +438,7 @@ export default function ScheduledActivities() {
         const { error: updateError } = await supabase
           .from("activities")
           .update(payload)
-          .eq("id", Number(editingActivity.id))
+          .eq("id", String(editingActivity.id))
           .eq("tenant_id", currentTenant.id);
         if (updateError) throw updateError;
       } else {
@@ -504,6 +488,8 @@ export default function ScheduledActivities() {
       toast.success(editingActivity ? "Actividad actualizada" : "Actividad creada");
     } catch (error: unknown) {
       toast.error(`Error al guardar actividad: ${getErrorMessage(error)}`);
+    } finally {
+      setSavingActivity(false);
     }
   };
 
@@ -559,7 +545,7 @@ export default function ScheduledActivities() {
       const { error: updateError } = await supabase
         .from("activities")
         .update({ description: nextDescription })
-        .eq("id", Number(activity.id))
+        .eq("id", String(activity.id))
         .eq("tenant_id", currentTenant?.id as string);
 
       if (updateError) throw updateError;
@@ -573,16 +559,27 @@ export default function ScheduledActivities() {
 
   const handleDeleteActivity = async (activity: ScheduledActivity) => {
     try {
-      const scheduledActivityId = await getScheduledActivityId(activity, false);
-      if (scheduledActivityId) {
-        await supabase.from("activity_donations").delete().eq("scheduled_activity_id", scheduledActivityId);
-        await supabase.from("scheduled_activities").delete().eq("id", scheduledActivityId);
+      setDeletingActivityId(String(activity.id));
+      const { data: scheduledMatches, error: scheduledMatchError } = await supabase
+        .from("scheduled_activities")
+        .select("id")
+        .eq("tenant_id", currentTenant?.id as string)
+        .eq("name", activity.name)
+        .eq("scheduled_date", activity.activity_date);
+
+      if (scheduledMatchError) throw scheduledMatchError;
+
+      const scheduledIds = (scheduledMatches || []).map((row) => String(row.id));
+      if (scheduledIds.length > 0) {
+        await supabase.from("activity_donations").delete().in("scheduled_activity_id", scheduledIds);
+        await supabase.from(SCHEDULED_ACTIVITY_EXCLUSIONS).delete().in("scheduled_activity_id", scheduledIds);
+        await supabase.from("scheduled_activities").delete().in("id", scheduledIds);
       }
 
       const { error: deleteError } = await supabase
         .from("activities")
         .delete()
-        .eq("id", Number(activity.id))
+        .eq("id", String(activity.id))
         .eq("tenant_id", currentTenant?.id as string);
 
       if (deleteError) throw deleteError;
@@ -591,6 +588,8 @@ export default function ScheduledActivities() {
       await fetchActivities();
     } catch (error: unknown) {
       toast.error(`Error al eliminar actividad: ${getErrorMessage(error)}`);
+    } finally {
+      setDeletingActivityId(null);
     }
   };
 
@@ -1157,7 +1156,9 @@ export default function ScheduledActivities() {
               )}
 
               <DialogFooter>
-                <Button type="submit">Guardar</Button>
+                <Button type="submit" disabled={savingActivity}>
+                  {savingActivity ? "Guardando..." : "Guardar"}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -1237,9 +1238,9 @@ export default function ScheduledActivities() {
 
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={deletingActivityId === String(activity.id)}>
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar
+                        {deletingActivityId === String(activity.id) ? "Eliminando..." : "Eliminar"}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
