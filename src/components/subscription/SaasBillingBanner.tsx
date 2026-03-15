@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AlertTriangle, Clock3, CreditCard, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -5,6 +6,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useMercadoPago } from "@/hooks/useMercadoPago";
 import { getTenantBillingState } from "@/lib/saasBilling";
 import { MercadoPagoBadge } from "./MercadoPagoBadge";
+import { PromoCodeField } from "./PromoCodeField";
 
 type Props = {
   compact?: boolean;
@@ -13,6 +15,7 @@ type Props = {
 export function SaasBillingBanner({ compact = false }: Props) {
   const { currentTenant } = useTenant();
   const { startCheckout, loading } = useMercadoPago();
+  const [promoCode, setPromoCode] = useState("");
 
   if (!currentTenant) return null;
 
@@ -65,7 +68,10 @@ export function SaasBillingBanner({ compact = false }: Props) {
           </div>
         </div>
       </div>
-      <Button onClick={() => void startCheckout()} disabled={loading} className="gap-2 bg-[#009EE3] hover:bg-[#0088C7]">
+      <div className="w-full max-w-sm">
+        <PromoCodeField value={promoCode} onChange={setPromoCode} disabled={loading} />
+      </div>
+      <Button onClick={() => void startCheckout({ promoCode })} disabled={loading} className="gap-2 bg-[#009EE3] hover:bg-[#0088C7]">
         <CreditCard className="h-4 w-4" />
         {loading ? "Redirigiendo..." : `Pagar con Mercado Pago ${state.offer.amount ? `· ${state.offer.label}` : ""}`}
       </Button>

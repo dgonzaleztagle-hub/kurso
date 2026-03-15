@@ -15,6 +15,24 @@ type CheckoutPayload = {
   tenantEmail?: string;
   tenantName?: string;
   appUrl?: string;
+  promoCode?: string;
+};
+
+type PromoCodeRecord = {
+  code: string;
+  active: boolean;
+  fixed_amount: number | string;
+  max_redemptions: number;
+  allowed_pricing_stages: string[] | null;
+};
+
+type PromoRedemptionRecord = {
+  id: string;
+  promo_code: string;
+  tenant_id: string;
+  checkout_reference: string;
+  payment_id: string | null;
+  status: string;
 };
 
 const json = (body: unknown, status = 200) =>
@@ -126,15 +144,120 @@ Deno.serve(async (req) => {
       String(tenant.subscription_status ?? ""),
       Number(tenant.saas_paid_cycle_count ?? 0),
     );
-    const offer = getOfferForStage(pricingStage);
+    const promoCode = String(payload.promoCode ?? "").trim().toUpperCase();
+    const baseOffer = getOfferForStage(pricingStage);
+    let offer = baseOffer;
+    let promoRedemptionId: string | null = null;
+    let createdPromoReservation = false;
+
+    if (promoCode) {
+      const promoResponse = await supabaseAdmin
+        .from("saas_promo_codes")
+        .select("code, active, fixed_amount, max_redemptions, allowed_pricing_stages")
+        .eq("code", promoCode)
+        .maybeSingle();
+      const promo = promoResponse.data as PromoCodeRecord | null;
+      const promoError = promoResponse.error;
+
+      if (promoError || !promo || !promo.active) {
+        return json({ error: "El código de descuento no es válido." }, 400);
+      }
+
+      if (Array.isArray(promo.allowed_pricing_stages) && promo.allowed_pricing_stages.length > 0 && !promo.allowed_pricing_stages.includes(pricingStage)) {
+        return json({ error: "Este código no aplica al estado actual de tu suscripción." }, 400);
+      }
+
+      const redemptionLookupResponse = await supabaseAdmin
+        .from("saas_promo_redemptions")
+        .select("id, promo_code, tenant_id, checkout_reference, payment_id, status")
+        .eq("promo_code", promo.code)
+        .in("status", ["checkout_created", "approved"])
+        .maybeSingle();
+      const existingRedemption = redemptionLookupResponse.data as PromoRedemptionRecord | null;
+      const redemptionLookupError = redemptionLookupResponse.error;
+
+      if (redemptionLookupError) {
+        return json({ error: "No fue posible validar el código de descuento." }, 500);
+      }
+
+      if (existingRedemption && existingRedemption.tenant_id !== tenant.id) {
+        return json({ error: "Este código ya fue utilizado." }, 400);
+      }
+
+      if (existingRedemption?.status === "approved") {
+        return json({ error: "Este código ya fue utilizado." }, 400);
+      }
+
+      if (existingRedemption) {
+        promoRedemptionId = existingRedemption.id;
+      } else {
+        const { count: redemptionCount, error: redemptionCountError } = await supabaseAdmin
+          .from("saas_promo_redemptions")
+          .select("id", { count: "exact", head: true })
+          .eq("promo_code", promo.code)
+          .eq("status", "approved");
+
+        if (redemptionCountError) {
+          return json({ error: "No fue posible validar el uso disponible del código." }, 500);
+        }
+
+        if ((redemptionCount ?? 0) >= Number(promo.max_redemptions ?? 1)) {
+          return json({ error: "Este código ya fue utilizado." }, 400);
+        }
+      }
+
+      offer = {
+        amount: Number(promo.fixed_amount),
+        label: `Activación de prueba por $${Number(promo.fixed_amount).toLocaleString("es-CL")}`,
+        titleSuffix: "Activación con código de prueba",
+        description: `Cobro único de prueba Kurso por $${Number(promo.fixed_amount).toLocaleString("es-CL")} mediante código interno.`,
+      };
+    }
+
     const baseDate = tenant.valid_until && tenant.valid_until >= new Date().toISOString().slice(0, 10)
       ? tenant.valid_until
       : new Date().toISOString().slice(0, 10);
     const billingCycle = String(baseDate).slice(0, 7);
-    const externalReference = `${tenant.id}|${pricingStage}|${billingCycle}`;
+    let checkoutReference = crypto.randomUUID();
     const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
     const payerEmail = String(payload.tenantEmail ?? authData.user.email ?? appUser?.email ?? "").trim();
     const payerName = String(payload.tenantName ?? appUser?.full_name ?? tenant.name).trim();
+
+    if (promoCode && promoRedemptionId) {
+      const redemptionLookupResponse = await supabaseAdmin
+        .from("saas_promo_redemptions")
+        .select("checkout_reference")
+        .eq("id", promoRedemptionId)
+        .maybeSingle();
+      const redemptionReference = redemptionLookupResponse.data as { checkout_reference: string } | null;
+      if (redemptionReference?.checkout_reference) {
+        checkoutReference = redemptionReference.checkout_reference;
+      }
+    }
+
+    if (promoCode && !promoRedemptionId) {
+      const createRedemptionResponse = await supabaseAdmin
+        .from("saas_promo_redemptions")
+        .insert({
+          promo_code: promoCode,
+          tenant_id: tenant.id,
+          checkout_reference: checkoutReference,
+          status: "checkout_created",
+        })
+        .select("id")
+        .maybeSingle();
+      const createdRedemption = createRedemptionResponse.data as { id: string } | null;
+      const createRedemptionError = createRedemptionResponse.error;
+
+      if (createRedemptionError || !createdRedemption) {
+        return json({ error: "No fue posible reservar el código de descuento." }, 400);
+      }
+
+      promoRedemptionId = createdRedemption.id;
+      createdPromoReservation = true;
+    }
+
+    const externalReference = `${tenant.id}|${pricingStage}|${billingCycle}|${checkoutReference}`;
 
     const preferenceResponse = await fetch(`${MP_API_BASE}/checkout/preferences`, {
       method: "POST",
@@ -165,6 +288,9 @@ Deno.serve(async (req) => {
           pricing_stage: pricingStage,
           expected_amount: offer.amount,
           billing_cycle: billingCycle,
+          checkout_reference: checkoutReference,
+          promo_code: promoCode || null,
+          promo_redemption_id: promoRedemptionId,
         },
         external_reference: externalReference,
         back_urls: {
@@ -180,6 +306,10 @@ Deno.serve(async (req) => {
 
     const preferenceData = await preferenceResponse.json();
     if (!preferenceResponse.ok) {
+      if (createdPromoReservation && promoRedemptionId) {
+        await supabaseAdmin.from("saas_promo_redemptions").delete().eq("id", promoRedemptionId);
+      }
+
       return json({
         error: "Mercado Pago preference creation failed",
         details: preferenceData,
@@ -195,6 +325,7 @@ Deno.serve(async (req) => {
       amount: offer.amount,
       currency: plan.currency,
       label: offer.label,
+      promoCodeApplied: promoCode || null,
       plan: {
         code: plan.code,
         name: plan.name,

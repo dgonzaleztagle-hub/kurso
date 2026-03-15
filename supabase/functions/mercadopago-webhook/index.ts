@@ -123,6 +123,9 @@ Deno.serve(async (req) => {
     const tenantId = String(payment.metadata?.tenant_id ?? referenceParts[0] ?? "").trim();
     const pricingStageFromReference = String(payment.metadata?.pricing_stage ?? referenceParts[1] ?? "").trim() || null;
     const planCode = String(payment.metadata?.plan_code ?? "kurso_monthly_v1").trim() || null;
+    const promoCode = String(payment.metadata?.promo_code ?? "").trim().toUpperCase() || null;
+    const promoRedemptionId = String(payment.metadata?.promo_redemption_id ?? "").trim() || null;
+    const checkoutReference = String(payment.metadata?.checkout_reference ?? referenceParts[3] ?? "").trim() || null;
 
     if (!tenantId) {
       return json({
@@ -154,9 +157,45 @@ Deno.serve(async (req) => {
     const actualAmount = payment.transaction_amount != null ? Number(payment.transaction_amount) : null;
     const expectedAmount = Number(payment.metadata?.expected_amount ?? expectation.expectedAmount);
     const resolvedPricingStage = pricingStageFromReference ?? expectation.pricingStage;
-    const requiresManualReview = actualAmount === null || actualAmount !== expectedAmount;
-
     const now = new Date().toISOString();
+    let requiresManualReview = actualAmount === null || actualAmount !== expectedAmount;
+
+    if (promoCode && promoRedemptionId) {
+      const { data: promoRedemption, error: promoRedemptionError } = await supabaseAdmin
+        .from("saas_promo_redemptions")
+        .select("id, promo_code, tenant_id, payment_id, status")
+        .eq("id", promoRedemptionId)
+        .maybeSingle();
+
+      if (promoRedemptionError || !promoRedemption) {
+        requiresManualReview = true;
+      } else {
+        const isSameTenant = String(promoRedemption.tenant_id ?? "") === tenantId;
+        const isSameCode = String(promoRedemption.promo_code ?? "").trim().toUpperCase() === promoCode;
+        const alreadyApprovedWithOtherPayment = promoRedemption.status === "approved" &&
+          promoRedemption.payment_id &&
+          String(promoRedemption.payment_id) !== paymentId;
+
+        if (!isSameTenant || !isSameCode || alreadyApprovedWithOtherPayment || !checkoutReference) {
+          requiresManualReview = true;
+        } else if (String(payment.status) === "approved") {
+          const { error: redemptionUpdateError } = await supabaseAdmin
+            .from("saas_promo_redemptions")
+            .update({
+              payment_id: paymentId,
+              status: "approved",
+              approved_at: now,
+              updated_at: now,
+            })
+            .eq("id", promoRedemptionId)
+            .eq("checkout_reference", checkoutReference ?? "");
+
+          if (redemptionUpdateError) {
+            requiresManualReview = true;
+          }
+        }
+      }
+    }
     const logRecord = {
       payment_id: paymentId,
       tenant_id: tenantId,
@@ -170,6 +209,8 @@ Deno.serve(async (req) => {
       currency: payment.currency_id ? String(payment.currency_id) : null,
       payment_method: payment.payment_method_id ? String(payment.payment_method_id) : null,
       payer_email: payment.payer?.email ? String(payment.payer.email) : null,
+      promo_code: promoCode,
+      promo_redemption_id: promoRedemptionId,
       requires_manual_review: requiresManualReview,
       raw_data: payment,
       webhook_payload: payload,

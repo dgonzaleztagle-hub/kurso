@@ -12,6 +12,11 @@ type CheckoutResult = {
   amount: number;
   currency: string;
   label: string;
+  promoCodeApplied?: string | null;
+};
+
+type StartCheckoutOptions = {
+  promoCode?: string;
 };
 
 export const useMercadoPago = () => {
@@ -19,11 +24,13 @@ export const useMercadoPago = () => {
   const { currentTenant } = useTenant();
   const [loading, setLoading] = useState(false);
 
-  const startCheckout = async () => {
+  const startCheckout = async (options?: StartCheckoutOptions) => {
     if (!user || !currentTenant?.id) {
       toast.error("No se pudo resolver el tenant para iniciar el cobro.");
       return null;
     }
+
+    const promoCode = String(options?.promoCode ?? "").trim().toUpperCase();
 
     try {
       setLoading(true);
@@ -34,6 +41,7 @@ export const useMercadoPago = () => {
           tenantEmail: appUser?.email ?? user.email,
           tenantName: appUser?.full_name ?? currentTenant.name,
           appUrl: window.location.origin,
+          promoCode: promoCode || undefined,
         },
       });
 
@@ -50,6 +58,7 @@ export const useMercadoPago = () => {
         amount: data.amount,
         currency: data.currency,
         label: data.label,
+        promoCodeApplied: data.promoCodeApplied ?? null,
       }));
 
       window.location.href = data.initPoint;

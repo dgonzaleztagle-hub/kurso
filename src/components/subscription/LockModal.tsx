@@ -1,10 +1,12 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { CreditCard, MessageSquare, ShieldCheck } from "lucide-react";
 import { useMercadoPago } from "@/hooks/useMercadoPago";
 import { useTenant } from "@/contexts/TenantContext";
 import { getTenantBillingState } from "@/lib/saasBilling";
 import { MercadoPagoBadge } from "./MercadoPagoBadge";
+import { PromoCodeField } from "./PromoCodeField";
 
 interface LockModalProps {
   isOpen: boolean;
@@ -15,6 +17,7 @@ export function LockModal({ isOpen, isGracePeriod }: LockModalProps) {
   const { startCheckout, loading } = useMercadoPago();
   const { currentTenant } = useTenant();
   const state = getTenantBillingState(currentTenant);
+  const [promoCode, setPromoCode] = useState("");
 
   const handleInteractOutside = (e: Event) => {
     e.preventDefault();
@@ -63,9 +66,12 @@ export function LockModal({ isOpen, isGracePeriod }: LockModalProps) {
           </div>
 
           <div className="mt-5 flex flex-col gap-3">
+            <div className="rounded-xl border border-slate-200 bg-white/90 p-4">
+              <PromoCodeField value={promoCode} onChange={setPromoCode} disabled={loading} />
+            </div>
             <Button
               className="h-12 bg-[#009EE3] text-base font-semibold hover:bg-[#0088C7]"
-              onClick={() => void startCheckout()}
+              onClick={() => void startCheckout({ promoCode })}
               disabled={loading}
             >
               <CreditCard className="mr-2 h-5 w-5" />
